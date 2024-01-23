@@ -180,7 +180,8 @@ typedef struct NominatimRecord
     char *type;
     char *importance;
     char *icon;
-    List *extratags;
+	char *extratags;
+    //List *extratags;
 } NominatimRecord;
 
 struct string
@@ -343,6 +344,8 @@ Datum nominatim_fdw_handler(PG_FUNCTION_ARGS)
 
 Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
 {
+	Datum res;
+	return res;
 }
 
 Datum nominatim_fdw_version(PG_FUNCTION_ARGS)
@@ -361,71 +364,130 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
     text *query_text = PG_GETARG_TEXT_P(1);
-
-	const char *srvname = text_to_cstring(srvname_text);
-    //const char *query = text_to_cstring(query_text);
-
-	NominatimFDWState *state = GetServerInfo(srvname);
-    
 	FuncCallContext *funcctx;
-	AttInMetadata *attinmeta;
-	TupleDesc tupdesc;
-	int call_cntr;
-	int max_calls;
-	MemoryContext oldcontext;
-	//List *records;
-
-    elog(WARNING,"CALLED! > %s", text_to_cstring(query_text));
-
-    state->query = text_to_cstring(query_text);
-
+    NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
     
-
+	state->query = text_to_cstring(query_text);
+ 
 
 	if (SRF_IS_FIRSTCALL())
 	{
-        LoadData(state);
-
+		MemoryContext oldcontext;
+		TupleDesc tupdesc;
+       		
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-		//identity = GetIdentity(state);
+
+		LoadData(state);
+				
 		funcctx->user_fctx = state->records;
 
 		if (state->records)
 			funcctx->max_calls = state->records->length;
+
+		elog(DEBUG1,"  %s: number of records retrieved = %ld ",__func__, funcctx->max_calls);
+
 		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
 			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 							errmsg("function returning record called in context that cannot accept type record")));
+		tupdesc = BlessTupleDesc(tupdesc);
 
-		attinmeta = TupleDescGetAttInMetadata(tupdesc);
-		funcctx->attinmeta = attinmeta;
+		funcctx->attinmeta = TupleDescGetAttInMetadata(tupdesc);
 
 		MemoryContextSwitchTo(oldcontext);
 	}
 
 	funcctx = SRF_PERCALL_SETUP();
 
-	call_cntr = funcctx->call_cntr;
-	max_calls = funcctx->max_calls;
-	attinmeta = funcctx->attinmeta;
-
-	if (call_cntr < max_calls)
+	if (funcctx->call_cntr < funcctx->max_calls)
 	{
-		char **values;
-		HeapTuple tuple;
-		Datum result;
-		int MAX_SIZE = 512;
+		Datum		values[15];
+		bool		nulls[15];		
+		HeapTuple	tuple;
+		Datum		result;
+		struct NominatimRecord *record = (struct NominatimRecord *) palloc0(sizeof(struct NominatimRecord));
 
-		NominatimRecord *set = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, call_cntr);
+		NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
 
-		values = (char **)palloc(2 * sizeof(char *));
-		values[0] = (char *)palloc(MAX_SIZE * sizeof(char));
-		values[1] = (char *)palloc(MAX_SIZE * sizeof(char));
+		memset(nulls, 0, sizeof(nulls));
+				
+		if(place->osm_id)
+			values[0] = CStringGetTextDatum(place->osm_id);
+		else		
+			nulls[0] = true;		
 
-		snprintf(values[0], MAX_SIZE, "%s", set->display_name);
-		snprintf(values[1], MAX_SIZE, "%s", set->attribution);
+		if(place->osm_type)
+			values[1] = CStringGetTextDatum(place->osm_type);
+		else
+			nulls[1] = true;
 
-		tuple = BuildTupleFromCStrings(attinmeta, values);
+		if(place->ref)
+			values[2] = CStringGetTextDatum(place->ref);
+		else
+			nulls[2] = true;
+
+		if(place->class)
+			values[3] = CStringGetTextDatum(place->class);
+		else
+			nulls[3] = true;
+
+		if(place->display_name)
+			values[4] = CStringGetTextDatum(place->display_name);
+		else
+			nulls[4] = true;
+
+		if(place->display_rank)
+			values[5] = CStringGetTextDatum(place->display_rank);
+		else
+			nulls[5] = true;
+
+		if(place->place_id)
+			values[6] = CStringGetTextDatum(place->place_id);
+		else
+			nulls[6] = true;
+
+		if(place->place_rank)
+			values[7] = CStringGetTextDatum(place->place_rank);
+		else
+			nulls[7] = true;
+		
+		if(place->address_rank)
+			values[8] = CStringGetTextDatum(place->address_rank);
+		else
+			nulls[8] = true;
+
+		if(place->lon)
+			values[9] = CStringGetTextDatum(place->lon);
+		else
+			nulls[9] = true;
+
+		if(place->lat)
+			values[10] = CStringGetTextDatum(place->lat);
+		else
+			nulls[10] = true;
+	
+		if(place->boundingbox)
+			values[11] = CStringGetTextDatum(place->boundingbox);
+		else
+			nulls[11] = true;
+
+		if(place->importance)
+			values[12] = CStringGetTextDatum(place->importance);
+		else
+			nulls[12] = true;
+
+		if(place->icon)
+			values[13] = CStringGetTextDatum(place->icon);
+		else
+			nulls[13] = true;
+
+		if(place->extratags)
+			values[14] = CStringGetTextDatum(place->extratags);
+		else
+			nulls[14] = true;
+		
+		/* Build tuple */
+		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
 
 		SRF_RETURN_NEXT(funcctx, result);
@@ -641,7 +703,7 @@ static void LoadData(NominatimFDWState *state)
             place->display_name = (char *)xmlGetProp(results, (xmlChar *)"display_name");
             place->display_rank = (char *)xmlGetProp(results, (xmlChar *)"display_rank");
            //place->exclude_place_ids = (char *)xmlGetProp(results, (xmlChar *)"exclude_place_ids");
-           // place->extratags = (char *)xmlGetProp(results, (xmlChar *)"extratags");
+            place->extratags = "extratags";
             place->icon = (char *)xmlGetProp(results, (xmlChar *)"icon");
             place->importance = (char *)xmlGetProp(results, (xmlChar *)"importance");
             place->lat = (char *)xmlGetProp(results, (xmlChar *)"lat");
@@ -661,7 +723,7 @@ static void LoadData(NominatimFDWState *state)
                 place->class,
                 place->display_name,
                 place->display_rank,
-                "exratags WIP",
+                place->extratags,
                 place->icon,
                 place->importance,
                 place->lat,

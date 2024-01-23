@@ -11,29 +11,25 @@ RETURNS text AS 'MODULE_PATHNAME', 'nominatim_fdw_version'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 
-CREATE TYPE NominatimRecord AS (
-  timestamp timestamp,
-  attribution text,
-  querystring text,
-  polygon text,
-  exclude_place_ids text,
-  more_url text,
-  place_id text,
-  osm_type text,
-  osm_id text,
+CREATE TYPE NominatimRecord AS ( 
+  osm_id text,  
+  osm_type text, 
   ref text,
-  lat numeric,
-  lon numeric,
-  boundingbox text,
-  place_rank text,
-  address_tank text,
-  display_name text,
   class text,
-  type text,
+  display_name text,
+  display_rank text,
+  place_id text,
+  place_rank text,
+  address_rank text,
+  lon text,
+  lat text,
+  boundingbox text,  
   importance text,
   icon text,
-  extratags text  
+  extratags text
 );
+
+
 
 CREATE FUNCTION nominatim_simple_query(server_name text, query text)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_freeform_query'
