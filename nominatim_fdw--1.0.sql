@@ -24,11 +24,10 @@ CREATE TYPE NominatimRecord AS (
   lon numeric,
   lat numeric,
   boundingbox text,  
-  importance numeric,
+  importance double precision,
   icon text,
   extratags text,
-
-  timestamp text,
+  timestamp timestamptz,
   attribution text,
   querystring text,
   polygon text,
@@ -38,8 +37,8 @@ CREATE TYPE NominatimRecord AS (
 
 
 
-CREATE FUNCTION nominatim_simple_query(server_name text, query text)
-RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_freeform_query'
+CREATE FUNCTION nominatim_query(server_name text, query text)
+RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 

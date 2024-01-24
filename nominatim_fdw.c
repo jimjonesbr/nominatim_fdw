@@ -68,6 +68,7 @@
 #endif
 #include "utils/date.h"
 #include <utils/elog.h>
+#include <access/tupdesc.h>
 
 #define FDW_VERSION "1.0.0-dev"
 #define REQUEST_SUCCESS 0
@@ -225,12 +226,12 @@ static struct NominatimFDWOption valid_options[] =
 extern Datum nominatim_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_version(PG_FUNCTION_ARGS);
-extern Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_query(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(nominatim_fdw_handler);
 PG_FUNCTION_INFO_V1(nominatim_fdw_validator);
 PG_FUNCTION_INFO_V1(nominatim_fdw_version);
-PG_FUNCTION_INFO_V1(nominatim_fdw_freeform_query);
+PG_FUNCTION_INFO_V1(nominatim_fdw_query);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -239,7 +240,7 @@ static void NominatimBeginForeignScan(ForeignScanState *node, int eflags);
 static TupleTableSlot *NominatimIterateForeignScan(ForeignScanState *node);
 static void NominatimReScanForeignScan(ForeignScanState *node);
 static void NominatimEndForeignScan(ForeignScanState *node);
-static Datum ConvertDatum(HeapTuple tuple, int pgtype, char *value);
+static Datum ConvertDatum(HeapTuple tuple, int pgtype, int pgtypemod, char *value);
 static NominatimFDWState *GetServerInfo(const char *srvname);
 
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
@@ -277,7 +278,7 @@ static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid
 static ForeignScan *NominatimGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan)
 {
 	List *fdw_private;
-	NominatimFDWTable *opts = baserel->fdw_private;
+	//NominatimFDWTable *opts = baserel->fdw_private;
 	NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
 	
 	fdw_private = list_make1(state);
@@ -308,7 +309,7 @@ static void NominatimBeginForeignScan(ForeignScanState *node, int eflags)
 static TupleTableSlot *NominatimIterateForeignScan(ForeignScanState *node)
 {
 	TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
-	struct NominatimFDWState *state = (struct NominatimFDWState *) node->fdw_state;
+	//struct NominatimFDWState *state = (struct NominatimFDWState *) node->fdw_state;
 		
 	elog(DEBUG2,"%s called",__func__);
 
@@ -345,7 +346,7 @@ Datum nominatim_fdw_handler(PG_FUNCTION_ARGS)
 
 Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
 {
-	Datum res;
+	Datum res = 1;
 	return res;
 }
 
@@ -361,11 +362,12 @@ Datum nominatim_fdw_version(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }
 
-Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
+Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
     text *query_text = PG_GETARG_TEXT_P(1);
 	FuncCallContext *funcctx;
+	TupleDesc tupdesc;
     NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
     
 	state->query = text_to_cstring(query_text);
@@ -374,7 +376,7 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
-		TupleDesc tupdesc;
+		
        		
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -406,144 +408,67 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 		bool		nulls[21];		
 		HeapTuple	tuple;
 		Datum		result;
-		struct NominatimRecord *record = (struct NominatimRecord *) palloc0(sizeof(struct NominatimRecord));
-
 		NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
 
 		memset(nulls, 0, sizeof(nulls));
-				
-		if(place->osm_id)
-        {
-            // regproc typinput;
-            // tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(INT8OID));
-
-            // if (!HeapTupleIsValid(tuple)) 
-            // {
-            //     ereport(ERROR, 
-            //         (errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-            //             errmsg("cache lookup failed for type %u (osm_id)", INT8OID)));
-            // }
-
-            // typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
-            // ReleaseSysCache(tuple);
-
-            //values[0] = OidFunctionCall1(typinput, CStringGetDatum(place->osm_id));
-
-            //values[0] = CStringGetTextDatum(place->osm_id);
-
-            values[0] = ConvertDatum(tuple, INT8OID, place->osm_id);
-
-        }
-		else		
-			nulls[0] = true;		
-
-		if(place->osm_type)
-			values[1] = CStringGetTextDatum(place->osm_type);
-		else
-			nulls[1] = true;
-
-		if(place->ref)
-			values[2] = CStringGetTextDatum(place->ref);
-		else
-			nulls[2] = true;
-
-		if(place->class)
-			values[3] = CStringGetTextDatum(place->class);
-		else
-			nulls[3] = true;
-
-		if(place->display_name)
-			values[4] = CStringGetTextDatum(place->display_name);
-		else
-			nulls[4] = true;
-
-		if(place->display_rank)
-			values[5] = CStringGetTextDatum(place->display_rank);
-		else
-			nulls[5] = true;
-
-		if(place->place_id)
-            values[6] = ConvertDatum(tuple, INT8OID, place->place_id);
-			//values[6] = CStringGetTextDatum(place->place_id);
-		else
-			nulls[6] = true;
-
-		if(place->place_rank)
-			values[7] = ConvertDatum(tuple, INT4OID, place->place_rank);
-            //values[7] = CStringGetTextDatum(place->place_rank);
-		else
-			nulls[7] = true;
 		
-		if(place->address_rank)
-            values[8] = ConvertDatum(tuple, INT4OID, place->address_rank);
-			//values[8] = CStringGetTextDatum(place->address_rank);
-		else
-			nulls[8] = true;
+		for (size_t i = 0; i < tupdesc->natts; i++)
+		{
+			char *value = NULL;
+			Form_pg_attribute att = TupleDescAttr(tupdesc, i);					
 
-		if(place->lon)
-            values[9] = ConvertDatum(tuple, NUMERICOID, place->lon);
-			//values[9] = CStringGetTextDatum(place->lon);
-		else
-			nulls[9] = true;
+			if(strcmp(att->attname.data,"osm_id") == 0)
+				value = place->osm_id;
+			else if(strcmp(att->attname.data,"osm_type") == 0)
+				value = place->osm_type;
+			else if(strcmp(att->attname.data,"ref") == 0)
+				value = place->ref;
+			else if(strcmp(att->attname.data,"class") == 0)
+				value = place->class;
+			else if(strcmp(att->attname.data,"display_name") == 0)
+				value = place->display_name;
+			else if(strcmp(att->attname.data,"display_rank") == 0)
+				value = place->display_rank;
+			else if(strcmp(att->attname.data,"place_id") == 0)
+				value = place->place_id;
+			else if(strcmp(att->attname.data,"place_rank") == 0)
+				value = place->place_rank;
+			else if(strcmp(att->attname.data,"address_rank") == 0)
+				value = place->address_rank;
+			else if(strcmp(att->attname.data,"lon") == 0)
+				value = place->lon;
+			else if(strcmp(att->attname.data,"lat") == 0)
+				value = place->lat;
+			else if(strcmp(att->attname.data,"boundingbox") == 0)
+				value = place->boundingbox;
+			else if(strcmp(att->attname.data,"importance") == 0)
+				value = place->importance;
+			else if(strcmp(att->attname.data,"icon") == 0)
+				value = place->icon;
+			else if(strcmp(att->attname.data,"extratags") == 0)
+				value = place->extratags;
+			else if(strcmp(att->attname.data,"timestamp") == 0)
+				value = place->timestamp;
+			else if(strcmp(att->attname.data,"attribution") == 0)
+				value = place->attribution;
+			else if(strcmp(att->attname.data,"querystring") == 0)
+				value = place->querystring;
+			else if(strcmp(att->attname.data,"polygon") == 0)
+				value = place->polygon;
+			else if(strcmp(att->attname.data,"exclude_place_ids") == 0)
+				value = place->exclude_place_ids;
+			else if(strcmp(att->attname.data,"more_url") == 0)
+				value = place->more_url;
 
-		if(place->lat)
-            values[10] = ConvertDatum(tuple, NUMERICOID, place->lat);
-			//values[10] = CStringGetTextDatum(place->lat);
-		else
-			nulls[10] = true;
-	
-		if(place->boundingbox)
-			values[11] = CStringGetTextDatum(place->boundingbox);
-		else
-			nulls[11] = true;
+			elog(DEBUG2,"  %s = '%s'",att->attname.data, value);
 
-		if(place->importance)
-			//values[12] = CStringGetTextDatum(place->importance);
-             values[12] = ConvertDatum(tuple, NUMERICOID, place->importance);
-		else
-			nulls[12] = true;
+			if(value)
+				values[i] = ConvertDatum(tuple, att->atttypid, att->atttypmod, value);
+			else
+				nulls[i] = true;
 
-		if(place->icon)
-			values[13] = CStringGetTextDatum(place->icon);
-		else
-			nulls[13] = true;
-
-		if(place->extratags)
-			values[14] = CStringGetTextDatum(place->extratags);
-		else
-			nulls[14] = true;
+		}
 		
-        if(place->timestamp)
-			values[15] = CStringGetTextDatum(place->timestamp);
-		else
-			nulls[15] = true;
-
-        if(place->attribution)
-			values[16] = CStringGetTextDatum(place->attribution);
-		else
-			nulls[16] = true;
-		
-        if(place->querystring)
-			values[17] = CStringGetTextDatum(place->querystring);
-		else
-			nulls[17] = true;
-
-        if(place->polygon)
-			values[18] = CStringGetTextDatum(place->polygon);
-		else
-			nulls[18] = true;
-        
-        if(place->exclude_place_ids)
-			values[19] = CStringGetTextDatum(place->exclude_place_ids);
-		else
-			nulls[19] = true;
-
-        if(place->more_url)
-			values[20] = CStringGetTextDatum(place->more_url);
-		else
-			nulls[20] = true;
-		
-		/* Build tuple */
 		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
 
@@ -555,7 +480,7 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 	}
 }
 
-static Datum ConvertDatum(HeapTuple tuple, int pgtype, char *value)
+static Datum ConvertDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
 {
 
     regproc typinput;
@@ -572,7 +497,19 @@ static Datum ConvertDatum(HeapTuple tuple, int pgtype, char *value)
     typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
     ReleaseSysCache(tuple);
 
-    return OidFunctionCall1(typinput, CStringGetDatum(value));
+	if(pgtype == FLOAT4OID || 
+	   pgtype == FLOAT8OID || 
+	   pgtype == NUMERICOID || 
+	   pgtype == TIMESTAMPOID || 
+	   pgtype == TIMESTAMPTZOID || 
+	   pgtype == VARCHAROID)
+		return  OidFunctionCall3(
+					typinput,
+					CStringGetDatum(value),
+					ObjectIdGetDatum(InvalidOid),
+					Int32GetDatum(pgtypmod));
+	else
+		return OidFunctionCall1(typinput, CStringGetDatum(value));
 
 }
 
@@ -726,9 +663,9 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, PlannerInfo *root) 
 {
 
-    ForeignTable *ft = GetForeignTable(state->nominatim_table->foreigntableid);
-	ForeignServer *server = GetForeignServer(ft->serverid);	
-    ListCell *cell;
+    //ForeignTable *ft = GetForeignTable(state->nominatim_table->foreigntableid);
+	//ForeignServer *server = GetForeignServer(ft->serverid);	
+    //ListCell *cell;
 #if PG_VERSION_NUM < 130000
 	Relation rel = heap_open(ft->relid, NoLock);
 #else
