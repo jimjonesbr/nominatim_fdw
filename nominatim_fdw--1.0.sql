@@ -12,7 +12,7 @@ LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 
 CREATE TYPE NominatimRecord AS ( 
-  osm_id text,  
+  osm_id bigint,  
   osm_type text, 
   ref text,
   class text,
@@ -24,9 +24,16 @@ CREATE TYPE NominatimRecord AS (
   lon text,
   lat text,
   boundingbox text,  
-  importance text,
+  importance numeric,
   icon text,
-  extratags text
+  extratags text,
+
+  timestamp text,
+  attribution text,
+  querystring text,
+  polygon text,
+  exclude_place_ids text,
+  more_url text
 );
 
 

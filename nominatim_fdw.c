@@ -67,7 +67,7 @@
 #include "access/heapam.h"
 #endif
 #include "utils/date.h"
-#include "../../../../usr/include/postgresql/internal/c.h"
+#include <utils/elog.h>
 
 #define FDW_VERSION "1.0.0-dev"
 #define REQUEST_SUCCESS 0
@@ -239,6 +239,7 @@ static void NominatimBeginForeignScan(ForeignScanState *node, int eflags);
 static TupleTableSlot *NominatimIterateForeignScan(ForeignScanState *node);
 static void NominatimReScanForeignScan(ForeignScanState *node);
 static void NominatimEndForeignScan(ForeignScanState *node);
+static Datum ConvertDatum(HeapTuple tuple, int pgtype, char *value);
 static NominatimFDWState *GetServerInfo(const char *srvname);
 
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
@@ -401,8 +402,8 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 
 	if (funcctx->call_cntr < funcctx->max_calls)
 	{
-		Datum		values[15];
-		bool		nulls[15];		
+		Datum		values[21];
+		bool		nulls[21];		
 		HeapTuple	tuple;
 		Datum		result;
 		struct NominatimRecord *record = (struct NominatimRecord *) palloc0(sizeof(struct NominatimRecord));
@@ -412,7 +413,27 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 		memset(nulls, 0, sizeof(nulls));
 				
 		if(place->osm_id)
-			values[0] = CStringGetTextDatum(place->osm_id);
+        {
+            // regproc typinput;
+            // tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(INT8OID));
+
+            // if (!HeapTupleIsValid(tuple)) 
+            // {
+            //     ereport(ERROR, 
+            //         (errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+            //             errmsg("cache lookup failed for type %u (osm_id)", INT8OID)));
+            // }
+
+            // typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
+            // ReleaseSysCache(tuple);
+
+            //values[0] = OidFunctionCall1(typinput, CStringGetDatum(place->osm_id));
+
+            //values[0] = CStringGetTextDatum(place->osm_id);
+
+            values[0] = ConvertDatum(tuple, INT8OID, place->osm_id);
+
+        }
 		else		
 			nulls[0] = true;		
 
@@ -472,7 +493,8 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 			nulls[11] = true;
 
 		if(place->importance)
-			values[12] = CStringGetTextDatum(place->importance);
+			//values[12] = CStringGetTextDatum(place->importance);
+             values[12] = ConvertDatum(tuple, NUMERICOID, place->importance);
 		else
 			nulls[12] = true;
 
@@ -486,6 +508,36 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 		else
 			nulls[14] = true;
 		
+        if(place->timestamp)
+			values[15] = CStringGetTextDatum(place->timestamp);
+		else
+			nulls[15] = true;
+
+        if(place->attribution)
+			values[16] = CStringGetTextDatum(place->attribution);
+		else
+			nulls[16] = true;
+		
+        if(place->querystring)
+			values[17] = CStringGetTextDatum(place->querystring);
+		else
+			nulls[17] = true;
+
+        if(place->polygon)
+			values[18] = CStringGetTextDatum(place->polygon);
+		else
+			nulls[18] = true;
+        
+        if(place->exclude_place_ids)
+			values[19] = CStringGetTextDatum(place->exclude_place_ids);
+		else
+			nulls[19] = true;
+
+        if(place->more_url)
+			values[20] = CStringGetTextDatum(place->more_url);
+		else
+			nulls[20] = true;
+		
 		/* Build tuple */
 		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
@@ -496,6 +548,27 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 	{
 		SRF_RETURN_DONE(funcctx);
 	}
+}
+
+static Datum ConvertDatum(HeapTuple tuple, int pgtype, char *value)
+{
+
+    regproc typinput;
+    
+    tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(INT8OID));
+
+    if (!HeapTupleIsValid(tuple)) 
+    {
+        ereport(ERROR, 
+            (errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
+                errmsg("cache lookup failed for type %u (osm_id)", INT8OID)));
+    }
+
+    typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
+    ReleaseSysCache(tuple);
+    
+    return OidFunctionCall1(typinput, CStringGetDatum(value));
+
 }
 
 static NominatimFDWState *GetServerInfo(const char *srvname)
@@ -668,14 +741,12 @@ static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, Pl
 	state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;	
 	state->numcols = rel->rd_att->natts;
 
-
 }
 
 static void LoadData(NominatimFDWState *state)
 {
 	xmlNodePtr results;
-	//xmlNodePtr record;
-
+	
 	state->rowcount = 0;
 	state->records = NIL;
 
@@ -686,9 +757,10 @@ static void LoadData(NominatimFDWState *state)
 
 	Assert(state->xmldoc);
 
-   // elog(DEBUG2, "  %s: loading 'xmlroot'",__func__);
-	
-	for (results = xmlDocGetRootElement(state->xmldoc)->children; results != NULL; results = results->next)
+   elog(DEBUG2, "  %s: loading '%s'",__func__, xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring"));
+
+    
+    for (results = xmlDocGetRootElement(state->xmldoc)->children; results != NULL; results = results->next)
 	{
         
 		if (xmlStrcmp(results->name, (xmlChar *)"place") == 0)
@@ -697,24 +769,25 @@ static void LoadData(NominatimFDWState *state)
             struct NominatimRecord *place = (struct NominatimRecord *) palloc0(sizeof(struct NominatimRecord));
             place->ref = (char *)xmlGetProp(results, (xmlChar *)"ref");
             place->address_rank = (char *)xmlGetProp(results, (xmlChar *)"address_rank");
-            //place->attribution = (char *)xmlGetProp(results, (xmlChar *)"attribution");
+            place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
             place->boundingbox = (char *)xmlGetProp(results, (xmlChar *)"boundingbox");
             place->class = (char *)xmlGetProp(results, (xmlChar *)"class");
             place->display_name = (char *)xmlGetProp(results, (xmlChar *)"display_name");
             place->display_rank = (char *)xmlGetProp(results, (xmlChar *)"display_rank");
-           //place->exclude_place_ids = (char *)xmlGetProp(results, (xmlChar *)"exclude_place_ids");
+            place->exclude_place_ids = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"exclude_place_ids");
             place->extratags = "extratags";
             place->icon = (char *)xmlGetProp(results, (xmlChar *)"icon");
             place->importance = (char *)xmlGetProp(results, (xmlChar *)"importance");
             place->lat = (char *)xmlGetProp(results, (xmlChar *)"lat");
             place->lon = (char *)xmlGetProp(results, (xmlChar *)"lon");
-           //place->more_url = (char *)xmlGetProp(results, (xmlChar *)"more_url");
+            place->more_url = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"more_url");
             place->osm_id = (char *)xmlGetProp(results, (xmlChar *)"osm_id");
             place->osm_type = (char *)xmlGetProp(results, (xmlChar *)"osm_type");
             place->place_id = (char *)xmlGetProp(results, (xmlChar *)"place_id");
             place->place_rank = (char *)xmlGetProp(results, (xmlChar *)"place_rank");
-            //place->polygon = (char *)xmlGetProp(results, (xmlChar *)"polygon");
-           // place->querystring = (char *)xmlGetProp(results, (xmlChar *)"querystring");
+            place->polygon = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"polygon");
+            place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
+            place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
             
             elog(DEBUG2, "%s:\n\n  ==== place ====\n  ref: %s\n  address_rank: %s\n  boundingbox: %s\n  class: %s\n  display_name: %s\n  display_rank: %s\n  extratags: %s\n  icon: %s\n  importance: %s\n  lat: %s\n  lon: %s\n  osm_id: %s\n  osy_type: %s\n  place_id: %s\n  place_rank: %s\n  ",__func__, 
                 place->ref,
@@ -734,23 +807,10 @@ static void LoadData(NominatimFDWState *state)
                 place->place_rank);
             
             state->records = lappend(state->records, place);
-
-			//for (record = results->children; record != NULL; record = record->next)
-			//{
-				// if (xmlStrcmp(record->name, (xmlChar *)"place") == 0)
-				// {
-					//state->records = lappend(state->records, record);
-					
-                    
-                    //state->pagesize++;
-					//elog(DEBUG2, "	appending %d > %s", state->pagesize, record->name);
-				//}
-			//}
+			
 		}
 	}
 
-	//if(record)
-	//	xmlFreeNode(record);
 	if(results)
 		xmlFreeNode(results);
 
