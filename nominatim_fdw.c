@@ -182,7 +182,8 @@ typedef struct NominatimRecord
     char *importance;
     char *icon;
 	char *extratags;
-    //List *extratags;
+    char *addressdetails;
+    char *namedetails;
 } NominatimRecord;
 
 struct string
@@ -404,8 +405,8 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 
 	if (funcctx->call_cntr < funcctx->max_calls)
 	{
-		Datum		values[21];
-		bool		nulls[21];		
+		Datum		values[23];
+		bool		nulls[23];		
 		HeapTuple	tuple;
 		Datum		result;
 		NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
@@ -417,55 +418,59 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 			char *value = NULL;
 			Form_pg_attribute att = TupleDescAttr(tupdesc, i);					
 
-			if(strcmp(att->attname.data,"osm_id") == 0)
+			if(strcmp(NameStr(att->attname),"osm_id") == 0)
 				value = place->osm_id;
-			else if(strcmp(att->attname.data,"osm_type") == 0)
+			else if(strcmp(NameStr(att->attname),"osm_type") == 0)
 				value = place->osm_type;
-			else if(strcmp(att->attname.data,"ref") == 0)
+			else if(strcmp(NameStr(att->attname),"ref") == 0)
 				value = place->ref;
-			else if(strcmp(att->attname.data,"class") == 0)
+			else if(strcmp(NameStr(att->attname),"class") == 0)
 				value = place->class;
-			else if(strcmp(att->attname.data,"display_name") == 0)
+			else if(strcmp(NameStr(att->attname),"display_name") == 0)
 				value = place->display_name;
-			else if(strcmp(att->attname.data,"display_rank") == 0)
+			else if(strcmp(NameStr(att->attname),"display_rank") == 0)
 				value = place->display_rank;
 			else if(strcmp(att->attname.data,"place_id") == 0)
 				value = place->place_id;
-			else if(strcmp(att->attname.data,"place_rank") == 0)
+			else if(strcmp(NameStr(att->attname),"place_rank") == 0)
 				value = place->place_rank;
-			else if(strcmp(att->attname.data,"address_rank") == 0)
+			else if(strcmp(NameStr(att->attname),"address_rank") == 0)
 				value = place->address_rank;
-			else if(strcmp(att->attname.data,"lon") == 0)
+			else if(strcmp(NameStr(att->attname),"lon") == 0)
 				value = place->lon;
-			else if(strcmp(att->attname.data,"lat") == 0)
+			else if(strcmp(NameStr(att->attname),"lat") == 0)
 				value = place->lat;
-			else if(strcmp(att->attname.data,"boundingbox") == 0)
+			else if(strcmp(NameStr(att->attname),"boundingbox") == 0)
 				value = place->boundingbox;
-			else if(strcmp(att->attname.data,"importance") == 0)
+			else if(strcmp(NameStr(att->attname),"importance") == 0)
 				value = place->importance;
-			else if(strcmp(att->attname.data,"icon") == 0)
+			else if(strcmp(NameStr(att->attname),"icon") == 0)
 				value = place->icon;
-			else if(strcmp(att->attname.data,"extratags") == 0)
+			else if(strcmp(NameStr(att->attname),"extratags") == 0)
 				value = place->extratags;
-			else if(strcmp(att->attname.data,"timestamp") == 0)
+			else if(strcmp(NameStr(att->attname),"timestamp") == 0)
 				value = place->timestamp;
-			else if(strcmp(att->attname.data,"attribution") == 0)
+			else if(strcmp(NameStr(att->attname),"attribution") == 0)
 				value = place->attribution;
-			else if(strcmp(att->attname.data,"querystring") == 0)
+			else if(strcmp(NameStr(att->attname),"querystring") == 0)
 				value = place->querystring;
-			else if(strcmp(att->attname.data,"polygon") == 0)
+			else if(strcmp(NameStr(att->attname),"polygon") == 0)
 				value = place->polygon;
-			else if(strcmp(att->attname.data,"exclude_place_ids") == 0)
+			else if(strcmp(NameStr(att->attname),"exclude_place_ids") == 0)
 				value = place->exclude_place_ids;
-			else if(strcmp(att->attname.data,"more_url") == 0)
+			else if(strcmp(NameStr(att->attname),"more_url") == 0)
 				value = place->more_url;
-
-			elog(DEBUG2,"  %s = '%s'",att->attname.data, value);
+            else if(strcmp(NameStr(att->attname),"addressdetails") == 0)
+				value = place->addressdetails;
+            else if(strcmp(NameStr(att->attname),"namedetails") == 0)
+				value = place->namedetails;
 
 			if(value)
 				values[i] = ConvertDatum(tuple, att->atttypid, att->atttypmod, value);
 			else
 				nulls[i] = true;
+
+            elog(DEBUG2,"  %s = '%s'",NameStr(att->attname), value);
 
 		}
 		
@@ -687,7 +692,9 @@ static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, Pl
 
 static void LoadData(NominatimFDWState *state)
 {
-	xmlNodePtr results;
+	xmlNodePtr searchresults;
+    xmlNodePtr places;
+    xmlNodePtr tag;
 	
 	state->rowcount = 0;
 	state->records = NIL;
@@ -702,60 +709,99 @@ static void LoadData(NominatimFDWState *state)
    elog(DEBUG2, "  %s: loading '%s'",__func__, xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring"));
 
     
-    for (results = xmlDocGetRootElement(state->xmldoc)->children; results != NULL; results = results->next)
+    for (searchresults = xmlDocGetRootElement(state->xmldoc)->children; searchresults != NULL; searchresults = searchresults->next)
 	{
         
-		if (xmlStrcmp(results->name, (xmlChar *)"place") == 0)
+		if (xmlStrcmp(searchresults->name, (xmlChar *)"place") == 0)
 		{                              
-            
+
             struct NominatimRecord *place = (struct NominatimRecord *) palloc0(sizeof(struct NominatimRecord));
-            place->ref = (char *)xmlGetProp(results, (xmlChar *)"ref");
-            place->address_rank = (char *)xmlGetProp(results, (xmlChar *)"address_rank");
+            StringInfoData xtags;
+            StringInfoData addressdetails;
+            StringInfoData namedetails;
+
+            initStringInfo(&xtags);
+            initStringInfo(&addressdetails);
+            initStringInfo(&namedetails);
+            
+            appendStringInfo(&xtags,"{");
+            appendStringInfo(&addressdetails,"{");
+            appendStringInfo(&namedetails,"{");
+
+            place->ref = (char *)xmlGetProp(searchresults, (xmlChar *)"ref");
+            place->address_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"address_rank");
             place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
-            place->boundingbox = (char *)xmlGetProp(results, (xmlChar *)"boundingbox");
-            place->class = (char *)xmlGetProp(results, (xmlChar *)"class");
-            place->display_name = (char *)xmlGetProp(results, (xmlChar *)"display_name");
-            place->display_rank = (char *)xmlGetProp(results, (xmlChar *)"display_rank");
-            place->exclude_place_ids = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"exclude_place_ids");
-            place->extratags = "extratags";
-            place->icon = (char *)xmlGetProp(results, (xmlChar *)"icon");
-            place->importance = (char *)xmlGetProp(results, (xmlChar *)"importance");
-            place->lat = (char *)xmlGetProp(results, (xmlChar *)"lat");
-            place->lon = (char *)xmlGetProp(results, (xmlChar *)"lon");
+            place->boundingbox = (char *)xmlGetProp(searchresults, (xmlChar *)"boundingbox");
+            place->class = (char *)xmlGetProp(searchresults, (xmlChar *)"class");
+            place->display_name = (char *)xmlGetProp(searchresults, (xmlChar *)"display_name");
+            place->display_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"display_rank");
+            place->exclude_place_ids = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"exclude_place_ids");            
+            place->icon = (char *)xmlGetProp(searchresults, (xmlChar *)"icon");
+            place->importance = (char *)xmlGetProp(searchresults, (xmlChar *)"importance");
+            place->lat = (char *)xmlGetProp(searchresults, (xmlChar *)"lat");
+            place->lon = (char *)xmlGetProp(searchresults, (xmlChar *)"lon");
             place->more_url = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"more_url");
-            place->osm_id = (char *)xmlGetProp(results, (xmlChar *)"osm_id");
-            place->osm_type = (char *)xmlGetProp(results, (xmlChar *)"osm_type");
-            place->place_id = (char *)xmlGetProp(results, (xmlChar *)"place_id");
-            place->place_rank = (char *)xmlGetProp(results, (xmlChar *)"place_rank");
+            place->osm_id = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_id");
+            place->osm_type = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_type");
+            place->place_id = (char *)xmlGetProp(searchresults, (xmlChar *)"place_id");
+            place->place_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"place_rank");
             place->polygon = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"polygon");
             place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
             place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
+
+            for (places = searchresults->children; places != NULL; places = places->next)
+            {
+                if (xmlStrcmp(places->name, (xmlChar *)"extratags") == 0)
+                {       
+                    for (tag = places->children; tag != NULL; tag = tag->next)
+                    {
+                        appendStringInfo(&xtags,"%s\"%s\":\"%s\"", 
+                            xtags.len == 1 ? "" : ",",
+                            (char *)xmlGetProp(tag, (xmlChar *)"key"), 
+                            (char *)xmlGetProp(tag, (xmlChar *)"value"));
+                    }   
+                } 
+                else if (xmlStrcmp(places->name, (xmlChar *)"namedetails") == 0)
+                {
+                    for (tag = places->children; tag != NULL; tag = tag->next)
+                    {
+                        appendStringInfo(&namedetails,"%s\"%s\":\"%s\"", 
+                            namedetails.len == 1 ? "" : ",",
+                            (char *)xmlGetProp(tag, (xmlChar *)"desc"), 
+                            (char *)xmlNodeGetContent(tag));
+                    }
+                } 
+                else
+                {
+                    appendStringInfo(&addressdetails,"%s\"%s\":\"%s\"", 
+                        addressdetails.len == 1 ? "" : ",",
+                        (char *)places->name, 
+                        (char *)xmlNodeGetContent(places));
+                }
+
+            }
+
+            appendStringInfo(&xtags,"}");
+            appendStringInfo(&addressdetails,"}");
+            appendStringInfo(&namedetails,"}");
             
-            elog(DEBUG2, "%s:\n\n  ==== place ====\n  ref: %s\n  address_rank: %s\n  boundingbox: %s\n  class: %s\n  display_name: %s\n  display_rank: %s\n  extratags: %s\n  icon: %s\n  importance: %s\n  lat: %s\n  lon: %s\n  osm_id: %s\n  osy_type: %s\n  place_id: %s\n  place_rank: %s\n  ",__func__, 
-                place->ref,
-                place->address_rank,
-                place->boundingbox,
-                place->class,
-                place->display_name,
-                place->display_rank,
-                place->extratags,
-                place->icon,
-                place->importance,
-                place->lat,
-                place->lon,
-                place->osm_id,
-                place->osm_type,
-                place->place_id,
-                place->place_rank);
-            
+            place->extratags = NameStr(xtags);
+            place->addressdetails = NameStr(addressdetails);
+            place->namedetails = NameStr(namedetails);
+
             state->records = lappend(state->records, place);
-			
 		}
 	}
 
-	if(results)
-		xmlFreeNode(results);
+    if(tag)
+	    xmlFreeNode(tag);
 
+    if(places)
+	 	xmlFreeNode(places);
+
+	if(searchresults)
+		xmlFreeNode(searchresults);    
+    
 }
 
 static int ExecuteRequest(NominatimFDWState *state)
@@ -794,7 +840,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         appendStringInfo(&url_buffer, "q=%s", curl_easy_escape(curl, state->query, 0));
 
     if (!state->format)
-        appendStringInfo(&url_buffer, "&format=%s", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+        appendStringInfo(&url_buffer, "&format=%s&extratags=1&addressdetails=1&namedetails=1", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
 
     if (curl)
     {

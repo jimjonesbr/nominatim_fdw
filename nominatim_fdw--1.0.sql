@@ -10,7 +10,6 @@ CREATE FUNCTION nominatim_fdw_version()
 RETURNS text AS 'MODULE_PATHNAME', 'nominatim_fdw_version'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
-
 CREATE TYPE NominatimRecord AS ( 
   osm_id bigint,  
   osm_type text, 
@@ -26,21 +25,20 @@ CREATE TYPE NominatimRecord AS (
   boundingbox text,  
   importance double precision,
   icon text,
-  extratags text,
   timestamp timestamptz,
   attribution text,
   querystring text,
   polygon text,
   exclude_place_ids text,
-  more_url text
+  more_url text,
+  extratags jsonb,
+  namedetails jsonb,
+  addressdetails jsonb
 );
-
-
 
 CREATE FUNCTION nominatim_query(server_name text, query text)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-
 
 CREATE FOREIGN DATA WRAPPER nominatim_fdw
 HANDLER nominatim_fdw_handler
