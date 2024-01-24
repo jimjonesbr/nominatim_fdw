@@ -463,27 +463,32 @@ Datum nominatim_fdw_freeform_query(PG_FUNCTION_ARGS)
 			nulls[5] = true;
 
 		if(place->place_id)
-			values[6] = CStringGetTextDatum(place->place_id);
+            values[6] = ConvertDatum(tuple, INT8OID, place->place_id);
+			//values[6] = CStringGetTextDatum(place->place_id);
 		else
 			nulls[6] = true;
 
 		if(place->place_rank)
-			values[7] = CStringGetTextDatum(place->place_rank);
+			values[7] = ConvertDatum(tuple, INT4OID, place->place_rank);
+            //values[7] = CStringGetTextDatum(place->place_rank);
 		else
 			nulls[7] = true;
 		
 		if(place->address_rank)
-			values[8] = CStringGetTextDatum(place->address_rank);
+            values[8] = ConvertDatum(tuple, INT4OID, place->address_rank);
+			//values[8] = CStringGetTextDatum(place->address_rank);
 		else
 			nulls[8] = true;
 
 		if(place->lon)
-			values[9] = CStringGetTextDatum(place->lon);
+            values[9] = ConvertDatum(tuple, NUMERICOID, place->lon);
+			//values[9] = CStringGetTextDatum(place->lon);
 		else
 			nulls[9] = true;
 
 		if(place->lat)
-			values[10] = CStringGetTextDatum(place->lat);
+            values[10] = ConvertDatum(tuple, NUMERICOID, place->lat);
+			//values[10] = CStringGetTextDatum(place->lat);
 		else
 			nulls[10] = true;
 	
@@ -555,18 +560,18 @@ static Datum ConvertDatum(HeapTuple tuple, int pgtype, char *value)
 
     regproc typinput;
     
-    tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(INT8OID));
+    tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
 
     if (!HeapTupleIsValid(tuple)) 
     {
         ereport(ERROR, 
             (errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-                errmsg("cache lookup failed for type %u (osm_id)", INT8OID)));
+                errmsg("cache lookup failed for type %u (osm_id)", pgtype)));
     }
 
     typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
     ReleaseSysCache(tuple);
-    
+
     return OidFunctionCall1(typinput, CStringGetDatum(value));
 
 }
