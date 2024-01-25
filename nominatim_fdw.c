@@ -213,7 +213,8 @@ struct MemoryStruct
 static struct NominatimFDWOption valid_options[] =
 {
 	/* Foreign Servers */
-	{NOMINATIM_SERVER_OPTION_FORMAT, ForeignServerRelationId, false, false},
+	{NOMINATIM_SERVER_OPTION_URL, ForeignServerRelationId, true, false},
+    {NOMINATIM_SERVER_OPTION_FORMAT, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_HTTP_PROXY, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_HTTPS_PROXY, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_PROXY_USER, ForeignServerRelationId, false, false},
@@ -267,6 +268,7 @@ static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, Pl
 static void LoadData(NominatimFDWState *state);
 static void LoadDataReverseLookup(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
+static int CheckURL(char *url);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
@@ -365,8 +367,114 @@ Datum nominatim_fdw_handler(PG_FUNCTION_ARGS)
 
 Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
 {
-	Datum res = 1;
-	return res;
+    List *options_list = untransformRelOptions(PG_GETARG_DATUM(0));
+    Oid catalog = PG_GETARG_OID(1);
+    ListCell *cell;
+    struct NominatimFDWOption *opt;
+    bool hasliteralatt = false;
+
+    /* Initialize found state to not found */
+    for (opt = valid_options; opt->optname; opt++)
+        opt->optfound = false;
+
+    foreach (cell, options_list)
+    {
+        DefElem *def = (DefElem *)lfirst(cell);
+        bool optfound = false;
+
+        for (opt = valid_options; opt->optname; opt++)
+        {
+
+            if (catalog == opt->optcontext && strcmp(opt->optname, def->defname) == 0)
+            {
+
+                /* Mark that this user option was found */
+                opt->optfound = optfound = true;
+
+                if (strlen(defGetString(def)) == 0)
+                {
+                    ereport(ERROR,
+                            (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                             errmsg("empty value in option '%s'", opt->optname)));
+                }
+
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_URL) == 0 ||
+                    strcmp(opt->optname, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0 ||
+                    strcmp(opt->optname, NOMINATIM_SERVER_OPTION_HTTPS_PROXY) == 0)
+                {
+                    int return_code = CheckURL(defGetString(def));
+
+                    if (return_code != REQUEST_SUCCESS)
+                    {
+                        ereport(ERROR,
+                                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                                 errmsg("invalid %s: '%s'", opt->optname, defGetString(def))));
+                    }
+                }
+
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
+                {
+                    char *endptr;
+                    char *timeout_str = defGetString(def);
+                    long timeout_val = strtol(timeout_str, &endptr, 0);
+
+                    if (timeout_str[0] == '\0' || *endptr != '\0' || timeout_val < 0)
+                    {
+                        ereport(ERROR,
+                                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                                 errmsg("invalid %s: '%s'", def->defname, timeout_str),
+                                 errhint("expected values are positive integers (timeout in seconds)")));
+                    }
+                }
+
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_CONNECTRETRY) == 0 || strcmp(opt->optname, NOMINATIM_SERVER_OPTION_REQUEST_MAX_REDIRECT) == 0)
+                {
+                    char *endptr;
+                    char *retry_str = defGetString(def);
+                    long retry_val = strtol(retry_str, &endptr, 0);
+
+                    if (retry_str[0] == '\0' || *endptr != '\0' || retry_val < 0)
+                    {
+                        ereport(ERROR,
+                                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                                 errmsg("invalid %s: '%s'", def->defname, retry_str),
+                                 errhint("expected values are positive integers (retry attempts in case of failure)")));
+                    }
+                }
+
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_REQUEST_REDIRECT) == 0)
+                {
+                    if(strcasecmp(defGetString(def),"true") != 0 && strcasecmp(defGetString(def),"false") != 0)
+                        ereport(ERROR,
+                                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                                 errmsg("invalid %s: '%s'", def->defname, defGetString(def)),
+                                 errhint("parameter expectes boolean values ('true', 'false')")));
+                }
+
+                
+            }
+        }
+
+        if (!optfound)
+        {
+            ereport(ERROR,
+                    (errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
+                     errmsg("invalid rdf_fdw option '%s'", def->defname)));
+        }
+    }
+
+    for (opt = valid_options; opt->optname; opt++)
+    {
+        /* Required option for this catalog type is missing? */
+        if (catalog == opt->optcontext && opt->optrequired && !opt->optfound)
+        {
+            ereport(ERROR,
+                    (errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
+                     errmsg("required option '%s' is missing", opt->optname)));
+        }
+    }
+
+    PG_RETURN_VOID();
 }
 
 Datum nominatim_fdw_version(PG_FUNCTION_ARGS)
@@ -1385,4 +1493,36 @@ static void LoadData(NominatimFDWState * state)
         return REQUEST_FAIL;
 
     return REQUEST_SUCCESS;
+}
+
+/* 
+ * CheckURL
+ * --------
+ * CheckS if an URL is valid.
+ * 
+ * url: URL to be validated.
+ * 
+ * returns REQUEST_SUCCESS or REQUEST_FAIL
+ */
+static int CheckURL(char *url)
+{
+
+	CURLUcode code;
+	CURLU *handler = curl_url();
+
+	elog(DEBUG1, "%s called > '%s'", __func__, url);
+
+	code = curl_url_set(handler, CURLUPART_URL, url, 0);
+
+	curl_url_cleanup(handler);
+
+	elog(DEBUG1, "  %s handler return code: %u", __func__, code);
+
+	if (code != 0)
+	{
+		elog(DEBUG1, "%s: invalid URL (%u) > '%s'", __func__, code, url);
+		return code;
+	}
+
+	return REQUEST_SUCCESS;
 }
