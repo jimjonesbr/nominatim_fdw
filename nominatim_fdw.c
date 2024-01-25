@@ -122,6 +122,7 @@ typedef struct NominatimFDWState
 	char *custom_params;         /* Custom parameters used to compose the request URL */
     char *format;  /*  */
     char *query;  /*  */
+    char *extra_params;  /*  */
 	bool request_redirect;       /* Enables or disables URL redirecting. */
    	long request_max_redirect;   /* Limit of how many times the URL redirection (jump) may occur. */
 	long connect_timeout;        /* Timeout for SPARQL queries */
@@ -367,17 +368,20 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
     text *query_text = PG_GETARG_TEXT_P(1);
-	FuncCallContext *funcctx;
+    text *extra_params = PG_GETARG_TEXT_P(2);
+
+    FuncCallContext *funcctx;
 	TupleDesc tupdesc;
     NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
     
 	state->query = text_to_cstring(query_text);
- 
+    
+    state->extra_params = text_to_cstring(extra_params);
+    elog(DEBUG2,"  %s: setting 'extra_params' > '%s'",__func__,state->extra_params);
 
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
-		
        		
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
@@ -708,7 +712,6 @@ static void LoadData(NominatimFDWState *state)
 
    elog(DEBUG2, "  %s: loading '%s'",__func__, xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring"));
 
-    
     for (searchresults = xmlDocGetRootElement(state->xmldoc)->children; searchresults != NULL; searchresults = searchresults->next)
 	{
         
@@ -745,7 +748,14 @@ static void LoadData(NominatimFDWState *state)
             place->osm_type = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_type");
             place->place_id = (char *)xmlGetProp(searchresults, (xmlChar *)"place_id");
             place->place_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"place_rank");
-            place->polygon = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"polygon");
+            
+            if(xmlGetProp(searchresults, (xmlChar *)"geotext"))
+                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geotext");
+            else if(xmlGetProp(searchresults, (xmlChar *)"geojson"))
+                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geojson");
+            else if(xmlGetProp(searchresults, (xmlChar *)"geosvg"))
+                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geosvg");
+            
             place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
             place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
 
@@ -770,6 +780,13 @@ static void LoadData(NominatimFDWState *state)
                             (char *)xmlGetProp(tag, (xmlChar *)"desc"), 
                             (char *)xmlNodeGetContent(tag));
                     }
+                }
+                else if (xmlStrcmp(places->name, (xmlChar *)"geokml") == 0)
+                {
+                    xmlBufferPtr buffer = xmlBufferCreate();
+                    xmlNodeDump(buffer, state->xmldoc, places->children, 0, 0);
+                    place->polygon = pstrdup((char *) buffer->content);
+                    xmlBufferFree(buffer);
                 } 
                 else
                 {
@@ -800,8 +817,7 @@ static void LoadData(NominatimFDWState *state)
 	 	xmlFreeNode(places);
 
 	if(searchresults)
-		xmlFreeNode(searchresults);    
-    
+		xmlFreeNode(searchresults);
 }
 
 static int ExecuteRequest(NominatimFDWState *state)
@@ -827,20 +843,23 @@ static int ExecuteRequest(NominatimFDWState *state)
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
 
-    initStringInfo(&accept_header);
-    appendStringInfo(&accept_header, "Accept: text/xml");
+    // initStringInfo(&accept_header);
+    // appendStringInfo(&accept_header, "Accept-Language: text/xml");
 
     initStringInfo(&url_buffer);
     appendStringInfo(&url_buffer, "%s?", state->url);
 
-    if (state->city)
-        appendStringInfo(&url_buffer, "%s=%s", NOMINATIM_TAG_CITY, state->city);
+    // if (state->city)
+    //     appendStringInfo(&url_buffer, "%s=%s", NOMINATIM_TAG_CITY, state->city);
 
-    if (state->query)
+    if(state->query)
         appendStringInfo(&url_buffer, "q=%s", curl_easy_escape(curl, state->query, 0));
 
     if (!state->format)
-        appendStringInfo(&url_buffer, "&format=%s&extratags=1&addressdetails=1&namedetails=1", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+        appendStringInfo(&url_buffer, "&format=%s", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+
+    if(strcmp(state->extra_params,"")!=0)
+        appendStringInfo(&url_buffer, "%s", state->extra_params);
 
     if (curl)
     {
@@ -896,7 +915,6 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         if (state->request_redirect)
         {
-
             elog(DEBUG1, "  %s: setting request redirect: %d (%s)", __func__, state->request_redirect, state->request_redirect ? "true" : "false");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
@@ -922,15 +940,15 @@ static int ExecuteRequest(NominatimFDWState *state)
         // curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, 'GET');
 
         initStringInfo(&user_agent);
-        appendStringInfo(&user_agent, "PostgreSQL/%s rdf_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
+        appendStringInfo(&user_agent, "PostgreSQL/%s nominatim_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
         // appendStringInfo(&user_agent, "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36");
 
         elog(DEBUG1, "  %s: \"Agent: %s\"", __func__, user_agent.data);
 
         curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
 
-        headers = curl_slist_append(headers, accept_header.data);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        // headers = curl_slist_append(headers, accept_header.data);
+        // curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
         elog(DEBUG2, "  %s: performing cURL request ... ", __func__);
 

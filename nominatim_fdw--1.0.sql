@@ -36,7 +36,10 @@ CREATE TYPE NominatimRecord AS (
   addressdetails jsonb
 );
 
-CREATE FUNCTION nominatim_query(server_name text, query text)
+CREATE FUNCTION nominatim_query(
+    server_name text, 
+    query text, 
+    extra_params text DEFAULT '')
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
