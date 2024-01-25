@@ -111,7 +111,7 @@ typedef struct NominatimFDWState
     char *amenity;     /*  */
     char *street;      /*  */
     char *city;        /*  */
-    char *couny;       /*  */
+    char *county;       /*  */
     char *state;       /*  */
     char *country;     /*  */
     char *postalcode;  /*  */
@@ -124,6 +124,7 @@ typedef struct NominatimFDWState
     char *query;  /*  */
     char *extra_params;  /*  */
 	bool request_redirect;       /* Enables or disables URL redirecting. */
+    bool is_query_structured;
    	long request_max_redirect;   /* Limit of how many times the URL redirection (jump) may occur. */
 	long connect_timeout;        /* Timeout for SPARQL queries */
 	long max_retries;            /* Number of re-try attemtps for failed SPARQL queries */
@@ -229,11 +230,13 @@ extern Datum nominatim_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_version(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_query(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(nominatim_fdw_handler);
 PG_FUNCTION_INFO_V1(nominatim_fdw_validator);
 PG_FUNCTION_INFO_V1(nominatim_fdw_version);
 PG_FUNCTION_INFO_V1(nominatim_fdw_query);
+PG_FUNCTION_INFO_V1(nominatim_fdw_query_structured);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -243,6 +246,7 @@ static TupleTableSlot *NominatimIterateForeignScan(ForeignScanState *node);
 static void NominatimReScanForeignScan(ForeignScanState *node);
 static void NominatimEndForeignScan(ForeignScanState *node);
 static Datum ConvertDatum(HeapTuple tuple, int pgtype, int pgtypemod, char *value);
+static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place);
 static NominatimFDWState *GetServerInfo(const char *srvname);
 
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
@@ -374,18 +378,21 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 	TupleDesc tupdesc;
     NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
     
-	state->query = text_to_cstring(query_text);
-    
-    state->extra_params = text_to_cstring(extra_params);
-    elog(DEBUG2,"  %s: setting 'extra_params' > '%s'",__func__,state->extra_params);
-
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
-       		
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
+        state->query = text_to_cstring(query_text);
+        state->extra_params = text_to_cstring(extra_params);
+        state->is_query_structured = false;
+
+        elog(DEBUG1,"\n\n\t=== %s ===\n\tq:'%s'\n\textra_params: '%s'\n"
+        ,__func__,
+        state->query,
+        state->extra_params);
+       	
 		LoadData(state);
 				
 		funcctx->user_fctx = state->records;
@@ -419,63 +426,15 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 		
 		for (size_t i = 0; i < tupdesc->natts; i++)
 		{
-			char *value = NULL;
 			Form_pg_attribute att = TupleDescAttr(tupdesc, i);					
-
-			if(strcmp(NameStr(att->attname),"osm_id") == 0)
-				value = place->osm_id;
-			else if(strcmp(NameStr(att->attname),"osm_type") == 0)
-				value = place->osm_type;
-			else if(strcmp(NameStr(att->attname),"ref") == 0)
-				value = place->ref;
-			else if(strcmp(NameStr(att->attname),"class") == 0)
-				value = place->class;
-			else if(strcmp(NameStr(att->attname),"display_name") == 0)
-				value = place->display_name;
-			else if(strcmp(NameStr(att->attname),"display_rank") == 0)
-				value = place->display_rank;
-			else if(strcmp(att->attname.data,"place_id") == 0)
-				value = place->place_id;
-			else if(strcmp(NameStr(att->attname),"place_rank") == 0)
-				value = place->place_rank;
-			else if(strcmp(NameStr(att->attname),"address_rank") == 0)
-				value = place->address_rank;
-			else if(strcmp(NameStr(att->attname),"lon") == 0)
-				value = place->lon;
-			else if(strcmp(NameStr(att->attname),"lat") == 0)
-				value = place->lat;
-			else if(strcmp(NameStr(att->attname),"boundingbox") == 0)
-				value = place->boundingbox;
-			else if(strcmp(NameStr(att->attname),"importance") == 0)
-				value = place->importance;
-			else if(strcmp(NameStr(att->attname),"icon") == 0)
-				value = place->icon;
-			else if(strcmp(NameStr(att->attname),"extratags") == 0)
-				value = place->extratags;
-			else if(strcmp(NameStr(att->attname),"timestamp") == 0)
-				value = place->timestamp;
-			else if(strcmp(NameStr(att->attname),"attribution") == 0)
-				value = place->attribution;
-			else if(strcmp(NameStr(att->attname),"querystring") == 0)
-				value = place->querystring;
-			else if(strcmp(NameStr(att->attname),"polygon") == 0)
-				value = place->polygon;
-			else if(strcmp(NameStr(att->attname),"exclude_place_ids") == 0)
-				value = place->exclude_place_ids;
-			else if(strcmp(NameStr(att->attname),"more_url") == 0)
-				value = place->more_url;
-            else if(strcmp(NameStr(att->attname),"addressdetails") == 0)
-				value = place->addressdetails;
-            else if(strcmp(NameStr(att->attname),"namedetails") == 0)
-				value = place->namedetails;
-
+            char *value = GetAttributeValue(att,place);
+           
 			if(value)
 				values[i] = ConvertDatum(tuple, att->atttypid, att->atttypmod, value);
 			else
 				nulls[i] = true;
 
             elog(DEBUG2,"  %s = '%s'",NameStr(att->attname), value);
-
 		}
 		
 		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
@@ -487,6 +446,162 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 	{
 		SRF_RETURN_DONE(funcctx);
 	}
+}
+
+/*
+ * Nominatim Doc: https://nominatim.org/release-docs/3.4/api/Search/
+ */
+Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
+{
+	text *srvname_text = PG_GETARG_TEXT_P(0);
+    text *query_text = PG_GETARG_TEXT_P(1);
+    text *street = PG_GETARG_TEXT_P(2);
+    text *city = PG_GETARG_TEXT_P(3);
+    text *county = PG_GETARG_TEXT_P(4);
+    text *tstate = PG_GETARG_TEXT_P(5);
+    text *country = PG_GETARG_TEXT_P(6);
+    text *postalcode = PG_GETARG_TEXT_P(7);
+    text *extra_params = PG_GETARG_TEXT_P(8);
+
+    FuncCallContext *funcctx;
+	TupleDesc tupdesc;
+    NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
+
+	if (SRF_IS_FIRSTCALL())
+	{
+		MemoryContext oldcontext;       		
+		funcctx = SRF_FIRSTCALL_INIT();
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        state->query = text_to_cstring(query_text);
+        state->street = text_to_cstring(street);
+        state->city = text_to_cstring(city);
+        state->county = text_to_cstring(county);
+        state->state = text_to_cstring(tstate);
+        state->country = text_to_cstring(country);
+        state->postalcode = text_to_cstring(postalcode);
+        state->extra_params = text_to_cstring(extra_params);
+        state->is_query_structured = true;
+
+        elog(DEBUG1,"\n\n\t=== %s ===\n\tamenity: '%s'\n\tstreet: '%s'\n\tcity: '%s'\n\tcounty: '%s'\n\tstate: '%s'\n\tcountry: '%s'\n\tpostalcode: '%s'\n\textra_params: '%s'\n"
+            ,__func__,
+            state->query,
+            state->street,
+            state->city,
+            state->county,
+            state->state,
+            state->country,
+            state->postalcode,
+            state->extra_params);
+            
+		LoadData(state);
+				
+		funcctx->user_fctx = state->records;
+
+		if (state->records)
+			funcctx->max_calls = state->records->length;
+
+		elog(DEBUG1,"  %s: number of records retrieved = %ld ",__func__, funcctx->max_calls);
+
+		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("function returning record called in context that cannot accept type record")));
+		tupdesc = BlessTupleDesc(tupdesc);
+
+		funcctx->attinmeta = TupleDescGetAttInMetadata(tupdesc);
+
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	funcctx = SRF_PERCALL_SETUP();
+
+	if (funcctx->call_cntr < funcctx->max_calls)
+	{
+		Datum		values[23];
+		bool		nulls[23];		
+		HeapTuple	tuple;
+		Datum		result;
+		NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
+
+		memset(nulls, 0, sizeof(nulls));
+		
+		for (size_t i = 0; i < tupdesc->natts; i++)
+		{
+			Form_pg_attribute att = TupleDescAttr(tupdesc, i);					
+            char *value = GetAttributeValue(att,place);
+           
+			if(value)
+				values[i] = ConvertDatum(tuple, att->atttypid, att->atttypmod, value);
+			else
+				nulls[i] = true;
+
+            elog(DEBUG2,"  %s = '%s'",NameStr(att->attname), value);
+		}
+		
+		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
+		result = HeapTupleGetDatum(tuple);
+
+		SRF_RETURN_NEXT(funcctx, result);
+	}
+	else
+	{
+		SRF_RETURN_DONE(funcctx);
+	}
+}
+
+
+static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place)
+{
+    
+    if (strcmp(NameStr(att->attname), "osm_id") == 0)
+        return place->osm_id;
+    else if (strcmp(NameStr(att->attname), "osm_type") == 0)
+        return place->osm_type;
+    else if (strcmp(NameStr(att->attname), "ref") == 0)
+        return place->ref;
+    else if (strcmp(NameStr(att->attname), "class") == 0)
+        return place->class;
+    else if (strcmp(NameStr(att->attname), "display_name") == 0)
+        return place->display_name;
+    else if (strcmp(NameStr(att->attname), "display_rank") == 0)
+        return place->display_rank;
+    else if (strcmp(att->attname.data, "place_id") == 0)
+        return place->place_id;
+    else if (strcmp(NameStr(att->attname), "place_rank") == 0)
+        return place->place_rank;
+    else if (strcmp(NameStr(att->attname), "address_rank") == 0)
+        return place->address_rank;
+    else if (strcmp(NameStr(att->attname), "lon") == 0)
+        return place->lon;
+    else if (strcmp(NameStr(att->attname), "lat") == 0)
+        return place->lat;
+    else if (strcmp(NameStr(att->attname), "boundingbox") == 0)
+        return place->boundingbox;
+    else if (strcmp(NameStr(att->attname), "importance") == 0)
+        return place->importance;
+    else if (strcmp(NameStr(att->attname), "icon") == 0)
+        return place->icon;
+    else if (strcmp(NameStr(att->attname), "extratags") == 0)
+        return place->extratags;
+    else if (strcmp(NameStr(att->attname), "timestamp") == 0)
+        return place->timestamp;
+    else if (strcmp(NameStr(att->attname), "attribution") == 0)
+        return place->attribution;
+    else if (strcmp(NameStr(att->attname), "querystring") == 0)
+        return place->querystring;
+    else if (strcmp(NameStr(att->attname), "polygon") == 0)
+        return place->polygon;
+    else if (strcmp(NameStr(att->attname), "exclude_place_ids") == 0)
+        return place->exclude_place_ids;
+    else if (strcmp(NameStr(att->attname), "more_url") == 0)
+        return place->more_url;
+    else if (strcmp(NameStr(att->attname), "addressdetails") == 0)
+        return place->addressdetails;
+    else if (strcmp(NameStr(att->attname), "namedetails") == 0)
+        return place->namedetails;
+    else 
+        return NULL;
+
 }
 
 static Datum ConvertDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
@@ -852,11 +967,31 @@ static int ExecuteRequest(NominatimFDWState *state)
     // if (state->city)
     //     appendStringInfo(&url_buffer, "%s=%s", NOMINATIM_TAG_CITY, state->city);
 
-    if(state->query)
-        appendStringInfo(&url_buffer, "q=%s", curl_easy_escape(curl, state->query, 0));
+    if (state->query)
+        appendStringInfo(&url_buffer, "%s=%s&",
+                         state->is_query_structured ? "amenity" : "q",
+                         curl_easy_escape(curl, state->query, 0));
+
+    if (state->street)
+        appendStringInfo(&url_buffer, "street=%s&", curl_easy_escape(curl, state->street, 0));
+
+    if (state->city)
+        appendStringInfo(&url_buffer, "city=%s&", curl_easy_escape(curl, state->city, 0));
+
+    if (state->county)
+        appendStringInfo(&url_buffer, "county=%s&", curl_easy_escape(curl, state->county, 0));
+
+    if (state->state)
+        appendStringInfo(&url_buffer, "state=%s&", curl_easy_escape(curl, state->state, 0));
+
+    if (state->country)
+        appendStringInfo(&url_buffer, "country=%s&", curl_easy_escape(curl, state->country, 0));
+        
+    if (state->postalcode)
+        appendStringInfo(&url_buffer, "postalcode=%s&", curl_easy_escape(curl, state->postalcode, 0));
 
     if (!state->format)
-        appendStringInfo(&url_buffer, "&format=%s", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+        appendStringInfo(&url_buffer, "format=%s", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
 
     if(strcmp(state->extra_params,"")!=0)
         appendStringInfo(&url_buffer, "%s", state->extra_params);

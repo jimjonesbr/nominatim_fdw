@@ -38,9 +38,22 @@ CREATE TYPE NominatimRecord AS (
 
 CREATE FUNCTION nominatim_query(
     server_name text, 
-    query text, 
+    query text,
     extra_params text DEFAULT '')
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION nominatim_query_structured(
+    server_name text, 
+    query text DEFAULT '',
+    street text DEFAULT '', 
+    city text DEFAULT '',
+    county text DEFAULT '',
+    state text DEFAULT '',
+    country text DEFAULT '',
+    postalcode text DEFAULT '',
+    extra_params text DEFAULT '')
+RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query_structured'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE FOREIGN DATA WRAPPER nominatim_fdw
