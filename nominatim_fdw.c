@@ -74,6 +74,9 @@
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 
+#define NOMINATIM_REQUEST_SEARCH "search"
+#define NOMINATIM_REQUEST_REVERSE "reverse"
+
 #define NOMINATIM_SERVER_OPTION_URL "url"
 #define NOMINATIM_SERVER_OPTION_FORMAT "format"
 #define NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT "connect_timeout"
@@ -107,6 +110,8 @@ typedef struct NominatimFDWState
 	int numcols;       /* Total number of columns in the foreign table. */
 	int rowcount;      /* Number of rows currently returned to the client */
 	int pagesize;      /* Total number of records retrieved from the SPARQL endpoint*/
+    int zoom;
+    char *request_type;
 	char* url;
     char *amenity;     /*  */
     char *street;      /*  */
@@ -122,12 +127,15 @@ typedef struct NominatimFDWState
 	char *custom_params;         /* Custom parameters used to compose the request URL */
     char *format;  /*  */
     char *query;  /*  */
+    char *layer;
     char *extra_params;  /*  */
 	bool request_redirect;       /* Enables or disables URL redirecting. */
     bool is_query_structured;
    	long request_max_redirect;   /* Limit of how many times the URL redirection (jump) may occur. */
 	long connect_timeout;        /* Timeout for SPARQL queries */
 	long max_retries;            /* Number of re-try attemtps for failed SPARQL queries */
+    float8 lon;
+    float8 lat;
 	xmlDocPtr xmldoc;            
     List *records;
 	struct NominatimFDWTable *nominatim_table; /* */
@@ -184,8 +192,10 @@ typedef struct NominatimRecord
     char *importance;
     char *icon;
 	char *extratags;
-    char *addressdetails;
+    char *addressdetails;    
     char *namedetails;
+    char *addressparts;
+    char* result;
 } NominatimRecord;
 
 struct string
@@ -231,11 +241,13 @@ extern Datum nominatim_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_version(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_query(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(nominatim_fdw_handler);
 PG_FUNCTION_INFO_V1(nominatim_fdw_validator);
 PG_FUNCTION_INFO_V1(nominatim_fdw_version);
 PG_FUNCTION_INFO_V1(nominatim_fdw_query);
+PG_FUNCTION_INFO_V1(nominatim_fdw_query_reverse);
 PG_FUNCTION_INFO_V1(nominatim_fdw_query_structured);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -253,6 +265,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp);
 static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, PlannerInfo *root);
 static void LoadData(NominatimFDWState *state);
+static void LoadDataReverseLookup(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
@@ -368,6 +381,95 @@ Datum nominatim_fdw_version(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }
 
+Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
+{
+	text *srvname_text = PG_GETARG_TEXT_P(0);
+    float8 lon = PG_GETARG_FLOAT8(1);
+    float8 lat = PG_GETARG_FLOAT8(2);
+    int zoom = PG_GETARG_INT32(3);
+    text *layer = PG_GETARG_TEXT_P(4);
+    text *extra_params = PG_GETARG_TEXT_P(5);
+
+    FuncCallContext *funcctx;
+	TupleDesc tupdesc;
+    NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
+
+	if (SRF_IS_FIRSTCALL())
+	{
+		MemoryContext oldcontext;       		
+		funcctx = SRF_FIRSTCALL_INIT();
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+        
+        state->lon = lon;
+        state->lat = lat;
+        state->zoom = zoom;
+        state->layer = strcmp(text_to_cstring(layer),"") == 0 ? NULL : text_to_cstring(layer);
+        state->extra_params = text_to_cstring(extra_params);
+        state->request_type = NOMINATIM_REQUEST_REVERSE;
+
+        elog(DEBUG1,"\n\n\t=== %s ===\n\tlon: '%f'\n\tlat: '%f'\n\tzoom: '%d'\n\textra_params: '%s'\n\tlayer: '%s'\n"
+            ,__func__,
+            state->lon,
+            state->lat,
+            state->zoom,
+            state->extra_params,
+            state->layer);
+            
+		LoadDataReverseLookup(state);
+				
+		funcctx->user_fctx = state->records;
+
+		if (state->records)
+			funcctx->max_calls = state->records->length;
+
+		elog(DEBUG1,"  %s: number of records retrieved = %ld ",__func__, funcctx->max_calls);
+
+		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("function returning record called in context that cannot accept type record")));
+		tupdesc = BlessTupleDesc(tupdesc);
+
+		funcctx->attinmeta = TupleDescGetAttInMetadata(tupdesc);
+
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	funcctx = SRF_PERCALL_SETUP();
+
+	if (funcctx->call_cntr < funcctx->max_calls)
+	{
+		Datum		values[18];
+		bool		nulls[18];		
+		HeapTuple	tuple;
+		Datum		result;
+		NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
+
+		memset(nulls, 0, sizeof(nulls));
+		
+		for (size_t i = 0; i < tupdesc->natts; i++)
+		{
+			Form_pg_attribute att = TupleDescAttr(tupdesc, i);					
+            char *value = GetAttributeValue(att,place);
+           
+			if(value)
+				values[i] = ConvertDatum(tuple, att->atttypid, att->atttypmod, value);
+			else
+				nulls[i] = true;
+
+            elog(DEBUG2,"  %s = '%s'",NameStr(att->attname), value);
+		}
+		
+		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
+		result = HeapTupleGetDatum(tuple);
+
+		SRF_RETURN_NEXT(funcctx, result);
+	}
+	else
+	{
+		SRF_RETURN_DONE(funcctx);
+	}
+}
+
 Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
@@ -387,6 +489,7 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
         state->query = text_to_cstring(query_text);
         state->extra_params = text_to_cstring(extra_params);
         state->is_query_structured = false;
+        state->request_type = NOMINATIM_REQUEST_SEARCH;
 
         elog(DEBUG1,"\n\n\t=== %s ===\n\tq:'%s'\n\textra_params: '%s'\n"
         ,__func__,
@@ -481,6 +584,7 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
         state->country = text_to_cstring(country);
         state->postalcode = text_to_cstring(postalcode);
         state->extra_params = text_to_cstring(extra_params);
+        state->request_type = NOMINATIM_REQUEST_SEARCH;
         state->is_query_structured = true;
 
         elog(DEBUG1,"\n\n\t=== %s ===\n\tamenity: '%s'\n\tstreet: '%s'\n\tcity: '%s'\n\tcounty: '%s'\n\tstate: '%s'\n\tcountry: '%s'\n\tpostalcode: '%s'\n\textra_params: '%s'\n"
@@ -599,6 +703,10 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
         return place->addressdetails;
     else if (strcmp(NameStr(att->attname), "namedetails") == 0)
         return place->namedetails;
+    else if (strcmp(NameStr(att->attname), "result") == 0)
+        return place->result;
+    else if (strcmp(NameStr(att->attname), "addressparts") == 0)
+        return place->addressparts;
     else 
         return NULL;
 
@@ -809,189 +917,315 @@ static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, Pl
 
 }
 
-static void LoadData(NominatimFDWState *state)
+static void LoadDataReverseLookup(NominatimFDWState *state)
 {
-	xmlNodePtr searchresults;
-    xmlNodePtr places;
+    struct NominatimRecord *place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
+    xmlNodePtr reversegeocode;
+    xmlNodePtr result;
     xmlNodePtr tag;
-	
-	state->rowcount = 0;
-	state->records = NIL;
+    StringInfoData addressparts;
+    StringInfoData extratags;
+    StringInfoData namedetails;
+           
+    initStringInfo(&addressparts);
+    initStringInfo(&extratags);
+    initStringInfo(&namedetails);
 
-	elog(DEBUG1, "%s called",__func__);
-
-	if (ExecuteRequest(state) != REQUEST_SUCCESS)
-		elog(ERROR, "%s -> request failed: '%s'", __func__, state->url);
-
-	Assert(state->xmldoc);
-
-   elog(DEBUG2, "  %s: loading '%s'",__func__, xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring"));
-
-    for (searchresults = xmlDocGetRootElement(state->xmldoc)->children; searchresults != NULL; searchresults = searchresults->next)
-	{
-        
-		if (xmlStrcmp(searchresults->name, (xmlChar *)"place") == 0)
-		{                              
-
-            struct NominatimRecord *place = (struct NominatimRecord *) palloc0(sizeof(struct NominatimRecord));
-            StringInfoData xtags;
-            StringInfoData addressdetails;
-            StringInfoData namedetails;
-
-            initStringInfo(&xtags);
-            initStringInfo(&addressdetails);
-            initStringInfo(&namedetails);
-            
-            appendStringInfo(&xtags,"{");
-            appendStringInfo(&addressdetails,"{");
-            appendStringInfo(&namedetails,"{");
-
-            place->ref = (char *)xmlGetProp(searchresults, (xmlChar *)"ref");
-            place->address_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"address_rank");
-            place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
-            place->boundingbox = (char *)xmlGetProp(searchresults, (xmlChar *)"boundingbox");
-            place->class = (char *)xmlGetProp(searchresults, (xmlChar *)"class");
-            place->display_name = (char *)xmlGetProp(searchresults, (xmlChar *)"display_name");
-            place->display_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"display_rank");
-            place->exclude_place_ids = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"exclude_place_ids");            
-            place->icon = (char *)xmlGetProp(searchresults, (xmlChar *)"icon");
-            place->importance = (char *)xmlGetProp(searchresults, (xmlChar *)"importance");
-            place->lat = (char *)xmlGetProp(searchresults, (xmlChar *)"lat");
-            place->lon = (char *)xmlGetProp(searchresults, (xmlChar *)"lon");
-            place->more_url = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"more_url");
-            place->osm_id = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_id");
-            place->osm_type = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_type");
-            place->place_id = (char *)xmlGetProp(searchresults, (xmlChar *)"place_id");
-            place->place_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"place_rank");
-            
-            if(xmlGetProp(searchresults, (xmlChar *)"geotext"))
-                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geotext");
-            else if(xmlGetProp(searchresults, (xmlChar *)"geojson"))
-                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geojson");
-            else if(xmlGetProp(searchresults, (xmlChar *)"geosvg"))
-                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geosvg");
-            
-            place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
-            place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
-
-            for (places = searchresults->children; places != NULL; places = places->next)
-            {
-                if (xmlStrcmp(places->name, (xmlChar *)"extratags") == 0)
-                {       
-                    for (tag = places->children; tag != NULL; tag = tag->next)
-                    {
-                        appendStringInfo(&xtags,"%s\"%s\":\"%s\"", 
-                            xtags.len == 1 ? "" : ",",
-                            (char *)xmlGetProp(tag, (xmlChar *)"key"), 
-                            (char *)xmlGetProp(tag, (xmlChar *)"value"));
-                    }   
-                } 
-                else if (xmlStrcmp(places->name, (xmlChar *)"namedetails") == 0)
-                {
-                    for (tag = places->children; tag != NULL; tag = tag->next)
-                    {
-                        appendStringInfo(&namedetails,"%s\"%s\":\"%s\"", 
-                            namedetails.len == 1 ? "" : ",",
-                            (char *)xmlGetProp(tag, (xmlChar *)"desc"), 
-                            (char *)xmlNodeGetContent(tag));
-                    }
-                }
-                else if (xmlStrcmp(places->name, (xmlChar *)"geokml") == 0)
-                {
-                    xmlBufferPtr buffer = xmlBufferCreate();
-                    xmlNodeDump(buffer, state->xmldoc, places->children, 0, 0);
-                    place->polygon = pstrdup((char *) buffer->content);
-                    xmlBufferFree(buffer);
-                } 
-                else
-                {
-                    appendStringInfo(&addressdetails,"%s\"%s\":\"%s\"", 
-                        addressdetails.len == 1 ? "" : ",",
-                        (char *)places->name, 
-                        (char *)xmlNodeGetContent(places));
-                }
-
-            }
-
-            appendStringInfo(&xtags,"}");
-            appendStringInfo(&addressdetails,"}");
-            appendStringInfo(&namedetails,"}");
-            
-            place->extratags = NameStr(xtags);
-            place->addressdetails = NameStr(addressdetails);
-            place->namedetails = NameStr(namedetails);
-
-            state->records = lappend(state->records, place);
-		}
-	}
-
-    if(tag)
-	    xmlFreeNode(tag);
-
-    if(places)
-	 	xmlFreeNode(places);
-
-	if(searchresults)
-		xmlFreeNode(searchresults);
-}
-
-static int ExecuteRequest(NominatimFDWState *state)
-{
-    CURL *curl;
-    CURLcode res;
-    StringInfoData url_buffer;
-    StringInfoData user_agent;
-    StringInfoData accept_header;
-
-    char errbuf[CURL_ERROR_SIZE];
-    struct MemoryStruct chunk;
-    struct MemoryStruct chunk_header;
-    struct curl_slist *headers = NULL;
-
-    chunk.memory = palloc(1);
-    chunk.size = 0; /* no data at this point */
-    chunk_header.memory = palloc(1);
-    chunk_header.size = 0; /* no data at this point */
+    appendStringInfo(&addressparts, "{");
+    appendStringInfo(&extratags, "{");
+    appendStringInfo(&namedetails, "{");
 
     elog(DEBUG1, "%s called", __func__);
 
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl = curl_easy_init();
+    if (ExecuteRequest(state) != REQUEST_SUCCESS)
+        elog(ERROR, "%s -> request failed: '%s'", __func__, state->url);
 
-    // initStringInfo(&accept_header);
-    // appendStringInfo(&accept_header, "Accept-Language: text/xml");
+    Assert(state->xmldoc);
 
-    initStringInfo(&url_buffer);
-    appendStringInfo(&url_buffer, "%s?", state->url);
+    place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
+    place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
+    place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
+    place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
 
-    // if (state->city)
-    //     appendStringInfo(&url_buffer, "%s=%s", NOMINATIM_TAG_CITY, state->city);
+    for (reversegeocode = xmlDocGetRootElement(state->xmldoc)->children; reversegeocode != NULL; reversegeocode = reversegeocode->next)
+    {
+    
+        if (xmlStrcmp(reversegeocode->name, (xmlChar *)"result") == 0)
+        {
 
-    if (state->query)
-        appendStringInfo(&url_buffer, "%s=%s&",
-                         state->is_query_structured ? "amenity" : "q",
-                         curl_easy_escape(curl, state->query, 0));
+            place->ref = (char *)xmlGetProp(reversegeocode, (xmlChar *)"ref");
+            place->address_rank = (char *)xmlGetProp(reversegeocode, (xmlChar *)"address_rank");
+            place->boundingbox = (char *)xmlGetProp(reversegeocode, (xmlChar *)"boundingbox");
+            place->class = (char *)xmlGetProp(reversegeocode, (xmlChar *)"class");                
+            place->icon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"icon");
+            place->importance = (char *)xmlGetProp(reversegeocode, (xmlChar *)"importance");
+            place->lat = (char *)xmlGetProp(reversegeocode, (xmlChar *)"lat");
+            place->lon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"lon");
+            place->osm_id = (char *)xmlGetProp(reversegeocode, (xmlChar *)"osm_id");
+            place->osm_type = (char *)xmlGetProp(reversegeocode, (xmlChar *)"osm_type");
+            place->place_id = (char *)xmlGetProp(reversegeocode, (xmlChar *)"place_id");
+            place->place_rank = (char *)xmlGetProp(reversegeocode, (xmlChar *)"place_rank");
 
-    if (state->street)
-        appendStringInfo(&url_buffer, "street=%s&", curl_easy_escape(curl, state->street, 0));
+            if (xmlGetProp(reversegeocode, (xmlChar *)"geotext"))
+                place->polygon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"geotext");
+            else if (xmlGetProp(reversegeocode, (xmlChar *)"geojson"))
+                place->polygon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"geojson");
+            else if (xmlGetProp(reversegeocode, (xmlChar *)"geosvg"))
+                place->polygon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"geosvg");
+                
+            place->result = pstrdup((char *)xmlNodeGetContent(reversegeocode));
 
-    if (state->city)
-        appendStringInfo(&url_buffer, "city=%s&", curl_easy_escape(curl, state->city, 0));
+        }
+        else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"addressparts") == 0)
+        {
 
-    if (state->county)
-        appendStringInfo(&url_buffer, "county=%s&", curl_easy_escape(curl, state->county, 0));
+            for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
+            {
+                
+                appendStringInfo(&addressparts, "%s\"%s\":\"%s\"",
+                                 addressparts.len == 1 ? "" : ",",
+                                 (char *)tag->name,
+                                 (char *)xmlNodeGetContent(tag));
+            }
 
-    if (state->state)
-        appendStringInfo(&url_buffer, "state=%s&", curl_easy_escape(curl, state->state, 0));
+            place->addressparts = NameStr(addressparts);
+        } 
+        else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"extratags") == 0)
+        {
 
-    if (state->country)
-        appendStringInfo(&url_buffer, "country=%s&", curl_easy_escape(curl, state->country, 0));
-        
-    if (state->postalcode)
-        appendStringInfo(&url_buffer, "postalcode=%s&", curl_easy_escape(curl, state->postalcode, 0));
+            for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
+            {
+                appendStringInfo(&extratags, "%s\"%s\":\"%s\"",
+                                extratags.len == 1 ? "" : ",",
+                                (char *)xmlGetProp(tag, (xmlChar *)"key"),
+                                (char *)xmlGetProp(tag, (xmlChar *)"value"));
+            }
 
-    if (!state->format)
-        appendStringInfo(&url_buffer, "format=%s", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+        }
+        else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"namedetails") == 0)
+        {
+            for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
+            {
+                appendStringInfo(&namedetails, "%s\"%s\":\"%s\"",
+                                    namedetails.len == 1 ? "" : ",",
+                                    (char *)xmlGetProp(tag, (xmlChar *)"desc"),
+                                    (char *)xmlNodeGetContent(tag));
+                
+            }
+
+        }
+
+    }
+
+    appendStringInfo(&addressparts, "}");
+    appendStringInfo(&extratags, "}");
+    appendStringInfo(&namedetails, "}");
+    
+    place->addressparts = NameStr(addressparts);
+    place->extratags = NameStr(extratags);
+    place->namedetails = NameStr(namedetails);
+
+    state->records = lappend(state->records, place);
+
+}
+
+static void LoadData(NominatimFDWState * state)
+{
+        xmlNodePtr searchresults;
+        xmlNodePtr places;
+        xmlNodePtr tag;
+
+        // state->rowcount = 0;
+        state->records = NIL;
+
+        elog(DEBUG1, "%s called", __func__);
+
+        if (ExecuteRequest(state) != REQUEST_SUCCESS)
+            elog(ERROR, "%s -> request failed: '%s'", __func__, state->url);
+
+        Assert(state->xmldoc);
+
+        elog(DEBUG2, "  %s: loading '%s'", __func__, xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring"));
+
+        for (searchresults = xmlDocGetRootElement(state->xmldoc)->children; searchresults != NULL; searchresults = searchresults->next)
+        {
+
+            if (xmlStrcmp(searchresults->name, (xmlChar *)"place") == 0)
+            {
+
+                struct NominatimRecord *place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
+                StringInfoData xtags;
+                StringInfoData addressdetails;
+                StringInfoData namedetails;
+
+                initStringInfo(&xtags);
+                initStringInfo(&addressdetails);
+                initStringInfo(&namedetails);
+
+                appendStringInfo(&xtags, "{");
+                appendStringInfo(&addressdetails, "{");
+                appendStringInfo(&namedetails, "{");
+
+                place->ref = (char *)xmlGetProp(searchresults, (xmlChar *)"ref");
+                place->address_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"address_rank");
+                place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
+                place->boundingbox = (char *)xmlGetProp(searchresults, (xmlChar *)"boundingbox");
+                place->class = (char *)xmlGetProp(searchresults, (xmlChar *)"class");
+                place->display_name = (char *)xmlGetProp(searchresults, (xmlChar *)"display_name");
+                place->display_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"display_rank");
+                place->exclude_place_ids = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"exclude_place_ids");
+                place->icon = (char *)xmlGetProp(searchresults, (xmlChar *)"icon");
+                place->importance = (char *)xmlGetProp(searchresults, (xmlChar *)"importance");
+                place->lat = (char *)xmlGetProp(searchresults, (xmlChar *)"lat");
+                place->lon = (char *)xmlGetProp(searchresults, (xmlChar *)"lon");
+                place->more_url = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"more_url");
+                place->osm_id = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_id");
+                place->osm_type = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_type");
+                place->place_id = (char *)xmlGetProp(searchresults, (xmlChar *)"place_id");
+                place->place_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"place_rank");
+
+                if (xmlGetProp(searchresults, (xmlChar *)"geotext"))
+                    place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geotext");
+                else if (xmlGetProp(searchresults, (xmlChar *)"geojson"))
+                    place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geojson");
+                else if (xmlGetProp(searchresults, (xmlChar *)"geosvg"))
+                    place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geosvg");
+
+                place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
+                place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
+
+                for (places = searchresults->children; places != NULL; places = places->next)
+                {
+                    if (xmlStrcmp(places->name, (xmlChar *)"extratags") == 0)
+                    {
+                        for (tag = places->children; tag != NULL; tag = tag->next)
+                        {
+                            appendStringInfo(&xtags, "%s\"%s\":\"%s\"",
+                                             xtags.len == 1 ? "" : ",",
+                                             (char *)xmlGetProp(tag, (xmlChar *)"key"),
+                                             (char *)xmlGetProp(tag, (xmlChar *)"value"));
+                        }
+                    }
+                    else if (xmlStrcmp(places->name, (xmlChar *)"namedetails") == 0)
+                    {
+                        for (tag = places->children; tag != NULL; tag = tag->next)
+                        {
+                            appendStringInfo(&namedetails, "%s\"%s\":\"%s\"",
+                                             namedetails.len == 1 ? "" : ",",
+                                             (char *)xmlGetProp(tag, (xmlChar *)"desc"),
+                                             (char *)xmlNodeGetContent(tag));
+                        }
+                    }
+                    else if (xmlStrcmp(places->name, (xmlChar *)"geokml") == 0)
+                    {
+                        xmlBufferPtr buffer = xmlBufferCreate();
+                        xmlNodeDump(buffer, state->xmldoc, places->children, 0, 0);
+                        place->polygon = pstrdup((char *)buffer->content);
+                        xmlBufferFree(buffer);
+                    }
+                    else
+                    {
+                        appendStringInfo(&addressdetails, "%s\"%s\":\"%s\"",
+                                         addressdetails.len == 1 ? "" : ",",
+                                         (char *)places->name,
+                                         (char *)xmlNodeGetContent(places));
+                    }
+                }
+
+                appendStringInfo(&xtags, "}");
+                appendStringInfo(&addressdetails, "}");
+                appendStringInfo(&namedetails, "}");
+
+                place->extratags = NameStr(xtags);
+                place->addressdetails = NameStr(addressdetails);
+                place->namedetails = NameStr(namedetails);
+
+                state->records = lappend(state->records, place);
+            }
+        }
+
+        if (tag)
+            xmlFreeNode(tag);
+
+        if (places)
+            xmlFreeNode(places);
+
+        if (searchresults)
+            xmlFreeNode(searchresults);
+    }
+
+    static int ExecuteRequest(NominatimFDWState * state)
+    {
+        CURL *curl;
+        CURLcode res;
+        StringInfoData url_buffer;
+        StringInfoData user_agent;
+        StringInfoData accept_header;
+
+        char errbuf[CURL_ERROR_SIZE];
+        struct MemoryStruct chunk;
+        struct MemoryStruct chunk_header;
+        struct curl_slist *headers = NULL;
+
+        chunk.memory = palloc(1);
+        chunk.size = 0; /* no data at this point */
+        chunk_header.memory = palloc(1);
+        chunk_header.size = 0; /* no data at this point */
+
+        elog(DEBUG1, "%s called", __func__);
+
+        curl_global_init(CURL_GLOBAL_ALL);
+        curl = curl_easy_init();
+
+        // initStringInfo(&accept_header);
+        // appendStringInfo(&accept_header, "Accept-Language: text/xml");
+
+        initStringInfo(&url_buffer);
+        appendStringInfo(&url_buffer, "%s", state->url);
+
+        // if (state->city)
+        //     appendStringInfo(&url_buffer, "%s=%s", NOMINATIM_TAG_CITY, state->city);
+
+        appendStringInfo(&url_buffer, "/%s?", state->request_type);
+
+        if (state->query)
+            appendStringInfo(&url_buffer, "%s=%s&",
+                             state->is_query_structured ? "amenity" : "q",
+                             curl_easy_escape(curl, state->query, 0));
+
+        if (state->street)
+            appendStringInfo(&url_buffer, "street=%s&", curl_easy_escape(curl, state->street, 0));
+
+        if (state->city)
+            appendStringInfo(&url_buffer, "city=%s&", curl_easy_escape(curl, state->city, 0));
+
+        if (state->county)
+            appendStringInfo(&url_buffer, "county=%s&", curl_easy_escape(curl, state->county, 0));
+
+        if (state->state)
+            appendStringInfo(&url_buffer, "state=%s&", curl_easy_escape(curl, state->state, 0));
+
+        if (state->country)
+            appendStringInfo(&url_buffer, "country=%s&", curl_easy_escape(curl, state->country, 0));
+
+        if (state->postalcode)
+            appendStringInfo(&url_buffer, "postalcode=%s&", curl_easy_escape(curl, state->postalcode, 0));
+
+        if (!state->format)
+            appendStringInfo(&url_buffer, "format=%s&", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+
+        if (state->lon)
+            appendStringInfo(&url_buffer, "lon=%f&", state->lon);
+
+        if (state->lat)
+            appendStringInfo(&url_buffer, "lat=%f&", state->lat);
+
+        if (state->zoom)
+            appendStringInfo(&url_buffer, "zoomt=%d&", state->zoom);
+
+        if (state->layer)
+            appendStringInfo(&url_buffer, "layer=%s&", state->layer);
+        //appendStringInfo(&url_buffer, "%s%s&",strcmp(state->layer,"") == 0 ? "" : "layer=", state->layer);
 
     if(strcmp(state->extra_params,"")!=0)
         appendStringInfo(&url_buffer, "%s", state->extra_params);

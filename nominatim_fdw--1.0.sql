@@ -36,6 +36,27 @@ CREATE TYPE NominatimRecord AS (
   addressdetails jsonb
 );
 
+CREATE TYPE NominatimReverseGeocode AS ( 
+  osm_id bigint,  
+  osm_type text, 
+  result text,
+  ref text,
+  place_id bigint,
+  place_rank int,
+  address_rank int,
+  lon numeric,
+  lat numeric,
+  boundingbox text,  
+  icon text,
+  timestamp timestamptz,
+  attribution text,
+  querystring text,
+  polygon text,
+  extratags jsonb,
+  namedetails jsonb,
+  addressparts jsonb
+);
+
 CREATE FUNCTION nominatim_query(
     server_name text, 
     query text,
@@ -54,6 +75,16 @@ CREATE FUNCTION nominatim_query_structured(
     postalcode text DEFAULT '',
     extra_params text DEFAULT '')
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query_structured'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION nominatim_query_reverse(
+    server_name text, 
+    lon double precision DEFAULT 0,
+    lat double precision DEFAULT 0,
+    zoom int DEFAULT 0,
+    layer text DEFAULT '',
+    extra_params text DEFAULT '')
+RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_query_reverse'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE FOREIGN DATA WRAPPER nominatim_fdw
