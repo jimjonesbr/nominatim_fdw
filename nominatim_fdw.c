@@ -1221,7 +1221,7 @@ static void LoadData(NominatimFDWState * state)
             appendStringInfo(&url_buffer, "lat=%f&", state->lat);
 
         if (state->zoom)
-            appendStringInfo(&url_buffer, "zoomt=%d&", state->zoom);
+            appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
 
         if (state->layer)
             appendStringInfo(&url_buffer, "layer=%s&", state->layer);
