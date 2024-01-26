@@ -81,14 +81,29 @@
 #define NOMINATIM_SERVER_OPTION_URL "url"
 #define NOMINATIM_SERVER_OPTION_FORMAT "format"
 #define NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT "connect_timeout"
-#define NOMINATIM_SERVER_OPTION_CONNECTRETRY "connect_retry"
-#define NOMINATIM_SERVER_OPTION_REQUEST_REDIRECT "request_redirect"
-#define NOMINATIM_SERVER_OPTION_REQUEST_MAX_REDIRECT "request_max_redirect"
+#define NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY "max_connect_retry"
+#define NOMINATIM_SERVER_OPTION_MAXREDIRECT "max_connect_redirect"
 #define NOMINATIM_SERVER_OPTION_HTTP_PROXY "http_proxy"
 #define NOMINATIM_SERVER_OPTION_HTTPS_PROXY "https_proxy"
 #define NOMINATIM_SERVER_OPTION_PROXY_USER "proxy_user"
 #define NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD "proxy_user_password"
 #define NOMINATIM_SERVER_OPTION_QUERY "query"
+
+#define NOMINATIM_TABLE_OPTION_QUERY "q"
+#define NOMINATIM_TABLE_OPTION_AMENITY "amenity"
+#define NOMINATIM_TABLE_OPTION_STREET "street"
+#define NOMINATIM_TABLE_OPTION_CITY "city"
+#define NOMINATIM_TABLE_OPTION_COUNTY "county"
+#define NOMINATIM_TABLE_OPTION_STATE "state"
+#define NOMINATIM_TABLE_OPTION_COUNTRY "country"
+#define NOMINATIM_TABLE_OPTION_POSTALCODE "postalcode"
+#define NOMINATIM_TABLE_OPTION_EXTRATAGS "extratags"
+#define NOMINATIM_TABLE_OPTION_NAMEDETAILS "namedetails"
+#define NOMINATIM_TABLE_OPTION_ADDRESSDETAILS "addressdetails"
+#define NOMINATIM_TABLE_OPTION_ADDRESSPARTS "addressparts"
+
+#define NOMINATIM_COLUMN_OPTION_PROPERTY "property"
+#define NOMINATIM_COLUMN_OPTION_FORMAT "format"
 
 #define NOMINATIM_TAG_CITY "city"
 #define NOMINATIM_TAG_STREET "street"
@@ -101,6 +116,7 @@
 
 #define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300
 #define NOMINATIM_DEFAULT_MAXRETRY 3
+#define NOMINATIM_DEFAULT_MAXREDIRECT 1
 #define NOMINATIM_DEFAULT_FORMAT "xml"
 #define NOMINATIM_DEFAULT_URL "https://nominatim.openstreetmap.org/search"
 
@@ -130,14 +146,25 @@ typedef struct NominatimFDWState
     char *format;  /*  */
     char *query;  /*  */
     char *layer;
-    char *extra_params;  /*  */
+    char *countrycodes;
+    char *feature_type;
+    char *exclude_place_ids;
+    char *viewbox;    
+    char *polygon_type;
+    char *email;    
+    bool dedupe;
+    bool bounded;
 	bool request_redirect;       /* Enables or disables URL redirecting. */
     bool is_query_structured;
+    bool extratags;
+    bool namedetails;
+    bool addressdetails;
    	long request_max_redirect;   /* Limit of how many times the URL redirection (jump) may occur. */
 	long connect_timeout;        /* Timeout for SPARQL queries */
 	long max_retries;            /* Number of re-try attemtps for failed SPARQL queries */
     float8 lon;
     float8 lat;
+    float8 polygon_threshold;
 	xmlDocPtr xmldoc;            
     List *records;
 	struct NominatimFDWTable *nominatim_table; /* */
@@ -221,9 +248,8 @@ static struct NominatimFDWOption valid_options[] =
 	{NOMINATIM_SERVER_OPTION_PROXY_USER, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
-	{NOMINATIM_SERVER_OPTION_CONNECTRETRY, ForeignServerRelationId, false, false},
-	{NOMINATIM_SERVER_OPTION_REQUEST_REDIRECT, ForeignServerRelationId, false, false},
-	{NOMINATIM_SERVER_OPTION_REQUEST_MAX_REDIRECT, ForeignServerRelationId, false, false},
+	{NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY, ForeignServerRelationId, false, false},
+	{NOMINATIM_SERVER_OPTION_MAXREDIRECT, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_QUERY, ForeignServerRelationId, false, false},
 	/* Foreign Tables */
 	{NOMINATIM_TAG_CITY, ForeignTableRelationId, true, false},
@@ -272,6 +298,7 @@ static void LoadData(NominatimFDWState *state);
 static void LoadDataReverseLookup(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
+static bool IsPolygonTypeSupported(char *polygon_type);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
@@ -429,7 +456,7 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                     }
                 }
 
-                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_CONNECTRETRY) == 0 || strcmp(opt->optname, NOMINATIM_SERVER_OPTION_REQUEST_MAX_REDIRECT) == 0)
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0 || strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
                 {
                     char *endptr;
                     char *retry_str = defGetString(def);
@@ -440,19 +467,9 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, retry_str),
-                                 errhint("expected values are positive integers (retry attempts in case of failure)")));
+                                 errhint("expected values are positive integers")));
                     }
                 }
-
-                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_REQUEST_REDIRECT) == 0)
-                {
-                    if(strcasecmp(defGetString(def),"true") != 0 && strcasecmp(defGetString(def),"false") != 0)
-                        ereport(ERROR,
-                                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
-                                 errmsg("invalid %s: '%s'", def->defname, defGetString(def)),
-                                 errhint("parameter expectes boolean values ('true', 'false')")));
-                }
-
                 
             }
         }
@@ -498,7 +515,10 @@ Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
     float8 lat = PG_GETARG_FLOAT8(2);
     int zoom = PG_GETARG_INT32(3);
     text *layer = PG_GETARG_TEXT_P(4);
-    text *extra_params = PG_GETARG_TEXT_P(5);
+    bool extratags = PG_GETARG_BOOL(5);
+    bool addressdetails = PG_GETARG_BOOL(6);
+    bool namedetails = PG_GETARG_BOOL(7);
+    text *polygon_text = PG_GETARG_TEXT_P(8);
 
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
@@ -513,16 +533,24 @@ Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
         state->lon = lon;
         state->lat = lat;
         state->zoom = zoom;
-        state->layer = strcmp(text_to_cstring(layer),"") == 0 ? NULL : text_to_cstring(layer);
-        state->extra_params = text_to_cstring(extra_params);
+        state->layer = strcmp(text_to_cstring(layer),"") == 0 ? NULL : text_to_cstring(layer);        
         state->request_type = NOMINATIM_REQUEST_REVERSE;
 
-        elog(DEBUG1,"\n\n\t=== %s ===\n\tlon: '%f'\n\tlat: '%f'\n\tzoom: '%d'\n\textra_params: '%s'\n\tlayer: '%s'\n"
+        state->polygon_type = text_to_cstring(polygon_text);
+        state->extratags = extratags;
+        state->addressdetails = addressdetails;
+        state->namedetails = namedetails;
+
+        if(!IsPolygonTypeSupported(state->polygon_type))
+            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+							errmsg("invalid polygon type '%s'",state->polygon_type)));
+
+        elog(DEBUG1,"\n\n\t=== %s ===\n\tlon: '%f'\n\tlat: '%f'\n\tzoom: '%d'\n\tpolygon_type: '%s'\n\tlayer: '%s'\n"
             ,__func__,
             state->lon,
             state->lat,
             state->zoom,
-            state->extra_params,
+            state->polygon_type,
             state->layer);
             
 		LoadDataReverseLookup(state);
@@ -570,7 +598,7 @@ Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
 		}
 		
         elog(DEBUG2,"  %s: creating heap tuple",__func__);
-        
+
 		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
 
@@ -585,9 +613,12 @@ Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
 Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
-    text *query_text = PG_GETARG_TEXT_P(1);
-    text *extra_params = PG_GETARG_TEXT_P(2);
-
+    text *query_text = PG_GETARG_TEXT_P(1);    
+    bool extratags = PG_GETARG_BOOL(2);
+    bool addressdetails = PG_GETARG_BOOL(3);
+    bool namedetails = PG_GETARG_BOOL(4);
+    text *polygon_text = PG_GETARG_TEXT_P(5);
+   
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
     NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
@@ -596,18 +627,26 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 	{
 		MemoryContext oldcontext;
         state = GetServerInfo(text_to_cstring(srvname_text));
+        
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
         state->query = text_to_cstring(query_text);
-        state->extra_params = text_to_cstring(extra_params);
+        state->polygon_type = text_to_cstring(polygon_text);
         state->is_query_structured = false;
+        state->extratags = extratags;
+        state->addressdetails = addressdetails;
+        state->namedetails = namedetails;
         state->request_type = NOMINATIM_REQUEST_SEARCH;
 
-        elog(DEBUG1,"\n\n\t=== %s ===\n\tq:'%s'\n\textra_params: '%s'\n"
+        if(!IsPolygonTypeSupported(state->polygon_type))
+            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+							errmsg("invalid polygon type '%s'",state->polygon_type)));
+        
+        elog(DEBUG1,"\n\n\t=== %s ===\n\tq:'%s'\n\tpolygon_type: '%s'\n"
         ,__func__,
         state->query,
-        state->extra_params);
+        state->polygon_type);
        	
 		LoadData(state);
 				
@@ -670,7 +709,11 @@ Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
     text *osm_ids_text = PG_GETARG_TEXT_P(1);
-    text *extra_params = PG_GETARG_TEXT_P(2);
+    bool extratags = PG_GETARG_BOOL(2);
+    bool addressdetails = PG_GETARG_BOOL(3);
+    bool namedetails = PG_GETARG_BOOL(4);
+    text *polygon_text = PG_GETARG_TEXT_P(5);
+
 
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
@@ -683,15 +726,22 @@ Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS)
         state = GetServerInfo(text_to_cstring(srvname_text));
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        state->osm_ids = text_to_cstring(osm_ids_text);
-        state->extra_params = text_to_cstring(extra_params);
+        state->osm_ids = text_to_cstring(osm_ids_text);    
+        state->polygon_type = text_to_cstring(polygon_text);    
         state->is_query_structured = false;
+        state->extratags = extratags;
+        state->addressdetails = addressdetails;
+        state->namedetails = namedetails;
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
 
-        elog(DEBUG1,"\n\n\t=== %s ===\n\tosm_ids:'%s'\n\textra_params: '%s'\n"
+        if(!IsPolygonTypeSupported(state->polygon_type))
+            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+							errmsg("invalid polygon type '%s'",state->polygon_type)));
+
+        elog(DEBUG1,"\n\n\t=== %s ===\n\tosm_ids:'%s'\n\tpolygon_type: '%s'\n"
         ,__func__,
         state->osm_ids,
-        state->extra_params);
+        state->polygon_type);
        	
 		LoadData(state);
 				
@@ -760,7 +810,10 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
     text *tstate = PG_GETARG_TEXT_P(5);
     text *country = PG_GETARG_TEXT_P(6);
     text *postalcode = PG_GETARG_TEXT_P(7);
-    text *extra_params = PG_GETARG_TEXT_P(8);
+    bool extratags = PG_GETARG_BOOL(8);
+    bool addressdetails = PG_GETARG_BOOL(9);
+    bool namedetails = PG_GETARG_BOOL(10);
+    text *polygon_text = PG_GETARG_TEXT_P(11);
 
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
@@ -773,6 +826,7 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
+        elog(DEBUG2,"%s: loading parameters",__func__);
         state->query = text_to_cstring(query_text);
         state->street = text_to_cstring(street);
         state->city = text_to_cstring(city);
@@ -780,11 +834,18 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
         state->state = text_to_cstring(tstate);
         state->country = text_to_cstring(country);
         state->postalcode = text_to_cstring(postalcode);
-        state->extra_params = text_to_cstring(extra_params);
         state->request_type = NOMINATIM_REQUEST_SEARCH;
         state->is_query_structured = true;
+        state->polygon_type = text_to_cstring(polygon_text);
+        state->extratags = extratags;
+        state->addressdetails = addressdetails;
+        state->namedetails = namedetails;
 
-        elog(DEBUG1,"\n\n\t=== %s ===\n\tamenity: '%s'\n\tstreet: '%s'\n\tcity: '%s'\n\tcounty: '%s'\n\tstate: '%s'\n\tcountry: '%s'\n\tpostalcode: '%s'\n\textra_params: '%s'\n"
+         if(!IsPolygonTypeSupported(state->polygon_type))
+            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+							errmsg("invalid polygon type '%s'",state->polygon_type)));
+
+        elog(DEBUG1,"\n\n\t=== %s ===\n\tamenity: '%s'\n\tstreet: '%s'\n\tcity: '%s'\n\tcounty: '%s'\n\tstate: '%s'\n\tcountry: '%s'\n\tpostalcode: '%s'\n\tpolygon_type: '%s'\n"
             ,__func__,
             state->query,
             state->street,
@@ -793,7 +854,7 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
             state->state,
             state->country,
             state->postalcode,
-            state->extra_params);
+            state->polygon_type);
             
 		LoadData(state);
 				
@@ -948,10 +1009,9 @@ static NominatimFDWState *GetServerInfo(const char *srvname)
 	NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
 	ForeignServer *server = GetForeignServerByName(srvname, true);
 
-	state->request_max_redirect = 0L;
     state->request_redirect = 1L;
-    state->max_retries = 3;
-    state->request_max_redirect = 5;
+    state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;
+    state->request_max_redirect = NOMINATIM_DEFAULT_MAXREDIRECT;
 
 	elog(DEBUG1, "%s called: '%s'", __func__, srvname);
 
@@ -994,27 +1054,22 @@ static NominatimFDWState *GetServerInfo(const char *srvname)
 				state->connect_timeout = strtol(timeout_str, &tailpt, 0);
 			}
 
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_REQUEST_REDIRECT) == 0)
-			{
-				state->request_redirect = defGetBoolean(def);
-
-				elog(DEBUG1, "  %s: setting \"%s\": %d", __func__, NOMINATIM_SERVER_OPTION_REQUEST_REDIRECT, state->request_redirect);
-			}
-
-			if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_REQUEST_MAX_REDIRECT) == 0)
+			if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
 			{
 				char *tailpt;
 				char *maxredirect_str = defGetString(def);
 
-				state->request_max_redirect = strtol(maxredirect_str, &tailpt, 10);
-
-				elog(DEBUG1, "  %s: setting \"%s\": %ld", __func__, NOMINATIM_SERVER_OPTION_REQUEST_MAX_REDIRECT, state->request_max_redirect);
-
-				if (strcmp(defGetString(def), "0") != 0 && state->request_max_redirect == 0)
-				{
-					elog(ERROR, "invalid value for \"%s\"", NOMINATIM_SERVER_OPTION_REQUEST_MAX_REDIRECT);
-				}
+				state->request_max_redirect = strtol(maxredirect_str, &tailpt, 10); 
 			}
+
+   			if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0)
+			{
+				char *tailpt;
+				char *val = defGetString(def);
+
+				state->max_retries = strtol(val, &tailpt, 10);              
+			}            
+            
 		}
 	}
 	else
@@ -1424,9 +1479,24 @@ static int ExecuteRequest(NominatimFDWState *state)
     if (state->layer && strlen(state->layer)>0)
         appendStringInfo(&url_buffer, "layer=%s&", state->layer);
     // appendStringInfo(&url_buffer, "%s%s&",strcmp(state->layer,"") == 0 ? "" : "layer=", state->layer);
+    
+    if(state->extratags)
+        appendStringInfo(&url_buffer, "extratags=1&");
+    
+    if(state->namedetails)
+        appendStringInfo(&url_buffer, "namedetails=1&");
+    
+    if(state->addressdetails)
+        appendStringInfo(&url_buffer, "addressdetails=1&");
+    else
+        appendStringInfo(&url_buffer, "addressdetails=0&");
+    
+    if(state->polygon_type && strlen(state->polygon_type)>0)
+        appendStringInfo(&url_buffer, "%s=1&",state->polygon_type);
 
-    if (strcmp(state->extra_params, "") != 0)
-        appendStringInfo(&url_buffer, "%s", state->extra_params);
+
+    // if (strcmp(state->extra_params, "") != 0)
+    //     appendStringInfo(&url_buffer, "%s", state->extra_params);
 
     if (curl)
     {
@@ -1614,4 +1684,17 @@ static int CheckURL(char *url)
 	}
 
 	return REQUEST_SUCCESS;
+}
+
+static bool IsPolygonTypeSupported(char *polygon_type)
+{
+    if(!polygon_type)
+        return false;
+
+    return (strcmp(polygon_type,"") == 0 ||
+           strcmp(polygon_type,"polygon_text") == 0 ||
+           strcmp(polygon_type,"polygon_geojson") == 0 ||
+           strcmp(polygon_type,"polygon_kml") == 0 ||
+           strcmp(polygon_type,"polygon_svg") == 0);
+          
 }

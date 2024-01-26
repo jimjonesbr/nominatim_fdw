@@ -1,3 +1,4 @@
+CREATE EXTENSION nominatim_fdw;
 
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
@@ -25,7 +26,7 @@ CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          http_proxy 'http://server.im',
-         http_user '');
+         proxy_user '');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
@@ -57,7 +58,7 @@ OPTIONS (url 'http://server.im',
          proxy_user 'jim',
          proxy_user_password 'pw',
          connect_timeout '42',
-         connect_retry '');
+         max_connect_retry '');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
@@ -66,7 +67,7 @@ OPTIONS (url 'http://server.im',
          proxy_user 'jim',
          proxy_user_password 'pw',
          connect_timeout '42',
-         connect_retry '-1');
+         max_connect_retry '-1');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
@@ -75,8 +76,8 @@ OPTIONS (url 'http://server.im',
          proxy_user 'jim',
          proxy_user_password 'pw',
          connect_timeout '42',
-         connect_retry '73',
-         request_redirect '');
+         max_connect_retry '73',
+         max_connect_redirect '');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
@@ -85,8 +86,8 @@ OPTIONS (url 'http://server.im',
          proxy_user 'jim',
          proxy_user_password 'pw',
          connect_timeout '42',
-         connect_retry '73',
-         request_redirect 'foo');
+         max_connect_retry '73',
+         max_connect_redirect '-1');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
@@ -95,17 +96,36 @@ OPTIONS (url 'http://server.im',
          proxy_user 'jim',
          proxy_user_password 'pw',
          connect_timeout '42',
-         connect_retry '73',
-         request_redirect 'true',
-         request_max_redirect '');
+         max_connect_retry '73',
+         max_connect_redirect '');
 
-CREATE SERVER foo 
+CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          http_proxy 'http://server.im',
          proxy_user 'jim',
          proxy_user_password 'pw',
          connect_timeout '42',
-         connect_retry '73',
-         request_redirect 'true',
-         request_max_redirect '-1');
+         max_connect_retry '73',
+         max_connect_redirect '-1');
+
+
+/* invalid URL - retrying as set in 'max_connect_retry' */ 
+CREATE SERVER srv
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         max_connect_retry '5',
+         connect_timeout '10');
+SELECT * FROM nominatim_query(server_name => 'srv',query => 'foo');
+
+/* no retry! */
+ALTER SERVER srv OPTIONS (SET max_connect_retry '0');
+SELECT * FROM nominatim_query(server_name => 'srv',query => 'foo');
+
+DROP SERVER srv;
+
+/* server does not exist */
+SELECT * FROM nominatim_query(server_name => 'foo',query => 'bar');
+SELECT * FROM nominatim_query_structured(server_name => 'foo',city => 'bar');
+SELECT * FROM nominatim_query_reverse(server_name => 'foo',lon => '1', lat => '2');
+SELECT * FROM nominatim_query_lookup(server_name => 'foo',osm_ids => 'W1');

@@ -2,7 +2,7 @@ MODULE_big = nominatim_fdw
 OBJS = nominatim_fdw.o
 EXTENSION = nominatim_fdw
 DATA = nominatim_fdw--1.0.sql
-# REGRESS = osm.sql
+REGRESS = exceptions functions
 
 CURL_CONFIG = curl-config
 PG_CONFIG = pg_config
