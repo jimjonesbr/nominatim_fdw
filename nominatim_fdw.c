@@ -76,6 +76,7 @@
 
 #define NOMINATIM_REQUEST_SEARCH "search"
 #define NOMINATIM_REQUEST_REVERSE "reverse"
+#define NOMINATIM_REQUEST_LOOKUP "lookup"
 
 #define NOMINATIM_SERVER_OPTION_URL "url"
 #define NOMINATIM_SERVER_OPTION_FORMAT "format"
@@ -113,6 +114,7 @@ typedef struct NominatimFDWState
     int zoom;
     char *request_type;
 	char* url;
+    char *osm_ids;
     char *amenity;     /*  */
     char *street;      /*  */
     char *city;        /*  */
@@ -139,7 +141,6 @@ typedef struct NominatimFDWState
 	xmlDocPtr xmldoc;            
     List *records;
 	struct NominatimFDWTable *nominatim_table; /* */
-	;     /* */
 } NominatimFDWState;
 
 typedef struct NominatimFDWTable
@@ -241,8 +242,9 @@ extern Datum nominatim_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_version(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_query(PG_FUNCTION_ARGS);
-extern Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(nominatim_fdw_handler);
 PG_FUNCTION_INFO_V1(nominatim_fdw_validator);
@@ -250,6 +252,7 @@ PG_FUNCTION_INFO_V1(nominatim_fdw_version);
 PG_FUNCTION_INFO_V1(nominatim_fdw_query);
 PG_FUNCTION_INFO_V1(nominatim_fdw_query_reverse);
 PG_FUNCTION_INFO_V1(nominatim_fdw_query_structured);
+PG_FUNCTION_INFO_V1(nominatim_fdw_query_lookup);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -371,7 +374,6 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
     Oid catalog = PG_GETARG_OID(1);
     ListCell *cell;
     struct NominatimFDWOption *opt;
-    bool hasliteralatt = false;
 
     /* Initialize found state to not found */
     for (opt = valid_options; opt->optname; opt++)
@@ -554,9 +556,9 @@ Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
 
 		memset(nulls, 0, sizeof(nulls));
 		
-		for (size_t i = 0; i < tupdesc->natts; i++)
+		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
 		{
-			Form_pg_attribute att = TupleDescAttr(tupdesc, i);					
+			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);					
             char *value = GetAttributeValue(att,place);
            
 			if(value)
@@ -567,6 +569,8 @@ Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
             elog(DEBUG2,"  %s = '%s'",NameStr(att->attname), value);
 		}
 		
+        elog(DEBUG2,"  %s: creating heap tuple",__func__);
+        
 		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
 
@@ -586,11 +590,12 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
-    NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
-    
+    NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
+        
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
+        state = GetServerInfo(text_to_cstring(srvname_text));
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
@@ -635,9 +640,9 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 
 		memset(nulls, 0, sizeof(nulls));
 		
-		for (size_t i = 0; i < tupdesc->natts; i++)
+		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
 		{
-			Form_pg_attribute att = TupleDescAttr(tupdesc, i);					
+			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);						
             char *value = GetAttributeValue(att,place);
            
 			if(value)
@@ -648,6 +653,8 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
             elog(DEBUG2,"  %s = '%s'",NameStr(att->attname), value);
 		}
 		
+        elog(DEBUG2,"  %s: creating heap tuple",__func__);
+
 		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
 
@@ -659,9 +666,90 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 	}
 }
 
-/*
- * Nominatim Doc: https://nominatim.org/release-docs/3.4/api/Search/
- */
+Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS)
+{
+	text *srvname_text = PG_GETARG_TEXT_P(0);
+    text *osm_ids_text = PG_GETARG_TEXT_P(1);
+    text *extra_params = PG_GETARG_TEXT_P(2);
+
+    FuncCallContext *funcctx;
+	TupleDesc tupdesc;
+    NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
+    
+	if (SRF_IS_FIRSTCALL())
+	{
+		MemoryContext oldcontext;
+		funcctx = SRF_FIRSTCALL_INIT();
+        state = GetServerInfo(text_to_cstring(srvname_text));
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        state->osm_ids = text_to_cstring(osm_ids_text);
+        state->extra_params = text_to_cstring(extra_params);
+        state->is_query_structured = false;
+        state->request_type = NOMINATIM_REQUEST_LOOKUP;
+
+        elog(DEBUG1,"\n\n\t=== %s ===\n\tosm_ids:'%s'\n\textra_params: '%s'\n"
+        ,__func__,
+        state->osm_ids,
+        state->extra_params);
+       	
+		LoadData(state);
+				
+		funcctx->user_fctx = state->records;
+
+		if (state->records)
+			funcctx->max_calls = state->records->length;
+
+		elog(DEBUG1,"  %s: number of records retrieved = %ld ",__func__, funcctx->max_calls);
+
+		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+							errmsg("function returning record called in context that cannot accept type record")));
+		tupdesc = BlessTupleDesc(tupdesc);
+
+		funcctx->attinmeta = TupleDescGetAttInMetadata(tupdesc);
+
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	funcctx = SRF_PERCALL_SETUP();
+
+	if (funcctx->call_cntr < funcctx->max_calls)
+	{
+		Datum		values[23];
+		bool		nulls[23];		
+		HeapTuple	tuple;
+		Datum		result;
+		NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
+
+		memset(nulls, 0, sizeof(nulls));
+				
+        for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+		{
+			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);					
+            char *value = GetAttributeValue(att, place);
+           
+			if(value)
+				values[i] = ConvertDatum(tuple, att->atttypid, att->atttypmod, value);
+			else
+				nulls[i] = true;
+
+            elog(DEBUG2,"  %s: %s = '%s'",__func__,NameStr(att->attname), value);
+		}
+		
+        elog(DEBUG2,"  %s: creating heap tuple",__func__);
+
+		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
+		result = HeapTupleGetDatum(tuple);
+
+		SRF_RETURN_NEXT(funcctx, result);
+	}
+	else
+	{
+		SRF_RETURN_DONE(funcctx);
+	}
+}
+
 Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
@@ -676,11 +764,12 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
-    NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
-
+    NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
+    
 	if (SRF_IS_FIRSTCALL())
 	{
-		MemoryContext oldcontext;       		
+		MemoryContext oldcontext;
+        state = GetServerInfo(text_to_cstring(srvname_text));
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
@@ -737,9 +826,9 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
 
 		memset(nulls, 0, sizeof(nulls));
 		
-		for (size_t i = 0; i < tupdesc->natts; i++)
+		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
 		{
-			Form_pg_attribute att = TupleDescAttr(tupdesc, i);					
+			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);					
             char *value = GetAttributeValue(att,place);
            
 			if(value)
@@ -750,6 +839,8 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
             elog(DEBUG2,"  %s = '%s'",NameStr(att->attname), value);
 		}
 		
+        elog(DEBUG2,"  %s: creating heap tuple",__func__);
+
 		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
 		result = HeapTupleGetDatum(tuple);
 
@@ -760,7 +851,6 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
 		SRF_RETURN_DONE(funcctx);
 	}
 }
-
 
 static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place)
 {
@@ -1029,7 +1119,6 @@ static void LoadDataReverseLookup(NominatimFDWState *state)
 {
     struct NominatimRecord *place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
     xmlNodePtr reversegeocode;
-    xmlNodePtr result;
     xmlNodePtr tag;
     StringInfoData addressparts;
     StringInfoData extratags;
@@ -1153,7 +1242,7 @@ static void LoadData(NominatimFDWState * state)
 
         Assert(state->xmldoc);
 
-        elog(DEBUG2, "  %s: loading '%s'", __func__, xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring"));
+        //elog(DEBUG2, "  %s: loading '%s'", __func__, xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring"));
 
         for (searchresults = xmlDocGetRootElement(state->xmldoc)->children; searchresults != NULL; searchresults = searchresults->next)
         {
@@ -1262,80 +1351,81 @@ static void LoadData(NominatimFDWState * state)
             xmlFreeNode(searchresults);
     }
 
-    static int ExecuteRequest(NominatimFDWState * state)
-    {
-        CURL *curl;
-        CURLcode res;
-        StringInfoData url_buffer;
-        StringInfoData user_agent;
-        StringInfoData accept_header;
+static int ExecuteRequest(NominatimFDWState *state)
+{
+    CURL *curl;
+    CURLcode res;
+    StringInfoData url_buffer;
+    StringInfoData user_agent;
+    char errbuf[CURL_ERROR_SIZE];
+    struct MemoryStruct chunk;
+    struct MemoryStruct chunk_header;
+    struct curl_slist *headers = NULL;
 
-        char errbuf[CURL_ERROR_SIZE];
-        struct MemoryStruct chunk;
-        struct MemoryStruct chunk_header;
-        struct curl_slist *headers = NULL;
+    chunk.memory = palloc(1);
+    chunk.size = 0; /* no data at this point */
+    chunk_header.memory = palloc(1);
+    chunk_header.size = 0; /* no data at this point */
 
-        chunk.memory = palloc(1);
-        chunk.size = 0; /* no data at this point */
-        chunk_header.memory = palloc(1);
-        chunk_header.size = 0; /* no data at this point */
+    elog(DEBUG1, "%s called", __func__);
 
-        elog(DEBUG1, "%s called", __func__);
+    curl_global_init(CURL_GLOBAL_ALL);
+    curl = curl_easy_init();
 
-        curl_global_init(CURL_GLOBAL_ALL);
-        curl = curl_easy_init();
+    // initStringInfo(&accept_header);
+    // appendStringInfo(&accept_header, "Accept-Language: text/xml");
 
-        // initStringInfo(&accept_header);
-        // appendStringInfo(&accept_header, "Accept-Language: text/xml");
+    initStringInfo(&url_buffer);
+    appendStringInfo(&url_buffer, "%s", state->url);
 
-        initStringInfo(&url_buffer);
-        appendStringInfo(&url_buffer, "%s", state->url);
+    // if (state->city)
+    //     appendStringInfo(&url_buffer, "%s=%s", NOMINATIM_TAG_CITY, state->city);
 
-        // if (state->city)
-        //     appendStringInfo(&url_buffer, "%s=%s", NOMINATIM_TAG_CITY, state->city);
+    appendStringInfo(&url_buffer, "/%s?", state->request_type);
 
-        appendStringInfo(&url_buffer, "/%s?", state->request_type);
+    if (state->query)
+        appendStringInfo(&url_buffer, "%s=%s&",
+                            state->is_query_structured ? "amenity" : "q",
+                            curl_easy_escape(curl, state->query, 0));
 
-        if (state->query)
-            appendStringInfo(&url_buffer, "%s=%s&",
-                             state->is_query_structured ? "amenity" : "q",
-                             curl_easy_escape(curl, state->query, 0));
+    if (state->osm_ids && strlen(state->osm_ids)>0)
+        appendStringInfo(&url_buffer, "osm_ids=%s&", curl_easy_escape(curl, state->osm_ids, 0));
 
-        if (state->street)
-            appendStringInfo(&url_buffer, "street=%s&", curl_easy_escape(curl, state->street, 0));
+    if (state->street && strlen(state->street)>0)
+        appendStringInfo(&url_buffer, "street=%s&", curl_easy_escape(curl, state->street, 0));
 
-        if (state->city)
-            appendStringInfo(&url_buffer, "city=%s&", curl_easy_escape(curl, state->city, 0));
+    if (state->city && strlen(state->city)>0)
+        appendStringInfo(&url_buffer, "city=%s&", curl_easy_escape(curl, state->city, 0));
 
-        if (state->county)
-            appendStringInfo(&url_buffer, "county=%s&", curl_easy_escape(curl, state->county, 0));
+    if (state->county && strlen(state->county)>0)
+        appendStringInfo(&url_buffer, "county=%s&", curl_easy_escape(curl, state->county, 0));
 
-        if (state->state)
-            appendStringInfo(&url_buffer, "state=%s&", curl_easy_escape(curl, state->state, 0));
+    if (state->state && strlen(state->state)>0)
+        appendStringInfo(&url_buffer, "state=%s&", curl_easy_escape(curl, state->state, 0));
 
-        if (state->country)
-            appendStringInfo(&url_buffer, "country=%s&", curl_easy_escape(curl, state->country, 0));
+    if (state->country && strlen(state->country)>0)
+        appendStringInfo(&url_buffer, "country=%s&", curl_easy_escape(curl, state->country, 0));
 
-        if (state->postalcode)
-            appendStringInfo(&url_buffer, "postalcode=%s&", curl_easy_escape(curl, state->postalcode, 0));
+    if (state->postalcode && strlen(state->postalcode)>0)
+        appendStringInfo(&url_buffer, "postalcode=%s&", curl_easy_escape(curl, state->postalcode, 0));
 
-        if (!state->format)
-            appendStringInfo(&url_buffer, "format=%s&", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+    if (!state->format)
+        appendStringInfo(&url_buffer, "format=%s&", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
 
-        if (state->lon)
-            appendStringInfo(&url_buffer, "lon=%f&", state->lon);
+    if (state->lon)
+        appendStringInfo(&url_buffer, "lon=%f&", state->lon);
 
-        if (state->lat)
-            appendStringInfo(&url_buffer, "lat=%f&", state->lat);
+    if (state->lat)
+        appendStringInfo(&url_buffer, "lat=%f&", state->lat);
 
-        if (state->zoom)
-            appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
+    if (state->zoom)
+        appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
 
-        if (state->layer)
-            appendStringInfo(&url_buffer, "layer=%s&", state->layer);
-        //appendStringInfo(&url_buffer, "%s%s&",strcmp(state->layer,"") == 0 ? "" : "layer=", state->layer);
+    if (state->layer && strlen(state->layer)>0)
+        appendStringInfo(&url_buffer, "layer=%s&", state->layer);
+    // appendStringInfo(&url_buffer, "%s%s&",strcmp(state->layer,"") == 0 ? "" : "layer=", state->layer);
 
-    if(strcmp(state->extra_params,"")!=0)
+    if (strcmp(state->extra_params, "") != 0)
         appendStringInfo(&url_buffer, "%s", state->extra_params);
 
     if (curl)
@@ -1458,14 +1548,14 @@ static void LoadData(NominatimFDWState * state)
             {
                 ereport(ERROR,
                         (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-                         errmsg("%s => (%u) %s%s", __func__, res, errbuf,
+                            errmsg("%s => (%u) %s%s", __func__, res, errbuf,
                                 ((errbuf[len - 1] != '\n') ? "\n" : ""))));
             }
             else
             {
                 ereport(ERROR,
                         (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-                         errmsg("%s => (%u) '%s'\n", __func__, res, curl_easy_strerror(res))));
+                            errmsg("%s => (%u) '%s'\n", __func__, res, curl_easy_strerror(res))));
             }
         }
         else
@@ -1487,8 +1577,8 @@ static void LoadData(NominatimFDWState * state)
     curl_global_cleanup();
 
     /*
-     * We thrown an error in case the SPARQL endpoint returns an empty XML doc
-     */
+        * We thrown an error in case the SPARQL endpoint returns an empty XML doc
+        */
     if (!state->xmldoc)
         return REQUEST_FAIL;
 
@@ -1506,7 +1596,6 @@ static void LoadData(NominatimFDWState * state)
  */
 static int CheckURL(char *url)
 {
-
 	CURLUcode code;
 	CURLU *handler = curl_url();
 

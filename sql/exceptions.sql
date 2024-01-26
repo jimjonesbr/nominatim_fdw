@@ -1,6 +1,3 @@
-DROP EXTENSION IF EXISTS nominatim_fdw CASCADE; 
-CREATE EXTENSION nominatim_fdw;
-
 
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 

@@ -64,6 +64,13 @@ CREATE FUNCTION nominatim_query(
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
+CREATE FUNCTION nominatim_query_lookup(
+    server_name text, 
+    osm_ids text,
+    extra_params text DEFAULT '')
+RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query_lookup'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
 CREATE FUNCTION nominatim_query_structured(
     server_name text, 
     query text DEFAULT '',
