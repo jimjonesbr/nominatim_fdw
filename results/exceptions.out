@@ -1,0 +1,150 @@
+CREATE EXTENSION nominatim_fdw;
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (http_proxy 'http://proxy.im');
+ERROR:  required option 'url' is missing
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url '');
+ERROR:  empty value in option 'url'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'bar');
+ERROR:  invalid url: 'bar'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://proxy.im',
+         http_proxy '');
+ERROR:  empty value in option 'http_proxy'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'bar');
+ERROR:  invalid http_proxy: 'bar'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user '');
+ERROR:  empty value in option 'proxy_user'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password '');
+ERROR:  empty value in option 'proxy_user_password'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password 'pw',
+         connect_timeout '');
+ERROR:  empty value in option 'connect_timeout'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password 'pw',
+         connect_timeout '-1');
+ERROR:  invalid connect_timeout: '-1'
+HINT:  expected values are positive integers (timeout in seconds)
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password 'pw',
+         connect_timeout '42',
+         max_connect_retry '');
+ERROR:  empty value in option 'max_connect_retry'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password 'pw',
+         connect_timeout '42',
+         max_connect_retry '-1');
+ERROR:  invalid max_connect_retry: '-1'
+HINT:  expected values are positive integers
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password 'pw',
+         connect_timeout '42',
+         max_connect_retry '73',
+         max_connect_redirect '');
+ERROR:  empty value in option 'max_connect_redirect'
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password 'pw',
+         connect_timeout '42',
+         max_connect_retry '73',
+         max_connect_redirect '-1');
+ERROR:  invalid max_connect_redirect: '-1'
+HINT:  expected values are positive integers
+CREATE SERVER foo 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password 'pw',
+         connect_timeout '42',
+         max_connect_retry '73',
+         max_connect_redirect '');
+ERROR:  empty value in option 'max_connect_redirect'
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         http_proxy 'http://server.im',
+         proxy_user 'jim',
+         proxy_user_password 'pw',
+         connect_timeout '42',
+         max_connect_retry '73',
+         max_connect_redirect '-1');
+ERROR:  invalid max_connect_redirect: '-1'
+HINT:  expected values are positive integers
+/* invalid URL - retrying as set in 'max_connect_retry' */ 
+CREATE SERVER srv
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im',
+         max_connect_retry '5',
+         connect_timeout '10');
+SELECT * FROM nominatim_query(server_name => 'srv',query => 'foo');
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html; charset=utf-8"
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html; charset=utf-8"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (1)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html; charset=utf-8"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (2)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html; charset=utf-8"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (3)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html; charset=utf-8"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (4)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html; charset=utf-8"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (5)
+ERROR:  ExecuteRequest => (23) Failed writing header
+
+/* no retry! */
+ALTER SERVER srv OPTIONS (SET max_connect_retry '0');
+SELECT * FROM nominatim_query(server_name => 'srv',query => 'foo');
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html; charset=utf-8"
+ERROR:  ExecuteRequest => (23) Failed writing header
+
+DROP SERVER srv;
+/* server does not exist */
+SELECT * FROM nominatim_query(server_name => 'foo',query => 'bar');
+ERROR:  FOREIGN SERVER does not exist: 'foo'
+SELECT * FROM nominatim_query_structured(server_name => 'foo',city => 'bar');
+ERROR:  FOREIGN SERVER does not exist: 'foo'
+SELECT * FROM nominatim_query_reverse(server_name => 'foo',lon => '1', lat => '2');
+ERROR:  FOREIGN SERVER does not exist: 'foo'
+SELECT * FROM nominatim_query_lookup(server_name => 'foo',osm_ids => 'W1');
+ERROR:  FOREIGN SERVER does not exist: 'foo'

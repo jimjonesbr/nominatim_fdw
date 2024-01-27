@@ -16,7 +16,15 @@ FROM nominatim_query(
       extratags => true,
       addressdetails => true,
       namedetails => true,
-      polygon => 'polygon_text');
+      polygon => 'polygon_text',
+      email => 'jim.jones@uni-muenster.de',
+      countrycodes => 'DE,BR,US',
+      featuretype => 'office',
+      dedupe => true,
+      exclude_place_ids => '42,73',
+      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
+      polygon_threshold => 0.1,
+      layer => 'address');
 
 SELECT pg_sleep(2);
 
@@ -28,16 +36,24 @@ SELECT
     jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_query_structured(
       server_name => 'osm',
+      polygon => 'polygon_text',
+      extratags => true,
+      addressdetails => true,
+      namedetails => true,
       amenity => 'wwu it',
       street => 'einsteinstraße 60',
       city => 'münster',
       state => 'nordrhein westfalen',
       country => 'germany',
       postalcode => '48149',
-      polygon => 'polygon_text',
-      extratags => true,
-      addressdetails => true,
-      namedetails => true);
+      email => 'jim.jones@uni-muenster.de',
+      countrycodes => 'DE,BR,US',
+      featuretype => 'office',
+      dedupe => true,
+      exclude_place_ids => '42,73',
+      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
+      polygon_threshold => 0.1,
+      layer => 'address');
 
 SELECT pg_sleep(2);
 
@@ -66,7 +82,15 @@ SELECT
 FROM nominatim_query_lookup(
       server_name => 'osm',
       osm_ids => 'W88291927',
-      polygon => 'polygon_text',
       extratags => true,
       addressdetails => true,
-      namedetails => true);
+      namedetails => true,
+      polygon => 'polygon_text',
+      email => 'jim.jones@uni-muenster.de',
+      countrycodes => 'DE,BR,US',
+      featuretype => 'office',
+      dedupe => true,
+      exclude_place_ids => '42,73',
+      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
+      polygon_threshold => 0.1,
+      layer => 'address');

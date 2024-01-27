@@ -101,6 +101,7 @@
 #define NOMINATIM_TABLE_OPTION_NAMEDETAILS "namedetails"
 #define NOMINATIM_TABLE_OPTION_ADDRESSDETAILS "addressdetails"
 #define NOMINATIM_TABLE_OPTION_ADDRESSPARTS "addressparts"
+#define NOMINATIM_TABLE_OPTION_ACCEPTLANGUAGE "accept_language"
 
 #define NOMINATIM_COLUMN_OPTION_PROPERTY "property"
 #define NOMINATIM_COLUMN_OPTION_FORMAT "format"
@@ -152,6 +153,7 @@ typedef struct NominatimFDWState
     char *viewbox;    
     char *polygon_type;
     char *email;    
+    char *accept_language;
     bool dedupe;
     bool bounded;
 	bool request_redirect;       /* Enables or disables URL redirecting. */
@@ -618,6 +620,16 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
     bool addressdetails = PG_GETARG_BOOL(3);
     bool namedetails = PG_GETARG_BOOL(4);
     text *polygon_text = PG_GETARG_TEXT_P(5);
+    text *language_text = PG_GETARG_TEXT_P(6);
+    text *countrycodes_text = PG_GETARG_TEXT_P(7);
+    text *layer_text = PG_GETARG_TEXT_P(8);
+    text *featuretype_text = PG_GETARG_TEXT_P(9);
+    text *excludeids_text = PG_GETARG_TEXT_P(10);
+    text *viewbox_text = PG_GETARG_TEXT_P(11);
+    bool bounded = PG_GETARG_BOOL(12);
+    float8 polygon_threshold = PG_GETARG_FLOAT8(13);
+    text *email_text = PG_GETARG_TEXT_P(14);
+    bool dedupe = PG_GETARG_BOOL(15);
    
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
@@ -633,10 +645,20 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 
         state->query = text_to_cstring(query_text);
         state->polygon_type = text_to_cstring(polygon_text);
+        state->accept_language = text_to_cstring(language_text);
+        state->countrycodes = text_to_cstring(countrycodes_text);
+        state->layer = text_to_cstring(layer_text);
+        state->feature_type = text_to_cstring(featuretype_text);
+        state->exclude_place_ids = text_to_cstring(excludeids_text);
+        state->viewbox = text_to_cstring(viewbox_text);
+        state->bounded = bounded;
+        state->polygon_threshold =  polygon_threshold;
+        state->email = text_to_cstring(email_text);
+        state->dedupe = dedupe;
         state->is_query_structured = false;
         state->extratags = extratags;
         state->addressdetails = addressdetails;
-        state->namedetails = namedetails;
+        state->namedetails = namedetails;        
         state->request_type = NOMINATIM_REQUEST_SEARCH;
 
         if(!IsPolygonTypeSupported(state->polygon_type))
@@ -713,7 +735,16 @@ Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS)
     bool addressdetails = PG_GETARG_BOOL(3);
     bool namedetails = PG_GETARG_BOOL(4);
     text *polygon_text = PG_GETARG_TEXT_P(5);
-
+    text *language_text = PG_GETARG_TEXT_P(6);
+    text *countrycodes_text = PG_GETARG_TEXT_P(7);
+    text *layer_text = PG_GETARG_TEXT_P(8);
+    text *featuretype_text = PG_GETARG_TEXT_P(9);
+    text *excludeids_text = PG_GETARG_TEXT_P(10);
+    text *viewbox_text = PG_GETARG_TEXT_P(11);
+    bool bounded = PG_GETARG_BOOL(12);
+    float8 polygon_threshold = PG_GETARG_FLOAT8(13);
+    text *email_text = PG_GETARG_TEXT_P(14);
+    bool dedupe = PG_GETARG_BOOL(15);
 
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
@@ -727,7 +758,17 @@ Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS)
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
         state->osm_ids = text_to_cstring(osm_ids_text);    
-        state->polygon_type = text_to_cstring(polygon_text);    
+        state->polygon_type = text_to_cstring(polygon_text);
+        state->accept_language = text_to_cstring(language_text);
+        state->countrycodes = text_to_cstring(countrycodes_text);
+        state->layer = text_to_cstring(layer_text);
+        state->feature_type = text_to_cstring(featuretype_text);
+        state->exclude_place_ids = text_to_cstring(excludeids_text);
+        state->viewbox = text_to_cstring(viewbox_text);
+        state->bounded = bounded;
+        state->polygon_threshold =  polygon_threshold;
+        state->email = text_to_cstring(email_text);
+        state->dedupe = dedupe;    
         state->is_query_structured = false;
         state->extratags = extratags;
         state->addressdetails = addressdetails;
@@ -814,6 +855,17 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
     bool addressdetails = PG_GETARG_BOOL(9);
     bool namedetails = PG_GETARG_BOOL(10);
     text *polygon_text = PG_GETARG_TEXT_P(11);
+    text *language_text = PG_GETARG_TEXT_P(12);
+    text *countrycodes_text = PG_GETARG_TEXT_P(13);
+    text *layer_text = PG_GETARG_TEXT_P(14);
+    text *featuretype_text = PG_GETARG_TEXT_P(15);
+    text *excludeids_text = PG_GETARG_TEXT_P(16);
+    text *viewbox_text = PG_GETARG_TEXT_P(17);
+    bool bounded = PG_GETARG_BOOL(18);
+    float8 polygon_threshold = PG_GETARG_FLOAT8(19);
+    text *email_text = PG_GETARG_TEXT_P(20);
+    bool dedupe = PG_GETARG_BOOL(21);
+
 
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
@@ -834,6 +886,16 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
         state->state = text_to_cstring(tstate);
         state->country = text_to_cstring(country);
         state->postalcode = text_to_cstring(postalcode);
+        state->accept_language = text_to_cstring(language_text);
+        state->countrycodes = text_to_cstring(countrycodes_text);
+        state->layer = text_to_cstring(layer_text);
+        state->feature_type = text_to_cstring(featuretype_text);
+        state->exclude_place_ids = text_to_cstring(excludeids_text);
+        state->viewbox = text_to_cstring(viewbox_text);
+        state->bounded = bounded;
+        state->polygon_threshold =  polygon_threshold;
+        state->email = text_to_cstring(email_text);
+        state->dedupe = dedupe;
         state->request_type = NOMINATIM_REQUEST_SEARCH;
         state->is_query_structured = true;
         state->polygon_type = text_to_cstring(polygon_text);
@@ -1495,6 +1557,41 @@ static int ExecuteRequest(NominatimFDWState *state)
     if(state->polygon_type && strlen(state->polygon_type)>0)
         appendStringInfo(&url_buffer, "%s=1&",state->polygon_type);
 
+    if (state->accept_language && strlen(state->accept_language)>0)
+        appendStringInfo(&url_buffer, "accept-language=%s&", curl_easy_escape(curl, state->accept_language, 0));
+
+    if (state->countrycodes && strlen(state->countrycodes)>0)
+        appendStringInfo(&url_buffer, "countrycodes=%s&", curl_easy_escape(curl, state->countrycodes, 0));
+    
+    if (state->layer && strlen(state->layer)>0)
+        appendStringInfo(&url_buffer, "layer=%s&", curl_easy_escape(curl, state->layer, 0));
+
+    if (state->feature_type && strlen(state->feature_type)>0)
+        appendStringInfo(&url_buffer, "featureType=%s&", curl_easy_escape(curl, state->feature_type, 0));
+
+    if (state->exclude_place_ids && strlen(state->exclude_place_ids)>0)
+        appendStringInfo(&url_buffer, "exclude_place_ids=%s&", curl_easy_escape(curl, state->exclude_place_ids, 0));
+
+    if (state->viewbox && strlen(state->viewbox)>0)
+        appendStringInfo(&url_buffer, "viewbox=%s&", curl_easy_escape(curl, state->viewbox, 0));
+
+    if (state->bounded)
+        appendStringInfo(&url_buffer, "bounded=1&");
+    else
+        appendStringInfo(&url_buffer, "bounded=0&");
+
+    if (state->polygon_threshold && state->polygon_threshold != 0.0)
+        appendStringInfo(&url_buffer, "polygon_threshold=%f&",state->polygon_threshold);
+
+    if (state->email && strlen(state->email)>0)
+        appendStringInfo(&url_buffer, "email=%s&", curl_easy_escape(curl, state->email, 0));
+
+    if (state->dedupe)
+        appendStringInfo(&url_buffer, "dedupe=1&");
+    else
+        appendStringInfo(&url_buffer, "dedupe=0&");
+    
+    
 
     // if (strcmp(state->extra_params, "") != 0)
     //     appendStringInfo(&url_buffer, "%s", state->extra_params);

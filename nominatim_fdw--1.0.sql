@@ -63,7 +63,17 @@ CREATE FUNCTION nominatim_query(
     extratags boolean DEFAULT false,
     addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
-    polygon text DEFAULT '')
+    polygon text DEFAULT '',
+    accept_language text DEFAULT '',    
+    countrycodes text DEFAULT '',
+    layer text DEFAULT '',
+    featuretype text DEFAULT '',
+    exclude_place_ids text DEFAULT '',
+    viewbox text DEFAULT '',
+    bounded boolean DEFAULT false,
+    polygon_threshold double precision DEFAULT 0.0,
+    email text DEFAULT '',
+    dedupe boolean DEFAULT false)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
@@ -73,7 +83,17 @@ CREATE FUNCTION nominatim_query_lookup(
     extratags boolean DEFAULT false,
     addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
-    polygon text DEFAULT '')
+    polygon text DEFAULT '',
+    accept_language text DEFAULT '',    
+    countrycodes text DEFAULT '',
+    layer text DEFAULT '',
+    featuretype text DEFAULT '',
+    exclude_place_ids text DEFAULT '',
+    viewbox text DEFAULT '',
+    bounded boolean DEFAULT false,
+    polygon_threshold double precision DEFAULT 0.0,
+    email text DEFAULT '',
+    dedupe boolean DEFAULT false)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query_lookup'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
@@ -89,7 +109,17 @@ CREATE FUNCTION nominatim_query_structured(
     extratags boolean DEFAULT false,
     addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
-    polygon text DEFAULT '')
+    polygon text DEFAULT '',
+    accept_language text DEFAULT '',    
+    countrycodes text DEFAULT '',
+    layer text DEFAULT '',
+    featuretype text DEFAULT '',
+    exclude_place_ids text DEFAULT '',
+    viewbox text DEFAULT '',
+    bounded boolean DEFAULT false,
+    polygon_threshold double precision DEFAULT 0.0,
+    email text DEFAULT '',
+    dedupe boolean DEFAULT false)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query_structured'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
