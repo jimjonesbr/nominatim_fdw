@@ -79,7 +79,7 @@ LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE FUNCTION nominatim_query_structured(
     server_name text, 
-    query text DEFAULT '',
+    amenity text DEFAULT '',
     street text DEFAULT '', 
     city text DEFAULT '',
     county text DEFAULT '',

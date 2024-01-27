@@ -803,7 +803,7 @@ Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS)
 Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
-    text *query_text = PG_GETARG_TEXT_P(1);
+    text *amenity_text = PG_GETARG_TEXT_P(1);
     text *street = PG_GETARG_TEXT_P(2);
     text *city = PG_GETARG_TEXT_P(3);
     text *county = PG_GETARG_TEXT_P(4);
@@ -827,7 +827,7 @@ Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
         elog(DEBUG2,"%s: loading parameters",__func__);
-        state->query = text_to_cstring(query_text);
+        state->amenity = text_to_cstring(amenity_text);
         state->street = text_to_cstring(street);
         state->city = text_to_cstring(city);
         state->county = text_to_cstring(county);
@@ -1439,9 +1439,10 @@ static int ExecuteRequest(NominatimFDWState *state)
     appendStringInfo(&url_buffer, "/%s?", state->request_type);
 
     if (state->query)
-        appendStringInfo(&url_buffer, "%s=%s&",
-                            state->is_query_structured ? "amenity" : "q",
-                            curl_easy_escape(curl, state->query, 0));
+        appendStringInfo(&url_buffer, "q=%s&", curl_easy_escape(curl, state->query, 0));
+    
+    if (state->amenity)
+        appendStringInfo(&url_buffer, "amenity=%s&", curl_easy_escape(curl, state->amenity, 0));
 
     if (state->osm_ids && strlen(state->osm_ids)>0)
         appendStringInfo(&url_buffer, "osm_ids=%s&", curl_easy_escape(curl, state->osm_ids, 0));

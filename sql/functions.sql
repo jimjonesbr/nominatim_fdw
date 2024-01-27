@@ -28,7 +28,7 @@ SELECT
     jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_query_structured(
       server_name => 'osm',
-      query => 'wwu it',
+      amenity => 'wwu it',
       street => 'einsteinstraße 60',
       city => 'münster',
       state => 'nordrhein westfalen',
