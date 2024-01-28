@@ -148,3 +148,11 @@ SELECT * FROM nominatim_reverse(server_name => 'foo',lon => '1', lat => '2');
 ERROR:  FOREIGN SERVER does not exist: 'foo'
 SELECT * FROM nominatim_lookup(server_name => 'foo', osm_ids => 'W1');
 ERROR:  FOREIGN SERVER does not exist: 'foo'
+CREATE SERVER srv
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'http://server.im');
+/* FOREIGN TABLE not supported */
+CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
+SERVER srv OPTIONS (foo 'bar');
+ERROR:  FOREIGN TABLE not supported
+HINT:  The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.

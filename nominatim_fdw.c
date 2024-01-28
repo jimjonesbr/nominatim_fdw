@@ -254,15 +254,6 @@ static struct NominatimFDWOption valid_options[] =
 	{NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_MAXREDIRECT, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_QUERY, ForeignServerRelationId, false, false},
-	/* Foreign Tables */
-	{NOMINATIM_TAG_CITY, ForeignTableRelationId, true, false},
-	{NOMINATIM_TAG_COUNTRY, ForeignTableRelationId, true, false},
-    {NOMINATIM_TAG_COUNTY, ForeignTableRelationId, true, false},
-    {NOMINATIM_TAG_POSTALCODE, ForeignTableRelationId, true, false},
-    {NOMINATIM_TAG_STATE, ForeignTableRelationId, true, false},
-    {NOMINATIM_TAG_STREET, ForeignTableRelationId, true, false},
-	/* Options for Foreign Table's Columns */
-	{NOMINATIM_COLUMN_OPTION_TAG, AttributeRelationId, true, true},
 	/* EOList option */
 	{NULL, InvalidOid, false, false}
 };
@@ -402,6 +393,12 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
     Oid catalog = PG_GETARG_OID(1);
     ListCell *cell;
     struct NominatimFDWOption *opt;
+
+     if(catalog == ForeignTableRelationId)
+            ereport(ERROR,
+                    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                     errmsg("FOREIGN TABLE not supported"),
+                     errhint("The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.")));
 
     /* Initialize found state to not found */
     for (opt = valid_options; opt->optname; opt++)
