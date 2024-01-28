@@ -119,7 +119,6 @@
 #define NOMINATIM_DEFAULT_MAXRETRY 3
 #define NOMINATIM_DEFAULT_MAXREDIRECT 1
 #define NOMINATIM_DEFAULT_FORMAT "xml"
-#define NOMINATIM_DEFAULT_URL "https://nominatim.openstreetmap.org/search"
 
 PG_MODULE_MAGIC;
 
@@ -129,6 +128,8 @@ typedef struct NominatimFDWState
 	int rowcount;      /* Number of rows currently returned to the client */
 	int pagesize;      /* Total number of records retrieved from the SPARQL endpoint*/
     int zoom;
+    int limit;
+    int offset;
     char *request_type;
 	char* url;
     char *osm_ids;
@@ -269,18 +270,16 @@ static struct NominatimFDWOption valid_options[] =
 extern Datum nominatim_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_version(PG_FUNCTION_ARGS);
-extern Datum nominatim_fdw_query(PG_FUNCTION_ARGS);
-extern Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS);
-extern Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS);
-extern Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_search(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(nominatim_fdw_handler);
 PG_FUNCTION_INFO_V1(nominatim_fdw_validator);
 PG_FUNCTION_INFO_V1(nominatim_fdw_version);
-PG_FUNCTION_INFO_V1(nominatim_fdw_query);
-PG_FUNCTION_INFO_V1(nominatim_fdw_query_reverse);
-PG_FUNCTION_INFO_V1(nominatim_fdw_query_structured);
-PG_FUNCTION_INFO_V1(nominatim_fdw_query_lookup);
+PG_FUNCTION_INFO_V1(nominatim_fdw_search);
+PG_FUNCTION_INFO_V1(nominatim_fdw_reverse);
+PG_FUNCTION_INFO_V1(nominatim_fdw_lookup);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -510,7 +509,7 @@ Datum nominatim_fdw_version(PG_FUNCTION_ARGS)
 	PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }
 
-Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
+Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
     float8 lon = PG_GETARG_FLOAT8(1);
@@ -612,24 +611,33 @@ Datum nominatim_fdw_query_reverse(PG_FUNCTION_ARGS)
 	}
 }
 
-Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
+Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
-    text *query_text = PG_GETARG_TEXT_P(1);    
-    bool extratags = PG_GETARG_BOOL(2);
-    bool addressdetails = PG_GETARG_BOOL(3);
-    bool namedetails = PG_GETARG_BOOL(4);
-    text *polygon_text = PG_GETARG_TEXT_P(5);
-    text *language_text = PG_GETARG_TEXT_P(6);
-    text *countrycodes_text = PG_GETARG_TEXT_P(7);
-    text *layer_text = PG_GETARG_TEXT_P(8);
-    text *featuretype_text = PG_GETARG_TEXT_P(9);
-    text *excludeids_text = PG_GETARG_TEXT_P(10);
-    text *viewbox_text = PG_GETARG_TEXT_P(11);
-    bool bounded = PG_GETARG_BOOL(12);
-    float8 polygon_threshold = PG_GETARG_FLOAT8(13);
-    text *email_text = PG_GETARG_TEXT_P(14);
-    bool dedupe = PG_GETARG_BOOL(15);
+    text *query_text = PG_GETARG_TEXT_P(1);
+    text *amenity_text = PG_GETARG_TEXT_P(2);
+    text *street = PG_GETARG_TEXT_P(3);
+    text *city = PG_GETARG_TEXT_P(4);
+    text *county = PG_GETARG_TEXT_P(5);
+    text *tstate = PG_GETARG_TEXT_P(6);
+    text *country = PG_GETARG_TEXT_P(7);
+    text *postalcode = PG_GETARG_TEXT_P(8);
+    bool extratags = PG_GETARG_BOOL(9);
+    bool addressdetails = PG_GETARG_BOOL(10);
+    bool namedetails = PG_GETARG_BOOL(11);
+    text *polygon_text = PG_GETARG_TEXT_P(12);
+    text *language_text = PG_GETARG_TEXT_P(13);
+    text *countrycodes_text = PG_GETARG_TEXT_P(14);
+    text *layer_text = PG_GETARG_TEXT_P(15);
+    text *featuretype_text = PG_GETARG_TEXT_P(16);
+    text *excludeids_text = PG_GETARG_TEXT_P(17);
+    text *viewbox_text = PG_GETARG_TEXT_P(18);
+    bool bounded = PG_GETARG_BOOL(19);
+    float8 polygon_threshold = PG_GETARG_FLOAT8(20);
+    text *email_text = PG_GETARG_TEXT_P(21);
+    bool dedupe = PG_GETARG_BOOL(22);
+    int limit = PG_GETARG_INT32(23);
+    int offset = PG_GETARG_INT32(24);
    
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
@@ -644,6 +652,14 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
         state->query = text_to_cstring(query_text);
+        state->amenity = text_to_cstring(amenity_text);
+        state->amenity = text_to_cstring(amenity_text);
+        state->street = text_to_cstring(street);
+        state->city = text_to_cstring(city);
+        state->county = text_to_cstring(county);
+        state->state = text_to_cstring(tstate);
+        state->country = text_to_cstring(country);
+        state->postalcode = text_to_cstring(postalcode);
         state->polygon_type = text_to_cstring(polygon_text);
         state->accept_language = text_to_cstring(language_text);
         state->countrycodes = text_to_cstring(countrycodes_text);
@@ -658,7 +674,10 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
         state->is_query_structured = false;
         state->extratags = extratags;
         state->addressdetails = addressdetails;
-        state->namedetails = namedetails;        
+        state->namedetails = namedetails;
+        state->limit = limit;
+        state->offset = offset;
+
         state->request_type = NOMINATIM_REQUEST_SEARCH;
 
         if(!IsPolygonTypeSupported(state->polygon_type))
@@ -727,7 +746,7 @@ Datum nominatim_fdw_query(PG_FUNCTION_ARGS)
 	}
 }
 
-Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS)
+Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
 {
 	text *srvname_text = PG_GETARG_TEXT_P(0);
     text *osm_ids_text = PG_GETARG_TEXT_P(1);
@@ -826,140 +845,6 @@ Datum nominatim_fdw_query_lookup(PG_FUNCTION_ARGS)
 				nulls[i] = true;
 
             elog(DEBUG2,"  %s: %s = '%s'",__func__,NameStr(att->attname), value);
-		}
-		
-        elog(DEBUG2,"  %s: creating heap tuple",__func__);
-
-		tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
-		result = HeapTupleGetDatum(tuple);
-
-		SRF_RETURN_NEXT(funcctx, result);
-	}
-	else
-	{
-		SRF_RETURN_DONE(funcctx);
-	}
-}
-
-Datum nominatim_fdw_query_structured(PG_FUNCTION_ARGS)
-{
-	text *srvname_text = PG_GETARG_TEXT_P(0);
-    text *amenity_text = PG_GETARG_TEXT_P(1);
-    text *street = PG_GETARG_TEXT_P(2);
-    text *city = PG_GETARG_TEXT_P(3);
-    text *county = PG_GETARG_TEXT_P(4);
-    text *tstate = PG_GETARG_TEXT_P(5);
-    text *country = PG_GETARG_TEXT_P(6);
-    text *postalcode = PG_GETARG_TEXT_P(7);
-    bool extratags = PG_GETARG_BOOL(8);
-    bool addressdetails = PG_GETARG_BOOL(9);
-    bool namedetails = PG_GETARG_BOOL(10);
-    text *polygon_text = PG_GETARG_TEXT_P(11);
-    text *language_text = PG_GETARG_TEXT_P(12);
-    text *countrycodes_text = PG_GETARG_TEXT_P(13);
-    text *layer_text = PG_GETARG_TEXT_P(14);
-    text *featuretype_text = PG_GETARG_TEXT_P(15);
-    text *excludeids_text = PG_GETARG_TEXT_P(16);
-    text *viewbox_text = PG_GETARG_TEXT_P(17);
-    bool bounded = PG_GETARG_BOOL(18);
-    float8 polygon_threshold = PG_GETARG_FLOAT8(19);
-    text *email_text = PG_GETARG_TEXT_P(20);
-    bool dedupe = PG_GETARG_BOOL(21);
-
-
-    FuncCallContext *funcctx;
-	TupleDesc tupdesc;
-    NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
-    
-	if (SRF_IS_FIRSTCALL())
-	{
-		MemoryContext oldcontext;
-        state = GetServerInfo(text_to_cstring(srvname_text));
-		funcctx = SRF_FIRSTCALL_INIT();
-		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
-
-        elog(DEBUG2,"%s: loading parameters",__func__);
-        state->amenity = text_to_cstring(amenity_text);
-        state->street = text_to_cstring(street);
-        state->city = text_to_cstring(city);
-        state->county = text_to_cstring(county);
-        state->state = text_to_cstring(tstate);
-        state->country = text_to_cstring(country);
-        state->postalcode = text_to_cstring(postalcode);
-        state->accept_language = text_to_cstring(language_text);
-        state->countrycodes = text_to_cstring(countrycodes_text);
-        state->layer = text_to_cstring(layer_text);
-        state->feature_type = text_to_cstring(featuretype_text);
-        state->exclude_place_ids = text_to_cstring(excludeids_text);
-        state->viewbox = text_to_cstring(viewbox_text);
-        state->bounded = bounded;
-        state->polygon_threshold =  polygon_threshold;
-        state->email = text_to_cstring(email_text);
-        state->dedupe = dedupe;
-        state->request_type = NOMINATIM_REQUEST_SEARCH;
-        state->is_query_structured = true;
-        state->polygon_type = text_to_cstring(polygon_text);
-        state->extratags = extratags;
-        state->addressdetails = addressdetails;
-        state->namedetails = namedetails;
-
-         if(!IsPolygonTypeSupported(state->polygon_type))
-            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-							errmsg("invalid polygon type '%s'",state->polygon_type)));
-
-        elog(DEBUG1,"\n\n\t=== %s ===\n\tamenity: '%s'\n\tstreet: '%s'\n\tcity: '%s'\n\tcounty: '%s'\n\tstate: '%s'\n\tcountry: '%s'\n\tpostalcode: '%s'\n\tpolygon_type: '%s'\n"
-            ,__func__,
-            state->query,
-            state->street,
-            state->city,
-            state->county,
-            state->state,
-            state->country,
-            state->postalcode,
-            state->polygon_type);
-            
-		LoadData(state);
-				
-		funcctx->user_fctx = state->records;
-
-		if (state->records)
-			funcctx->max_calls = state->records->length;
-
-		elog(DEBUG1,"  %s: number of records retrieved = %ld ",__func__, funcctx->max_calls);
-
-		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-			ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-							errmsg("function returning record called in context that cannot accept type record")));
-		tupdesc = BlessTupleDesc(tupdesc);
-
-		funcctx->attinmeta = TupleDescGetAttInMetadata(tupdesc);
-
-		MemoryContextSwitchTo(oldcontext);
-	}
-
-	funcctx = SRF_PERCALL_SETUP();
-
-	if (funcctx->call_cntr < funcctx->max_calls)
-	{
-		Datum		values[23];
-		bool		nulls[23];		
-		HeapTuple	tuple;
-		Datum		result;
-		NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
-
-		memset(nulls, 0, sizeof(nulls));
-		
-		for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
-		{
-			Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);					
-            char *value = GetAttributeValue(att,place);
-           
-			if(value)
-				values[i] = ConvertDatum(tuple, att->atttypid, att->atttypmod, value);
-			else
-				nulls[i] = true;
-
-            elog(DEBUG2,"  %s = '%s'",NameStr(att->attname), value);
 		}
 		
         elog(DEBUG2,"  %s: creating heap tuple",__func__);
@@ -1224,7 +1109,6 @@ static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, Pl
 	/*
 	 * Setting session's default values.
 	 */
-	state->url = NOMINATIM_DEFAULT_URL;
     state->format = NOMINATIM_DEFAULT_FORMAT;
 	state->connect_timeout = NOMINATIM_DEFAULT_CONNECTTIMEOUT;
 	state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;	
@@ -1500,10 +1384,10 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     appendStringInfo(&url_buffer, "/%s?", state->request_type);
 
-    if (state->query)
+    if (state->query && strlen(state->query)>0)
         appendStringInfo(&url_buffer, "q=%s&", curl_easy_escape(curl, state->query, 0));
     
-    if (state->amenity)
+    if (state->amenity && strlen(state->amenity)>0)
         appendStringInfo(&url_buffer, "amenity=%s&", curl_easy_escape(curl, state->amenity, 0));
 
     if (state->osm_ids && strlen(state->osm_ids)>0)
@@ -1591,8 +1475,11 @@ static int ExecuteRequest(NominatimFDWState *state)
     else
         appendStringInfo(&url_buffer, "dedupe=0&");
     
+    if(state->limit > 0)
+        appendStringInfo(&url_buffer, "limit=%d&",state->limit);
     
-
+    if(state->offset > 0)
+        appendStringInfo(&url_buffer, "offset=%d&",state->offset);
     // if (strcmp(state->extra_params, "") != 0)
     //     appendStringInfo(&url_buffer, "%s", state->extra_params);
 

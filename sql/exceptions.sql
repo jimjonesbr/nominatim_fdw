@@ -116,16 +116,16 @@ FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
          max_connect_retry '5',
          connect_timeout '10');
-SELECT * FROM nominatim_query(server_name => 'srv',query => 'foo');
+SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
 
 /* no retry! */
 ALTER SERVER srv OPTIONS (SET max_connect_retry '0');
-SELECT * FROM nominatim_query(server_name => 'srv',query => 'foo');
+SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
 
 DROP SERVER srv;
 
 /* server does not exist */
-SELECT * FROM nominatim_query(server_name => 'foo',query => 'bar');
-SELECT * FROM nominatim_query_structured(server_name => 'foo',city => 'bar');
-SELECT * FROM nominatim_query_reverse(server_name => 'foo',lon => '1', lat => '2');
-SELECT * FROM nominatim_query_lookup(server_name => 'foo',osm_ids => 'W1');
+SELECT * FROM nominatim_search(server_name => 'foo', q => 'bar');
+SELECT * FROM nominatim_search(server_name => 'foo', city => 'bar');
+SELECT * FROM nominatim_reverse(server_name => 'foo',lon => '1', lat => '2');
+SELECT * FROM nominatim_lookup(server_name => 'foo', osm_ids => 'W1');

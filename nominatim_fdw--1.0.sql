@@ -57,48 +57,9 @@ CREATE TYPE NominatimReverseGeocode AS (
   addressparts jsonb
 );
 
-CREATE FUNCTION nominatim_query(
+CREATE FUNCTION nominatim_search(
     server_name text, 
-    query text,
-    extratags boolean DEFAULT false,
-    addressdetails boolean DEFAULT false,
-    namedetails boolean DEFAULT false,
-    polygon text DEFAULT '',
-    accept_language text DEFAULT '',    
-    countrycodes text DEFAULT '',
-    layer text DEFAULT '',
-    featuretype text DEFAULT '',
-    exclude_place_ids text DEFAULT '',
-    viewbox text DEFAULT '',
-    bounded boolean DEFAULT false,
-    polygon_threshold double precision DEFAULT 0.0,
-    email text DEFAULT '',
-    dedupe boolean DEFAULT false)
-RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query'
-LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-
-CREATE FUNCTION nominatim_query_lookup(
-    server_name text, 
-    osm_ids text,
-    extratags boolean DEFAULT false,
-    addressdetails boolean DEFAULT false,
-    namedetails boolean DEFAULT false,
-    polygon text DEFAULT '',
-    accept_language text DEFAULT '',    
-    countrycodes text DEFAULT '',
-    layer text DEFAULT '',
-    featuretype text DEFAULT '',
-    exclude_place_ids text DEFAULT '',
-    viewbox text DEFAULT '',
-    bounded boolean DEFAULT false,
-    polygon_threshold double precision DEFAULT 0.0,
-    email text DEFAULT '',
-    dedupe boolean DEFAULT false)
-RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query_lookup'
-LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
-
-CREATE FUNCTION nominatim_query_structured(
-    server_name text, 
+    q text DEFAULT '',
     amenity text DEFAULT '',
     street text DEFAULT '', 
     city text DEFAULT '',
@@ -119,11 +80,33 @@ CREATE FUNCTION nominatim_query_structured(
     bounded boolean DEFAULT false,
     polygon_threshold double precision DEFAULT 0.0,
     email text DEFAULT '',
-    dedupe boolean DEFAULT false)
-RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_query_structured'
+    dedupe boolean DEFAULT false,
+    limit_result int DEFAULT 0,
+    offset_result int DEFAULT 0)
+RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_search'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
-CREATE FUNCTION nominatim_query_reverse(
+CREATE FUNCTION nominatim_lookup(
+    server_name text, 
+    osm_ids text,
+    extratags boolean DEFAULT false,
+    addressdetails boolean DEFAULT false,
+    namedetails boolean DEFAULT false,
+    polygon text DEFAULT '',
+    accept_language text DEFAULT '',    
+    countrycodes text DEFAULT '',
+    layer text DEFAULT '',
+    featuretype text DEFAULT '',
+    exclude_place_ids text DEFAULT '',
+    viewbox text DEFAULT '',
+    bounded boolean DEFAULT false,
+    polygon_threshold double precision DEFAULT 0.0,
+    email text DEFAULT '',
+    dedupe boolean DEFAULT false)
+RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_lookup'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
+CREATE FUNCTION nominatim_reverse(
     server_name text, 
     lon double precision DEFAULT 0,
     lat double precision DEFAULT 0,
@@ -133,7 +116,7 @@ CREATE FUNCTION nominatim_query_reverse(
     addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
     polygon text DEFAULT '')
-RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_query_reverse'
+RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_reverse'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
 CREATE FOREIGN DATA WRAPPER nominatim_fdw
