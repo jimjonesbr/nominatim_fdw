@@ -286,6 +286,7 @@ static NominatimFDWState *GetServerInfo(const char *srvname);
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp);
 static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, PlannerInfo *root);
+static void RaiseNominatimException(xmlNodePtr error);
 static void LoadData(NominatimFDWState *state);
 static void LoadDataReverseLookup(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
@@ -634,7 +635,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
     text *email_text = PG_GETARG_TEXT_P(21);
     bool dedupe = PG_GETARG_BOOL(22);
     int limit = PG_GETARG_INT32(23);
-    int offset = PG_GETARG_INT32(24);
+    int offset = PG_GETARG_INT32(24);       
    
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
@@ -674,8 +675,19 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->namedetails = namedetails;
         state->limit = limit;
         state->offset = offset;
-
         state->request_type = NOMINATIM_REQUEST_SEARCH;
+
+        if(state->amenity && strlen(state->amenity)>0 &&  
+           state->query && strlen(state->query)>0)
+            ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
+							errmsg("bad request => structured query parameters (amenity, street, city, county, state, postalcode, country) cannot be used together with 'q' parameter")));
+
+        if((state->amenity && strlen(state->amenity)==0) &&  
+           (state->query && strlen(state->query)==0))
+            ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
+							errmsg("bad request => nothing to search for."),
+                            errhint("a '%s' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)",__func__)));
+
 
         if(!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -1111,6 +1123,31 @@ static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, Pl
 	state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;	
 	state->numcols = rel->rd_att->natts;
 
+}
+
+static void RaiseNominatimException(xmlNodePtr error)
+{
+    xmlNodePtr node;
+
+    if (xmlStrcmp(error->name, (xmlChar *)"error") == 0)
+    {
+        char *code = NULL;
+        char *message = NULL;
+
+        for (node = xmlDocGetRootElement(error->doc)->children; node != NULL; node = node->next)
+        {
+            if (xmlStrcmp(node->name, (xmlChar *)"code") == 0)
+                code = (char *)xmlNodeGetContent(node);
+            else if (xmlStrcmp(node->name, (xmlChar *)"message") == 0)
+                message = (char *)xmlNodeGetContent(node);
+        }
+
+        if(code && message)
+            ereport(ERROR,
+                    (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_REPLY),
+                    errmsg("code %s: %s", code, message)));
+
+    }
 }
 
 static void LoadDataReverseLookup(NominatimFDWState *state)
@@ -1588,6 +1625,9 @@ static int ExecuteRequest(NominatimFDWState *state)
         {
             size_t len = strlen(errbuf);
             fprintf(stderr, "\nlibcurl: (%d) ", res);
+
+            // if(chunk.memory)
+            //     RaiseNominatimException(xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS));
 
             xmlFreeDoc(state->xmldoc);
             pfree(chunk.memory);

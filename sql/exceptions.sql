@@ -133,6 +133,12 @@ CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im');
 
+/* bad request: 'q' and 'amenity' cannot be combined */
+SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', amenity => 'bar');
+
+/* bad request: nothing to search for */
+SELECT * FROM nominatim_search(server_name => 'srv');
+
 /* FOREIGN TABLE not supported */
 CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
 SERVER srv OPTIONS (foo 'bar');

@@ -151,6 +151,13 @@ ERROR:  FOREIGN SERVER does not exist: 'foo'
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im');
+/* bad request: 'q' and 'amenity' cannot be combined */
+SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', amenity => 'bar');
+ERROR:  bad request => structured query parameters (amenity, street, city, county, state, postalcode, country) cannot be used together with 'q' parameter
+/* bad request: nothing to search for */
+SELECT * FROM nominatim_search(server_name => 'srv');
+ERROR:  bad request => nothing to search for.
+HINT:  a 'nominatim_fdw_search' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)
 /* FOREIGN TABLE not supported */
 CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
 SERVER srv OPTIONS (foo 'bar');
