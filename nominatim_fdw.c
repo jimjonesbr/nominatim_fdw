@@ -87,8 +87,9 @@
 #define NOMINATIM_SERVER_OPTION_HTTPS_PROXY "https_proxy"
 #define NOMINATIM_SERVER_OPTION_PROXY_USER "proxy_user"
 #define NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD "proxy_user_password"
-#define NOMINATIM_SERVER_OPTION_QUERY "query"
+#define NOMINATIM_SERVER_OPTION_LANGUAGE "accept_language"
 
+#define NOMINATIM_SERVER_OPTION_QUERY "query"
 #define NOMINATIM_TABLE_OPTION_QUERY "q"
 #define NOMINATIM_TABLE_OPTION_AMENITY "amenity"
 #define NOMINATIM_TABLE_OPTION_STREET "street"
@@ -119,6 +120,7 @@
 #define NOMINATIM_DEFAULT_MAXRETRY 3
 #define NOMINATIM_DEFAULT_MAXREDIRECT 1
 #define NOMINATIM_DEFAULT_FORMAT "xml"
+#define NOMINATIM_DEFAULT_LANGUAGE "en-US,en;q=0.9"
 
 PG_MODULE_MAGIC;
 
@@ -254,6 +256,7 @@ static struct NominatimFDWOption valid_options[] =
 	{NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_MAXREDIRECT, ForeignServerRelationId, false, false},
 	{NOMINATIM_SERVER_OPTION_QUERY, ForeignServerRelationId, false, false},
+    {NOMINATIM_SERVER_OPTION_LANGUAGE, ForeignServerRelationId, false, false},
 	/* EOList option */
 	{NULL, InvalidOid, false, false}
 };
@@ -281,12 +284,12 @@ static void NominatimReScanForeignScan(ForeignScanState *node);
 static void NominatimEndForeignScan(ForeignScanState *node);
 static Datum ConvertDatum(HeapTuple tuple, int pgtype, int pgtypemod, char *value);
 static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place);
-static NominatimFDWState *GetServerInfo(const char *srvname);
+static NominatimFDWState *InitSession(const char *srvname);
 
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp);
-static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, PlannerInfo *root);
-static void RaiseNominatimException(xmlNodePtr error);
+//static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, PlannerInfo *root);
+//static void RaiseNominatimException(xmlNodePtr error);
 static void LoadData(NominatimFDWState *state);
 static void LoadDataReverseLookup(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
@@ -518,16 +521,22 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
     bool addressdetails = PG_GETARG_BOOL(6);
     bool namedetails = PG_GETARG_BOOL(7);
     text *polygon_text = PG_GETARG_TEXT_P(8);
+    text *language_text = PG_GETARG_TEXT_P(9);
+
 
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
-    NominatimFDWState *state = GetServerInfo(text_to_cstring(srvname_text));
 
 	if (SRF_IS_FIRSTCALL())
 	{
-		MemoryContext oldcontext;       		
+		MemoryContext oldcontext;
+        NominatimFDWState *state = InitSession(text_to_cstring(srvname_text));
+
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+
+        if(language_text && strlen(text_to_cstring(language_text))>0)
+            state->accept_language = text_to_cstring(language_text);
         
         state->lon = lon;
         state->lat = lat;
@@ -542,7 +551,8 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
 
         if(!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-							errmsg("invalid polygon type '%s'",state->polygon_type)));
+							errmsg("invalid polygon type '%s'",state->polygon_type),
+                            errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
         elog(DEBUG1,"\n\n\t=== %s ===\n\tlon: '%f'\n\tlat: '%f'\n\tzoom: '%d'\n\tpolygon_type: '%s'\n\tlayer: '%s'\n"
             ,__func__,
@@ -644,11 +654,14 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
 	if (SRF_IS_FIRSTCALL())
 	{
 		MemoryContext oldcontext;
-        state = GetServerInfo(text_to_cstring(srvname_text));
+        state = InitSession(text_to_cstring(srvname_text));
         
 		funcctx = SRF_FIRSTCALL_INIT();
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
+        if(language_text && strlen(text_to_cstring(language_text))>0)
+            state->accept_language = text_to_cstring(language_text);
+            
         state->query = text_to_cstring(query_text);
         state->amenity = text_to_cstring(amenity_text);
         state->amenity = text_to_cstring(amenity_text);
@@ -658,8 +671,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->state = text_to_cstring(tstate);
         state->country = text_to_cstring(country);
         state->postalcode = text_to_cstring(postalcode);
-        state->polygon_type = text_to_cstring(polygon_text);
-        state->accept_language = text_to_cstring(language_text);
+        state->polygon_type = text_to_cstring(polygon_text);        
         state->countrycodes = text_to_cstring(countrycodes_text);
         state->layer = text_to_cstring(layer_text);
         state->feature_type = text_to_cstring(featuretype_text);
@@ -677,6 +689,8 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->offset = offset;
         state->request_type = NOMINATIM_REQUEST_SEARCH;
 
+        
+
         if(state->amenity && strlen(state->amenity)>0 &&  
            state->query && strlen(state->query)>0)
             ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
@@ -691,7 +705,8 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
 
         if(!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-							errmsg("invalid polygon type '%s'",state->polygon_type)));
+							errmsg("invalid polygon type '%s'",state->polygon_type),
+                            errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
         
         elog(DEBUG1,"\n\n\t=== %s ===\n\tq:'%s'\n\tpolygon_type: '%s'\n"
         ,__func__,
@@ -782,12 +797,14 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
 	{
 		MemoryContext oldcontext;
 		funcctx = SRF_FIRSTCALL_INIT();
-        state = GetServerInfo(text_to_cstring(srvname_text));
+        state = InitSession(text_to_cstring(srvname_text));
 		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
+        if(language_text && strlen(text_to_cstring(language_text))>0)
+            state->accept_language = text_to_cstring(language_text);
+
         state->osm_ids = text_to_cstring(osm_ids_text);    
-        state->polygon_type = text_to_cstring(polygon_text);
-        state->accept_language = text_to_cstring(language_text);
+        state->polygon_type = text_to_cstring(polygon_text);        
         state->countrycodes = text_to_cstring(countrycodes_text);
         state->layer = text_to_cstring(layer_text);
         state->feature_type = text_to_cstring(featuretype_text);
@@ -803,9 +820,13 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         state->namedetails = namedetails;
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
 
+        // if(state->accept_language && strlen(state->accept_language)>0)
+        //     state->accept_language = text_to_cstring(language_text);
+
         if(!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-							errmsg("invalid polygon type '%s'",state->polygon_type)));
+							errmsg("invalid polygon type '%s'",state->polygon_type),
+                            errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
         elog(DEBUG1,"\n\n\t=== %s ===\n\tosm_ids:'%s'\n\tpolygon_type: '%s'\n"
         ,__func__,
@@ -960,7 +981,7 @@ static Datum ConvertDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value
 
 }
 
-static NominatimFDWState *GetServerInfo(const char *srvname)
+static NominatimFDWState *InitSession(const char *srvname)
 {
 	NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
 	ForeignServer *server = GetForeignServerByName(srvname, true);
@@ -968,6 +989,7 @@ static NominatimFDWState *GetServerInfo(const char *srvname)
     state->request_redirect = 1L;
     state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;
     state->request_max_redirect = NOMINATIM_DEFAULT_MAXREDIRECT;
+    state->accept_language = NOMINATIM_DEFAULT_LANGUAGE;
 
 	elog(DEBUG1, "%s called: '%s'", __func__, srvname);
 
@@ -1024,8 +1046,10 @@ static NominatimFDWState *GetServerInfo(const char *srvname)
 				char *val = defGetString(def);
 
 				state->max_retries = strtol(val, &tailpt, 10);              
-			}            
-            
+			} 
+                       
+            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
+				state->accept_language = defGetString(def);
 		}
 	}
 	else
@@ -1101,54 +1125,55 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 	return realsize;
 }
 
-static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, PlannerInfo *root) 
-{
+// static void InitSession(struct NominatimFDWState *state, RelOptInfo *baserel, PlannerInfo *root) 
+// {
 
-    //ForeignTable *ft = GetForeignTable(state->nominatim_table->foreigntableid);
-	//ForeignServer *server = GetForeignServer(ft->serverid);	
-    //ListCell *cell;
-#if PG_VERSION_NUM < 130000
-	Relation rel = heap_open(ft->relid, NoLock);
-#else
-	Relation rel = table_open(state->nominatim_table->foreigntableid, NoLock);
-#endif
+//     //ForeignTable *ft = GetForeignTable(state->nominatim_table->foreigntableid);
+// 	//ForeignServer *server = GetForeignServer(ft->serverid);	
+//     //ListCell *cell;
+// #if PG_VERSION_NUM < 130000
+// 	Relation rel = heap_open(ft->relid, NoLock);
+// #else
+// 	Relation rel = table_open(state->nominatim_table->foreigntableid, NoLock);
+// #endif
 
-	elog(DEBUG1,"%s called",__func__);
+// 	elog(DEBUG1,"%s called",__func__);
 
-	/*
-	 * Setting session's default values.
-	 */
-    state->format = NOMINATIM_DEFAULT_FORMAT;
-	state->connect_timeout = NOMINATIM_DEFAULT_CONNECTTIMEOUT;
-	state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;	
-	state->numcols = rel->rd_att->natts;
+// 	/*
+// 	 * Setting session's default values.
+// 	 */
+//     state->format = NOMINATIM_DEFAULT_FORMAT;
+// 	state->connect_timeout = NOMINATIM_DEFAULT_CONNECTTIMEOUT;
+// 	state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;	
+// 	state->numcols = rel->rd_att->natts;
 
-}
+// }
 
-static void RaiseNominatimException(xmlNodePtr error)
-{
-    xmlNodePtr node;
 
-    if (xmlStrcmp(error->name, (xmlChar *)"error") == 0)
-    {
-        char *code = NULL;
-        char *message = NULL;
+// static void RaiseNominatimException(xmlNodePtr error)
+// {
+//     xmlNodePtr node;
 
-        for (node = xmlDocGetRootElement(error->doc)->children; node != NULL; node = node->next)
-        {
-            if (xmlStrcmp(node->name, (xmlChar *)"code") == 0)
-                code = (char *)xmlNodeGetContent(node);
-            else if (xmlStrcmp(node->name, (xmlChar *)"message") == 0)
-                message = (char *)xmlNodeGetContent(node);
-        }
+//     if (xmlStrcmp(error->name, (xmlChar *)"error") == 0)
+//     {
+//         char *code = NULL;
+//         char *message = NULL;
 
-        if(code && message)
-            ereport(ERROR,
-                    (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_REPLY),
-                    errmsg("code %s: %s", code, message)));
+//         for (node = xmlDocGetRootElement(error->doc)->children; node != NULL; node = node->next)
+//         {
+//             if (xmlStrcmp(node->name, (xmlChar *)"code") == 0)
+//                 code = (char *)xmlNodeGetContent(node);
+//             else if (xmlStrcmp(node->name, (xmlChar *)"message") == 0)
+//                 message = (char *)xmlNodeGetContent(node);
+//         }
 
-    }
-}
+//         if(code && message)
+//             ereport(ERROR,
+//                     (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_REPLY),
+//                     errmsg("code %s: %s", code, message)));
+
+//     }
+// }
 
 static void LoadDataReverseLookup(NominatimFDWState *state)
 {
@@ -1391,6 +1416,7 @@ static int ExecuteRequest(NominatimFDWState *state)
     CURL *curl;
     CURLcode res;
     StringInfoData url_buffer;
+    StringInfoData accept_header;
     StringInfoData user_agent;
     char errbuf[CURL_ERROR_SIZE];
     struct MemoryStruct chunk;
@@ -1406,9 +1432,6 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
-
-    // initStringInfo(&accept_header);
-    // appendStringInfo(&accept_header, "Accept-Language: text/xml");
 
     initStringInfo(&url_buffer);
     appendStringInfo(&url_buffer, "%s", state->url);
@@ -1601,10 +1624,14 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         elog(DEBUG1, "  %s: \"Agent: %s\"", __func__, user_agent.data);
 
+        //curl_easy_setopt(curl, CURLOPT_ACCEPT_ENCODING, user_agent.data);
         curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
 
-        // headers = curl_slist_append(headers, accept_header.data);
-        // curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        initStringInfo(&accept_header);
+        appendStringInfo(&accept_header, "Accept-Language: %s", state->accept_language);
+        headers = curl_slist_append(headers, NameStr(accept_header));
+        elog(DEBUG1,"  adding header: %s",NameStr(accept_header));
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
         elog(DEBUG2, "  %s: performing cURL request ... ", __func__);
 

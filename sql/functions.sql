@@ -12,7 +12,7 @@ SELECT
     jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_search(
       server_name => 'osm',
-      q => 'einsteinstraße 60,münster,germany',
+      q => 'einsteinstraße 60, münster, germany',
       extratags => true,
       addressdetails => true,
       namedetails => true,
@@ -25,7 +25,8 @@ FROM nominatim_search(
       viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
       polygon_threshold => 0.1,
       layer => 'address',
-      limit_result => 1);
+      limit_result => 1,
+      accept_language => 'de_DE,de,q=0.9');
 
 SELECT pg_sleep(2);
 
@@ -55,7 +56,8 @@ FROM nominatim_search(
       viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
       polygon_threshold => 0.1,
       layer => 'address',
-      limit_result => 1);
+      limit_result => 1,
+      accept_language => 'de_DE,de,q=0.9');
 
 SELECT pg_sleep(2);
 
@@ -71,7 +73,8 @@ FROM nominatim_reverse(
         polygon => 'polygon_text',
         extratags => true,
         addressdetails => true,
-        namedetails => true);
+        namedetails => true,
+        accept_language => 'de_DE,de,q=0.9');
 
 SELECT pg_sleep(2);
 
@@ -95,4 +98,5 @@ FROM nominatim_lookup(
       exclude_place_ids => '42,73',
       viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
       polygon_threshold => 0.1,
-      layer => 'address');
+      layer => 'address',
+      accept_language => 'de_DE,de,q=0.9');

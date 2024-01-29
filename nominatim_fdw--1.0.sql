@@ -115,7 +115,8 @@ CREATE FUNCTION nominatim_reverse(
     extratags boolean DEFAULT false,
     addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
-    polygon text DEFAULT '')
+    polygon text DEFAULT '',
+    accept_language text DEFAULT '')
 RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_reverse'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 
