@@ -80,7 +80,7 @@ CREATE FUNCTION nominatim_search(
     bounded boolean DEFAULT false,
     polygon_threshold double precision DEFAULT 0.0,
     email text DEFAULT '',
-    dedupe boolean DEFAULT false,
+    dedupe boolean DEFAULT true,
     limit_result int DEFAULT 0,
     offset_result int DEFAULT 0)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_search'
@@ -102,7 +102,7 @@ CREATE FUNCTION nominatim_lookup(
     bounded boolean DEFAULT false,
     polygon_threshold double precision DEFAULT 0.0,
     email text DEFAULT '',
-    dedupe boolean DEFAULT false)
+    dedupe boolean DEFAULT true)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_lookup'
 LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
 

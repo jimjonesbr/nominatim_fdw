@@ -646,7 +646,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
     bool dedupe = PG_GETARG_BOOL(22);
     int limit = PG_GETARG_INT32(23);
     int offset = PG_GETARG_INT32(24);       
-   
+
     FuncCallContext *funcctx;
 	TupleDesc tupdesc;
     NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
@@ -687,9 +687,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->namedetails = namedetails;
         state->limit = limit;
         state->offset = offset;
-        state->request_type = NOMINATIM_REQUEST_SEARCH;
-
-        
+        state->request_type = NOMINATIM_REQUEST_SEARCH;      
 
         if(state->amenity && strlen(state->amenity)>0 &&  
            state->query && strlen(state->query)>0)
@@ -819,9 +817,6 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
-
-        // if(state->accept_language && strlen(state->accept_language)>0)
-        //     state->accept_language = text_to_cstring(language_text);
 
         if(!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -1527,18 +1522,14 @@ static int ExecuteRequest(NominatimFDWState *state)
     if (state->email && strlen(state->email)>0)
         appendStringInfo(&url_buffer, "email=%s&", curl_easy_escape(curl, state->email, 0));
 
-    if (state->dedupe)
-        appendStringInfo(&url_buffer, "dedupe=1&");
-    else
-        appendStringInfo(&url_buffer, "dedupe=0&");
+    if (!state->dedupe)
+         appendStringInfo(&url_buffer, "dedupe=0&");
     
     if(state->limit > 0)
         appendStringInfo(&url_buffer, "limit=%d&",state->limit);
     
     if(state->offset > 0)
         appendStringInfo(&url_buffer, "offset=%d&",state->offset);
-    // if (strcmp(state->extra_params, "") != 0)
-    //     appendStringInfo(&url_buffer, "%s", state->extra_params);
 
     if (curl)
     {
