@@ -189,7 +189,7 @@ As in the Nominatim API, the free-form query string parameter `q` cannot be comb
 
 #### Examples
 
-For these examples we assume the following SERVER
+For these examples we assume the following `SERVER`:
 
 ```sql
 CREATE SERVER osm 
@@ -226,13 +226,12 @@ FROM nominatim_search(server_name => 'osm',
  Strcutured search with `extratags`
 
 ```sql
-SELECT osm_id, ref, lon, lat, jsonb_pretty(extratags) 
+SELECT osm_id, ref, lon, lat, jsonb_pretty(extratags) AS extratags 
 FROM nominatim_search(server_name => 'osm', 
                       street => 'neubrückenstraße 63', 
                       city => 'münster',
                       extratags => true);
-
-  osm_id   |       ref       |    lon    |    lat     |                                              jsonb_pretty                                              
+  osm_id   |       ref       |    lon    |    lat     |                                               extratags                                                
 -----------+-----------------+-----------+------------+--------------------------------------------------------------------------------------------------------
  121736959 | Theater Münster | 7.6293918 | 51.9648162 | {                                                                                                     +
            |                 |           |            |     "image": "https://upload.wikimedia.org/wikipedia/commons/6/64/Muenster_Stadttheater_%2881%29.JPG",+
@@ -264,7 +263,85 @@ FROM nominatim_search(server_name => 'osm',
 
 ### [nominatim_reverse](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_reverse)
 
+[Reverse](https://nominatim.org/release-docs/develop/api/Reverse/) geocoding generates an address from a coordinate given as latitude and longitude. The reverse geocoding API does not exactly compute the address for the coordinate it receives. It works by finding the closest suitable OSM object and returning its address information. This may occasionally lead to unexpected results.
+
+All parameters supported by the Nominatim reverse API can be used as parameteres for this function:
+
+| Parameter | Type | Description |
+|---|---|---
+| `server_name` | **required** | Foreign Data Wrapper server created using the [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server) statement. |
+| `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
+| `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
+| `namedetails` | optional | include a full list of names for the result. (default `false`) |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the CREATE SERVER |
+| `zoom` | optional | Level of detail required for the address. This is a number that corresponds roughly to the zoom level used in XYZ tile sources in frameworks like Leaflet.js, Openlayers etc. In terms of address details the zoom levels are as follows: `3` country, `5` state, `8` county, `10` city, `12` town / borough, `13` village / suburb, `14` neighbourhood, `15` any settlement, `16` major streets, `17` major and minor streets, `18` building (default `18`) |
+| `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
+| `polygon_type` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text (default *unset*) |
+| `polygon_treshold` | optional | floating-point number (default `0.0`) |
+| `email` | optional | valid email address (default *unset*) |
+
+#### Examples
+
+For these examples we assume the following `SERVER`:
+
+```sql
+CREATE SERVER osm 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'https://nominatim.openstreetmap.org');
+```
+
+Address generation for the coordinates `7.6293` longitude and `51.9648` latitude:        
+
+```sql
+SELECT osm_id, result, boundingbox
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6293,
+        lat => 51.9648,        
+        extratags => true);
+
+  osm_id   |                                                          result                                                          |                boundingbox                
+-----------+--------------------------------------------------------------------------------------------------------------------------+-------------------------------------------
+ 121736959 | Theater Münster, 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, North Rhine-Westphalia, 48143, Germany | 51.9644060,51.9652417,7.6286897,7.6304381
+(1 row)
+```
+
 ### [nominatim_lookup](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_lookup)
+
+The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows to query the address and other details of one or multiple OSM objects like node, way or relation.
+
+| Parameter | Type | Description |
+|---|---|---
+| `server_name` | **required** | Foreign Data Wrapper server created using the [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server) statement. |
+| `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
+| `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
+| `namedetails` | optional | include a full list of names for the result. (default `false`) |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the `CREATE SERVER` |
+| `polygon_type` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text (default *unset*) |
+| `polygon_treshold` | optional | floating-point number (default `0.0`) |
+| `email` | optional | valid email address (default *unset*) |
+
+#### Examples
+
+For these examples we assume the following `SERVER`:
+
+```sql
+CREATE SERVER osm 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'https://nominatim.openstreetmap.org');
+```
+
+```sql
+SELECT osm_id, display_name 
+FROM nominatim_lookup(
+      server_name => 'osm',
+      osm_ids => 'W121736959');
+
+  osm_id   |                                                       display_name                                                       
+-----------+--------------------------------------------------------------------------------------------------------------------------
+ 121736959 | Theater Münster, 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, North Rhine-Westphalia, 48143, Germany
+(1 row)
+```
 
 ## [Deploy with Docker](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#deploy-with-docker)
 
@@ -302,7 +379,7 @@ $ docker exec -u postgres my_container psql -d mydatabase -c "CREATE EXTENSION n
 
 ### [For testers and developers](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#for-testers-and-developers)
 
-If you're cool enough to try out the latest commits:
+Deploying the latest development version straight from the source:
 
 Dockerfile
 
