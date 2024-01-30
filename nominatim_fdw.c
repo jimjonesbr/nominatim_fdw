@@ -694,8 +694,8 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
             ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
 							errmsg("bad request => structured query parameters (amenity, street, city, county, state, postalcode, country) cannot be used together with 'q' parameter")));
 
-        if((state->amenity && strlen(state->amenity)==0) &&  
-           (state->query && strlen(state->query)==0))
+        if( (strlen(state->amenity) == 0 &&  strlen(state->street) == 0 && strlen(state->city) == 0 && strlen(state->county) == 0 && strlen(state->state) == 0 && strlen(state->country) == 0 && strlen(state->postalcode) == 0 ) &&
+             strlen(state->query) == 0)            
             ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
 							errmsg("bad request => nothing to search for."),
                             errhint("a '%s' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)",__func__)));
