@@ -15,6 +15,8 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
   - [ALTER SERVER](#alter-server)
   - [Version](#nominatim_fdw_version)
   - [Nominatim_Search](#nominatim_search)
+  - [Nominatim_Reverse](#nominatim_reverse)
+  - [Nominatim_Lookup](#nominatim_lookup)
 - [Examples](#examples)
 - [Deploy with Docker](#deploy-with-docker)
  
@@ -116,16 +118,13 @@ ALTER SERVER osm OPTIONS (ADD max_connect_rety '5');
 Changing previously configured options
 
 ```sql
-ALTER SERVER dbpedia OPTIONS (SET url 'https://a.new.url');
+ALTER SERVER osm OPTIONS (SET url 'https://a.new.url');
 ```
 
 Dropping options
 
 ```sql
-ALTER FOREIGN TABLE film OPTIONS (DROP enable_pushdown,
-                                  DROP log_sparql);
-
-ALTER SERVER dbpedia OPTIONS (DROP enable_pushdown);
+ALTER SERVER osm OPTIONS (DROP http_proxy);
 ```
 
 ### [nominatim_fdw_version](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#version)
@@ -152,11 +151,19 @@ SELECT nominatim_fdw_version();
 (1 row)
 ```
 
-### [nominatim_search](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_search)
+### [Nominatim_Search](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_search)
+
+**Synopsis**
+
+*SETOF NominatimRecord* nominatim_search(*parameters*)
+
+**Availability**: 1.0.0
+
+**Description**
 
 The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports structured and free-form search queries. The search query may also contain special phrases which are translated into specific OpenStreetMap (OSM) tags (e.g. Pub => amenity=pub). This can be used to narrow down the kind of objects to be returned.
 
-All parameters supported by the Nominatim search API can be used as parameteres for this function:
+**Parameters**
 
 | Parameter | Type | Description |
 |---|---|---|
@@ -187,7 +194,14 @@ All parameters supported by the Nominatim search API can be used as parameteres 
 
 As in the Nominatim API, the free-form query string parameter `q` cannot be combined with the parameters `amenity`, `street`, `city`, `county`, `state`, `country` and `postalcode, as they are used in structured calls.
 
-#### Examples
+
+----------------------
+
+
+
+
+
+**Usage**
 
 For these examples we assume the following `SERVER`:
 
@@ -261,11 +275,19 @@ FROM nominatim_search(server_name => 'osm',
 
 ```
 
-### [nominatim_reverse](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_reverse)
+### [Nominatim_Reverse](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_reverse)
+
+**Synopsis**
+
+*SETOF NominatimReverseGeocode* nominatim_reverse(*parameters*)
+
+**Availability**: 1.0.0
+
+**Description**
 
 [Reverse](https://nominatim.org/release-docs/develop/api/Reverse/) geocoding generates an address from a coordinate given as latitude and longitude. The reverse geocoding API does not exactly compute the address for the coordinate it receives. It works by finding the closest suitable OSM object and returning its address information. This may occasionally lead to unexpected results.
 
-All parameters supported by the Nominatim reverse API can be used as parameteres for this function:
+**Parameters**
 
 | Parameter | Type | Description |
 |---|---|---
@@ -280,7 +302,7 @@ All parameters supported by the Nominatim reverse API can be used as parameteres
 | `polygon_treshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | valid email address (default *unset*) |
 
-#### Examples
+**Usage**
 
 For these examples we assume the following `SERVER`:
 
@@ -306,9 +328,19 @@ FROM nominatim_reverse(
 (1 row)
 ```
 
-### [nominatim_lookup](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_lookup)
+### [Nominatim_Lookup](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_lookup)
+
+**Synopsis**
+
+*SETOF NominatimRecord* nominatim_lookup(*parameters*)
+
+**Availability**: 1.0.0
+
+**Description**
 
 The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows to query the address and other details of one or multiple OSM objects like node, way or relation.
+
+**Parameters**
 
 | Parameter | Type | Description |
 |---|---|---
@@ -321,7 +353,7 @@ The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows 
 | `polygon_treshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | valid email address (default *unset*) |
 
-#### Examples
+**Usage**
 
 For these examples we assume the following `SERVER`:
 
