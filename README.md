@@ -2,7 +2,7 @@
 ---------------------------------------------
 # PostgreSQL Foreign Data Wrapper for Nominatim (nominatim_fdw)
 
-The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [Nominatim](https://nominatim.org/) servers.
+The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [Nominatim](https://nominatim.org/) servers using simple function calls.
 
 
 ## Index
@@ -12,11 +12,12 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
 - [Update](#update)
 - [Usage](#usage)
   - [CREATE SERVER](#create-server)
-  - [ALTER SERVER](#alter-server)
-  - [Version](#nominatim_fdw_version)
-  - [Nominatim_Search](#nominatim_search)
-  - [Nominatim_Reverse](#nominatim_reverse)
-  - [Nominatim_Lookup](#nominatim_lookup)
+  - [ALTER SERVER](#alter-server)  
+  - [Functions](#functions)
+    - [Nominatim_Search](#nominatim_search)
+    - [Nominatim_Reverse](#nominatim_reverse)
+    - [Nominatim_Lookup](#nominatim_lookup)
+    - [Version](#nominatim_fdw_version)
 - [Examples](#examples)
 - [Deploy with Docker](#deploy-with-docker)
  
@@ -80,7 +81,7 @@ To use the `nominatim_fdw` you must first create a `SERVER` to connect to a Nomi
 
 ### [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server)
 
-The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server. The user who defines the server becomes its owner. A `SERVER` requires an `url`, so that `nominatim_fdw` knows where to sent the requests.
+The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server, which in this case means a Nominatim server. The user who defines the server becomes its owner. A `SERVER` requires an `url`, so that `nominatim_fdw` knows where to sent the requests.
 
 The following example creates a `SERVER` that connects to the [OpenStreetMap Nominatim Server](https://nominatim.openstreetmap.org):
 
@@ -95,7 +96,7 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 
 | Server Option | Type          | Description                                                                                                        |
 |---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
-| `url`     | **required**            | URL address of the SPARQL Endpoint.
+| `url`     | **required**            | URL address of the Nominatim endpoint.
 | `http_proxy` | optional            | Proxy for HTTP requests.
 | `proxy_user` | optional            | User for proxy server authentication.
 | `proxy_user_password` | optional            | Password for proxy server authentication.
@@ -126,42 +127,21 @@ Dropping options
 ```sql
 ALTER SERVER osm OPTIONS (DROP http_proxy);
 ```
+### [Functions](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#functions)
 
-### [nominatim_fdw_version](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#version)
+This section describes the `nominatim_fdw` functions, which are mapped to the Nominatim standard search endpoints [search](https://nominatim.org/release-docs/develop/api/Search/), [reverse](https://nominatim.org/release-docs/develop/api/Reverse/) and [lookup](https://nominatim.org/release-docs/develop/api/Lookup/).
 
-**Synopsis**
-
-*text* **nominatim_fdw_version**();
-
--------
-
-**Availability**: 1.0.0
+#### [Nominatim_Search](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_search)
 
 **Description**
 
-Shows the version of the installed `nominatim_fdw` and its main libraries.
+The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports [structured](https://nominatim.org/release-docs/develop/api/Search/#structured-query) and [free-form](https://nominatim.org/release-docs/develop/api/Search/#free-form-query) search queries, which are distinguished by either spliting the address components into different paramenteres, such as `street`, `county`, `state`, or  providing a single string in the parameter `q`.
 
-**Usage**
-
-```sql
-SELECT nominatim_fdw_version();
-                                                                                 nominatim_fdw_version                                                                                 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- nominatim_fdw = 1.0.0-dev, libxml/2.9.10 libcurl/7.74.0 OpenSSL/1.1.1w zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
-(1 row)
-```
-
-### [Nominatim_Search](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_search)
+**Availability**: 1.0.0
 
 **Synopsis**
 
 *SETOF NominatimRecord* nominatim_search(*parameters*)
-
-**Availability**: 1.0.0
-
-**Description**
-
-The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports structured and free-form search queries. The search query may also contain special phrases which are translated into specific OpenStreetMap (OSM) tags (e.g. Pub => amenity=pub). This can be used to narrow down the kind of objects to be returned.
 
 **Parameters**
 
@@ -180,7 +160,7 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
 | `namedetails` | optional | include a full list of names for the result. (default `false`) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the CREATE SERVER |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `countrycodes` | optional | comma-separated list of [country codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) (default *unset*) |
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
 | `featureType` | optional | one of: `country`, `state`, `city`, `settlement` (default *unset*) |
@@ -196,9 +176,6 @@ As in the Nominatim API, the free-form query string parameter `q` cannot be comb
 
 
 ----------------------
-
-
-
 
 
 **Usage**
@@ -275,33 +252,34 @@ FROM nominatim_search(server_name => 'osm',
 
 ```
 
-### [Nominatim_Reverse](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_reverse)
-
-**Synopsis**
-
-*SETOF NominatimReverseGeocode* nominatim_reverse(*parameters*)
-
-**Availability**: 1.0.0
+#### [Nominatim_Reverse](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_reverse)
 
 **Description**
 
 [Reverse](https://nominatim.org/release-docs/develop/api/Reverse/) geocoding generates an address from a coordinate given as latitude and longitude. The reverse geocoding API does not exactly compute the address for the coordinate it receives. It works by finding the closest suitable OSM object and returning its address information. This may occasionally lead to unexpected results.
 
+**Availability**: 1.0.0
+
+**Synopsis**
+
+*SETOF NominatimReverseGeocode* nominatim_reverse(*parameters*)
+
 **Parameters**
 
 | Parameter | Type | Description |
 |---|---|---
-| `server_name` | **required** | Foreign Data Wrapper server created using the [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server) statement. |
+| `server_name` | **required** | Foreign Data Wrapper server created using the `CREATE SERVER` statement. |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
-| `namedetails` | optional | include a full list of names for the result. (default `false`) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the CREATE SERVER |
+| `namedetails` | optional | includes a full list of names for the result. (default `false`) |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `zoom` | optional | Level of detail required for the address. This is a number that corresponds roughly to the zoom level used in XYZ tile sources in frameworks like Leaflet.js, Openlayers etc. In terms of address details the zoom levels are as follows: `3` country, `5` state, `8` county, `10` city, `12` town / borough, `13` village / suburb, `14` neighbourhood, `15` any settlement, `16` major streets, `17` major and minor streets, `18` building (default `18`) |
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
-| `polygon_type` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text (default *unset*) |
-| `polygon_treshold` | optional | floating-point number (default `0.0`) |
-| `email` | optional | valid email address (default *unset*) |
+| `polygon_type` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
+| `polygon_treshold` | optional | floating-point number. When one of the `polygon_*` outputs is chosen, return a simplified version of the output geometry. The parameter describes the tolerance in degrees with which the geometry may differ from the original geometry. Topology is preserved in the geometry. (default `0.0`) |
+| `email` | optional | In case you're using the public Nominatim service: If you are making large numbers of requests, please include an appropriate email address to identify your requests. See Nominatim's [Usage Policy](https://operations.osmfoundation.org/policies/nominatim/) for more details. You may ignore this parameter if you're hosting your server (default *unset*) |
 
+----------------------
 **Usage**
 
 For these examples we assume the following `SERVER`:
@@ -328,17 +306,17 @@ FROM nominatim_reverse(
 (1 row)
 ```
 
-### [Nominatim_Lookup](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_lookup)
-
-**Synopsis**
-
-*SETOF NominatimRecord* nominatim_lookup(*parameters*)
-
-**Availability**: 1.0.0
+#### [Nominatim_Lookup](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_lookup)
 
 **Description**
 
 The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows to query the address and other details of one or multiple OSM objects like node, way or relation.
+
+**Availability**: 1.0.0
+
+**Synopsis**
+
+*SETOF NominatimRecord* nominatim_lookup(*parameters*)
 
 **Parameters**
 
@@ -372,6 +350,28 @@ FROM nominatim_lookup(
   osm_id   |                                                       display_name                                                       
 -----------+--------------------------------------------------------------------------------------------------------------------------
  121736959 | Theater Münster, 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, North Rhine-Westphalia, 48143, Germany
+(1 row)
+```
+
+#### [nominatim_fdw_version](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#version)
+
+**Description**
+
+Shows the version of the installed `nominatim_fdw` and its main libraries.
+
+**Availability**: 1.0.0
+
+**Synopsis**
+
+*text* **nominatim_fdw_version**();
+
+**Usage**
+
+```sql
+SELECT nominatim_fdw_version();
+                                                                                 nominatim_fdw_version                                                                                 
+---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ nominatim_fdw = 1.0.0-dev, libxml/2.9.10 libcurl/7.74.0 OpenSSL/1.1.1w zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
 (1 row)
 ```
 
