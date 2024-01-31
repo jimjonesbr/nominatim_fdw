@@ -139,6 +139,9 @@ SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', amenity => 'ba
 /* bad request: nothing to search for */
 SELECT * FROM nominatim_search(server_name => 'srv');
 
+/* bad request: invalid layer */
+SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', layer => 'bar');
+
 /* FOREIGN TABLE not supported */
 CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
 SERVER srv OPTIONS (foo 'bar');

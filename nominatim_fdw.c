@@ -244,6 +244,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
 static bool IsPolygonTypeSupported(char *polygon_type);
+static bool IsLayerValid(char *layer);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
@@ -491,6 +492,12 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         state->extratags = extratags;
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
+        
+        if(state->layer && !IsLayerValid(state->layer))
+            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                            errmsg("invalid layer '%s'", state->layer),
+                            errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
+
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -647,6 +654,11 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
             ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
                             errmsg("bad request => nothing to search for."),
                             errhint("a '%s' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)", __func__)));
+        
+        if(state->layer && !IsLayerValid(state->layer))
+            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                            errmsg("invalid layer '%s'", state->layer),
+                            errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -770,6 +782,11 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
+
+        if(state->layer && !IsLayerValid(state->layer))
+            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                            errmsg("invalid layer '%s'", state->layer),
+                            errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -1420,9 +1437,6 @@ static int ExecuteRequest(NominatimFDWState *state)
     if (state->zoom)
         appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
 
-    if (state->layer && strlen(state->layer) > 0)
-        appendStringInfo(&url_buffer, "layer=%s&", state->layer);
-
     if (state->extratags)
         appendStringInfo(&url_buffer, "extratags=1&");
 
@@ -1677,4 +1691,25 @@ static bool IsPolygonTypeSupported(char *polygon_type)
             strcmp(polygon_type, "polygon_geojson") == 0 ||
             strcmp(polygon_type, "polygon_kml") == 0 ||
             strcmp(polygon_type, "polygon_svg") == 0);
+}
+
+/*
+ * IsLayerValid
+ * ----------
+ * 
+ * Checks if a polygon type is supported by the nominatim endpoint
+ * 
+ * returns boolean (true: valid, false: invalid)
+ */
+static bool IsLayerValid(char *layer)
+{
+    if (!layer)
+        return false;
+
+    return (strcmp(layer, "") == 0 ||
+            strcmp(layer, "address") == 0 ||
+            strcmp(layer, "poi") == 0 ||
+            strcmp(layer, "railway") == 0 ||
+            strcmp(layer, "natural") == 0 ||
+            strcmp(layer, "manmade") == 0);
 }
