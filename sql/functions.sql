@@ -94,7 +94,7 @@ SELECT pg_sleep(2);
 SELECT 
     osm_id, 
 	osm_type, 
-	result, 
+	result IS NOT NULL AND result <> '' valid_result,
 	ref, 
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank, 
