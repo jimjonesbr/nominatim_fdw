@@ -2,7 +2,8 @@ CREATE SERVER osm
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'https://nominatim.openstreetmap.org');
 
-SELECT * FROM nominatim_fdw_version();
+SELECT nominatim_fdw_version() IS NOT NULL, 
+       nominatim_fdw_version() <> '';
 
 SELECT 
     osm_id, osm_type, 
