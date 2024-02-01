@@ -4,6 +4,7 @@
 
 The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [Nominatim](https://nominatim.org/) servers using simple function calls.
 
+![CI](https://github.com/jimjonesbr/nominatim_fdw/actions/workflows/ci.yml/badge.svg)
 
 ## Index
 
