@@ -53,3 +53,8 @@ dkms.conf
 local-tests/
 .vscode/
 *.bc
+
+# regress tests results
+results
+regression.out
+regression.diffs
