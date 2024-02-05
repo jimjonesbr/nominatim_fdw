@@ -196,9 +196,10 @@ BEGIN
   LOOP
    RAISE NOTICE 'Resolving coordinates "%" (%) ...',ST_AsEWKT(rec.geom), rec.country;
    SELECT result INTO addr 
-   FROM nominatim_reverse(server_name => 'osm', 
-						  lon => ST_X(rec.geom), 
-						  lat => ST_Y(rec.geom));
+   FROM nominatim_reverse(
+          server_name => 'osm', 
+					lon => ST_X(rec.geom), 
+					lat => ST_Y(rec.geom));
    IF addr IS NOT NULL THEN
      UPDATE german_embasssy SET address = addr WHERE id = rec.id;
 	 EXECUTE pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.

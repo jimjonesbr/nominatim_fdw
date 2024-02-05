@@ -987,6 +987,7 @@ static NominatimFDWState *InitSession(const char *srvname)
     state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;
     state->request_max_redirect = NOMINATIM_DEFAULT_MAXREDIRECT;
     state->accept_language = NOMINATIM_DEFAULT_LANGUAGE;
+    state->connect_timeout = NOMINATIM_DEFAULT_CONNECTTIMEOUT;
 
     elog(DEBUG1, "%s called: '%s'", __func__, srvname);
 

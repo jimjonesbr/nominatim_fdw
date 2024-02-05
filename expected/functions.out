@@ -162,9 +162,9 @@ FROM nominatim_reverse(
         addressdetails => true,
         namedetails => true,
         accept_language => 'de_DE,de,q=0.9');
-  osm_id  | osm_type | valid_result | valid_ref | valid_place_id | place_rank | valid_lon | valid_lat | valid_bbox | icon | valid_timestamp | valid_attribution |              querystring              | valid_polygon | valid_extratags | valid_namedetails | valid_addressparts 
-----------+----------+--------------+-----------+----------------+------------+-----------+-----------+------------+------+-----------------+-------------------+---------------------------------------+---------------+-----------------+-------------------+--------------------
- 88291927 | way      | t            | t         | t              |         30 | t         | t         | t          |      | t               | t                 | lat=51.966087&lon=7.603811&format=xml | t             | t               | t                 | t
+ osm_id  | osm_type | valid_result | valid_ref | valid_place_id | place_rank | valid_lon | valid_lat | valid_bbox | icon | valid_timestamp | valid_attribution |              querystring              | valid_polygon | valid_extratags | valid_namedetails | valid_addressparts 
+---------+----------+--------------+-----------+----------------+------------+-----------+-----------+------------+------+-----------------+-------------------+---------------------------------------+---------------+-----------------+-------------------+--------------------
+ 4745499 | relation | t            | t         | t              |         30 | f         | t         | t          |      | t               | t                 | lat=51.966087&lon=7.603811&format=xml | t             | t               | t                 | t
 (1 row)
 
 SELECT pg_sleep(2);

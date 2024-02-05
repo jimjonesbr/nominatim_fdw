@@ -43,7 +43,10 @@ BEGIN
     SELECT * FROM public.xmas_market
   LOOP
    RAISE NOTICE 'Resolving "%" ...', rec.address;
-   SELECT ST_MakePoint(lon,lat) INTO g FROM nominatim_search(server_name => 'osm', q => rec.address);
+   SELECT ST_MakePoint(lon,lat) INTO g 
+   FROM nominatim_search(
+          server_name => 'osm', 
+          q => rec.address);
    IF g IS NOT NULL THEN
      UPDATE xmas_market SET geom = g WHERE id = rec.id;
 	 EXECUTE pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
