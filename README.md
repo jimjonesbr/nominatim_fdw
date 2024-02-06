@@ -142,7 +142,7 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 
 **Synopsis**
 
-*SETOF NominatimRecord* nominatim_search(*parameters*)
+*SETOF Record* nominatim_search(*parameters*)
 
 **Parameters**
 
@@ -263,7 +263,7 @@ FROM nominatim_search(server_name => 'osm',
 
 **Synopsis**
 
-*SETOF NominatimReverseGeocode* nominatim_reverse(*parameters*)
+*SETOF Record* nominatim_reverse(*parameters*)
 
 **Parameters**
 
@@ -317,7 +317,7 @@ The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows 
 
 **Synopsis**
 
-*SETOF NominatimRecord* nominatim_lookup(*parameters*)
+*SETOF Record* nominatim_lookup(*parameters*)
 
 **Parameters**
 
