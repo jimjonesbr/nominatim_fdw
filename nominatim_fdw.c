@@ -1662,7 +1662,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         }
         else
         {
-            long response_code;
+           // long response_code;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
             if(strcmp(state->request_type,NOMINATIM_REQUEST_STATUS)!=0)
