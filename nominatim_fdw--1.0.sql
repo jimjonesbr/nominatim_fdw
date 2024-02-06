@@ -57,6 +57,10 @@ CREATE TYPE NominatimReverseGeocode AS (
   addressparts jsonb
 );
 
+CREATE FUNCTION nominatim_status(server_name text)
+RETURNS boolean AS 'MODULE_PATHNAME', 'nominatim_fdw_status'
+LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+
 CREATE FUNCTION nominatim_search(
     server_name text, 
     q text DEFAULT '',

@@ -77,6 +77,7 @@
 #define NOMINATIM_REQUEST_SEARCH "search"
 #define NOMINATIM_REQUEST_REVERSE "reverse"
 #define NOMINATIM_REQUEST_LOOKUP "lookup"
+#define NOMINATIM_REQUEST_STATUS "status"
 
 #define NOMINATIM_SERVER_OPTION_URL "url"
 #define NOMINATIM_SERVER_OPTION_FORMAT "format"
@@ -136,6 +137,7 @@ typedef struct NominatimFDWState
     bool extratags;            /* Include any additional information in the result that is available in the database? */
     bool namedetails;          /* Include a full list of names for the result? */
     bool addressdetails;       /* Include a breakdown of the address into elements? */
+    bool isalive;              /* True if the foreign server is reachable or false otherwise */
     long request_max_redirect; /* Limit of how many times the URL redirection (jump) may occur. */
     long connect_timeout;      /* Timeout for SPARQL queries */
     long max_retries;          /* Number of re-try attemtps for failed SPARQL queries */
@@ -218,6 +220,7 @@ extern Datum nominatim_fdw_version(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_search(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_status(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(nominatim_fdw_handler);
 PG_FUNCTION_INFO_V1(nominatim_fdw_validator);
@@ -225,6 +228,7 @@ PG_FUNCTION_INFO_V1(nominatim_fdw_version);
 PG_FUNCTION_INFO_V1(nominatim_fdw_search);
 PG_FUNCTION_INFO_V1(nominatim_fdw_reverse);
 PG_FUNCTION_INFO_V1(nominatim_fdw_lookup);
+PG_FUNCTION_INFO_V1(nominatim_fdw_status);
 
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
 static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
@@ -241,6 +245,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp);
 static void ParseNominatimSearchData(NominatimFDWState *state);
 static void ParseNominatimReverseData(NominatimFDWState *state);
+//static bool IsNominatimServerAlive(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
 static bool IsPolygonTypeSupported(char *polygon_type);
@@ -865,6 +870,22 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
  *
  * returns SETOF NominatimRecord
  */
+
+Datum nominatim_fdw_status(PG_FUNCTION_ARGS)
+{
+    text *srvname_text = PG_GETARG_TEXT_P(0);
+    NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
+    state = InitSession(text_to_cstring(srvname_text));
+
+    state->request_type = NOMINATIM_REQUEST_STATUS;
+
+    if (ExecuteRequest(state) != REQUEST_SUCCESS)
+        PG_RETURN_BOOL(true);
+    else
+        PG_RETURN_BOOL(false);
+    
+
+}
 static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place)
 {
 
@@ -1372,6 +1393,12 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
         xmlFreeNode(searchresults);
 }
 
+// static bool IsNominatimServerAlive(NominatimFDWState *state)
+// {
+
+//     return true;
+// }
+
 static int ExecuteRequest(NominatimFDWState *state)
 {
     CURL *curl;
@@ -1383,6 +1410,7 @@ static int ExecuteRequest(NominatimFDWState *state)
     struct MemoryStruct chunk;
     struct MemoryStruct chunk_header;
     struct curl_slist *headers = NULL;
+    long response_code;
 
     chunk.memory = palloc(1);
     chunk.size = 0; /* no data at this point */
@@ -1399,96 +1427,99 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     appendStringInfo(&url_buffer, "/%s?", state->request_type);
 
-    if (state->query && strlen(state->query) > 0)
-        appendStringInfo(&url_buffer, "q=%s&", curl_easy_escape(curl, state->query, 0));
+    if (strcmp(state->request_type, NOMINATIM_REQUEST_STATUS) != 0)
+    {
+        if (state->query && strlen(state->query) > 0)
+            appendStringInfo(&url_buffer, "q=%s&", curl_easy_escape(curl, state->query, 0));
 
-    if (state->amenity && strlen(state->amenity) > 0)
-        appendStringInfo(&url_buffer, "amenity=%s&", curl_easy_escape(curl, state->amenity, 0));
+        if (state->amenity && strlen(state->amenity) > 0)
+            appendStringInfo(&url_buffer, "amenity=%s&", curl_easy_escape(curl, state->amenity, 0));
 
-    if (state->osm_ids && strlen(state->osm_ids) > 0)
-        appendStringInfo(&url_buffer, "osm_ids=%s&", curl_easy_escape(curl, state->osm_ids, 0));
+        if (state->osm_ids && strlen(state->osm_ids) > 0)
+            appendStringInfo(&url_buffer, "osm_ids=%s&", curl_easy_escape(curl, state->osm_ids, 0));
 
-    if (state->street && strlen(state->street) > 0)
-        appendStringInfo(&url_buffer, "street=%s&", curl_easy_escape(curl, state->street, 0));
+        if (state->street && strlen(state->street) > 0)
+            appendStringInfo(&url_buffer, "street=%s&", curl_easy_escape(curl, state->street, 0));
 
-    if (state->city && strlen(state->city) > 0)
-        appendStringInfo(&url_buffer, "city=%s&", curl_easy_escape(curl, state->city, 0));
+        if (state->city && strlen(state->city) > 0)
+            appendStringInfo(&url_buffer, "city=%s&", curl_easy_escape(curl, state->city, 0));
 
-    if (state->county && strlen(state->county) > 0)
-        appendStringInfo(&url_buffer, "county=%s&", curl_easy_escape(curl, state->county, 0));
+        if (state->county && strlen(state->county) > 0)
+            appendStringInfo(&url_buffer, "county=%s&", curl_easy_escape(curl, state->county, 0));
 
-    if (state->state && strlen(state->state) > 0)
-        appendStringInfo(&url_buffer, "state=%s&", curl_easy_escape(curl, state->state, 0));
+        if (state->state && strlen(state->state) > 0)
+            appendStringInfo(&url_buffer, "state=%s&", curl_easy_escape(curl, state->state, 0));
 
-    if (state->country && strlen(state->country) > 0)
-        appendStringInfo(&url_buffer, "country=%s&", curl_easy_escape(curl, state->country, 0));
+        if (state->country && strlen(state->country) > 0)
+            appendStringInfo(&url_buffer, "country=%s&", curl_easy_escape(curl, state->country, 0));
 
-    if (state->postalcode && strlen(state->postalcode) > 0)
-        appendStringInfo(&url_buffer, "postalcode=%s&", curl_easy_escape(curl, state->postalcode, 0));
+        if (state->postalcode && strlen(state->postalcode) > 0)
+            appendStringInfo(&url_buffer, "postalcode=%s&", curl_easy_escape(curl, state->postalcode, 0));
 
-    if (!state->format)
-        appendStringInfo(&url_buffer, "format=%s&", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+        if (!state->format)
+            appendStringInfo(&url_buffer, "format=%s&", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
 
-    if (state->lon)
-        appendStringInfo(&url_buffer, "lon=%f&", state->lon);
+        if (state->lon)
+            appendStringInfo(&url_buffer, "lon=%f&", state->lon);
 
-    if (state->lat)
-        appendStringInfo(&url_buffer, "lat=%f&", state->lat);
+        if (state->lat)
+            appendStringInfo(&url_buffer, "lat=%f&", state->lat);
 
-    if (state->zoom)
-        appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
+        if (state->zoom)
+            appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
 
-    if (state->extratags)
-        appendStringInfo(&url_buffer, "extratags=1&");
+        if (state->extratags)
+            appendStringInfo(&url_buffer, "extratags=1&");
 
-    if (state->namedetails)
-        appendStringInfo(&url_buffer, "namedetails=1&");
+        if (state->namedetails)
+            appendStringInfo(&url_buffer, "namedetails=1&");
 
-    if (state->addressdetails)
-        appendStringInfo(&url_buffer, "addressdetails=1&");
-    else
-        appendStringInfo(&url_buffer, "addressdetails=0&");
+        if (state->addressdetails)
+            appendStringInfo(&url_buffer, "addressdetails=1&");
+        else
+            appendStringInfo(&url_buffer, "addressdetails=0&");
 
-    if (state->polygon_type && strlen(state->polygon_type) > 0)
-        appendStringInfo(&url_buffer, "%s=1&", state->polygon_type);
+        if (state->polygon_type && strlen(state->polygon_type) > 0)
+            appendStringInfo(&url_buffer, "%s=1&", state->polygon_type);
 
-    if (state->accept_language && strlen(state->accept_language) > 0)
-        appendStringInfo(&url_buffer, "accept-language=%s&", curl_easy_escape(curl, state->accept_language, 0));
+        if (state->accept_language && strlen(state->accept_language) > 0)
+            appendStringInfo(&url_buffer, "accept-language=%s&", curl_easy_escape(curl, state->accept_language, 0));
 
-    if (state->countrycodes && strlen(state->countrycodes) > 0)
-        appendStringInfo(&url_buffer, "countrycodes=%s&", curl_easy_escape(curl, state->countrycodes, 0));
+        if (state->countrycodes && strlen(state->countrycodes) > 0)
+            appendStringInfo(&url_buffer, "countrycodes=%s&", curl_easy_escape(curl, state->countrycodes, 0));
 
-    if (state->layer && strlen(state->layer) > 0)
-        appendStringInfo(&url_buffer, "layer=%s&", curl_easy_escape(curl, state->layer, 0));
+        if (state->layer && strlen(state->layer) > 0)
+            appendStringInfo(&url_buffer, "layer=%s&", curl_easy_escape(curl, state->layer, 0));
 
-    if (state->feature_type && strlen(state->feature_type) > 0)
-        appendStringInfo(&url_buffer, "featureType=%s&", curl_easy_escape(curl, state->feature_type, 0));
+        if (state->feature_type && strlen(state->feature_type) > 0)
+            appendStringInfo(&url_buffer, "featureType=%s&", curl_easy_escape(curl, state->feature_type, 0));
 
-    if (state->exclude_place_ids && strlen(state->exclude_place_ids) > 0)
-        appendStringInfo(&url_buffer, "exclude_place_ids=%s&", curl_easy_escape(curl, state->exclude_place_ids, 0));
+        if (state->exclude_place_ids && strlen(state->exclude_place_ids) > 0)
+            appendStringInfo(&url_buffer, "exclude_place_ids=%s&", curl_easy_escape(curl, state->exclude_place_ids, 0));
 
-    if (state->viewbox && strlen(state->viewbox) > 0)
-        appendStringInfo(&url_buffer, "viewbox=%s&", curl_easy_escape(curl, state->viewbox, 0));
+        if (state->viewbox && strlen(state->viewbox) > 0)
+            appendStringInfo(&url_buffer, "viewbox=%s&", curl_easy_escape(curl, state->viewbox, 0));
 
-    if (state->bounded)
-        appendStringInfo(&url_buffer, "bounded=1&");
-    else
-        appendStringInfo(&url_buffer, "bounded=0&");
+        if (state->bounded)
+            appendStringInfo(&url_buffer, "bounded=1&");
+        else
+            appendStringInfo(&url_buffer, "bounded=0&");
 
-    if (state->polygon_threshold && state->polygon_threshold != 0.0)
-        appendStringInfo(&url_buffer, "polygon_threshold=%f&", state->polygon_threshold);
+        if (state->polygon_threshold && state->polygon_threshold != 0.0)
+            appendStringInfo(&url_buffer, "polygon_threshold=%f&", state->polygon_threshold);
 
-    if (state->email && strlen(state->email) > 0)
-        appendStringInfo(&url_buffer, "email=%s&", curl_easy_escape(curl, state->email, 0));
+        if (state->email && strlen(state->email) > 0)
+            appendStringInfo(&url_buffer, "email=%s&", curl_easy_escape(curl, state->email, 0));
 
-    if (!state->dedupe)
-        appendStringInfo(&url_buffer, "dedupe=0&");
+        if (!state->dedupe)
+            appendStringInfo(&url_buffer, "dedupe=0&");
 
-    if (state->limit > 0)
-        appendStringInfo(&url_buffer, "limit=%d&", state->limit);
+        if (state->limit > 0)
+            appendStringInfo(&url_buffer, "limit=%d&", state->limit);
 
-    if (state->offset > 0)
-        appendStringInfo(&url_buffer, "offset=%d&", state->offset);
+        if (state->offset > 0)
+            appendStringInfo(&url_buffer, "offset=%d&", state->offset);
+    }
 
     if (curl)
     {
@@ -1578,19 +1609,32 @@ static int ExecuteRequest(NominatimFDWState *state)
         elog(DEBUG2, "  %s: performing cURL request ... ", __func__);
 
         res = curl_easy_perform(curl);
+        
+        curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
         if (res != CURLE_OK)
         {
-
-            for (long i = 1; i <= state->max_retries && (res = curl_easy_perform(curl)) != CURLE_OK; i++)
+            if (strcmp(state->request_type,NOMINATIM_REQUEST_STATUS)==0 && response_code != 200)
             {
-                long response_code;
-                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-                elog(WARNING, "  %s: request to '%s' failed with return code %ld (%ld)", __func__, state->url, response_code, i);
+                for (long i = 1; i <= state->max_retries && (res = curl_easy_perform(curl)) != CURLE_OK; i++){
+                    elog(DEBUG1, "  %s: request to '%s' failed with return code %ld (%ld)", __func__, state->url, response_code, i);
+                }
+                    
+            } 
+            else if (strcmp(state->request_type,NOMINATIM_REQUEST_STATUS)!=0) 
+            {
+                for (long i = 1; i <= state->max_retries && (res = curl_easy_perform(curl)) != CURLE_OK; i++)
+                {
+                    elog(WARNING, "  %s: request to '%s' failed with return code %ld (%ld)", __func__, state->url, response_code, i);
+                }
+
             }
         }
 
-        if (res != CURLE_OK)
+        /*
+         * 
+         */
+        if (res != CURLE_OK && strcmp(state->request_type,NOMINATIM_REQUEST_STATUS)!=0)
         {
             size_t len = strlen(errbuf);
             fprintf(stderr, "\nlibcurl: (%d) ", res);
@@ -1620,7 +1664,9 @@ static int ExecuteRequest(NominatimFDWState *state)
         {
             long response_code;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-            state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
+
+            if(strcmp(state->request_type,NOMINATIM_REQUEST_STATUS)!=0)
+                state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
 
             elog(DEBUG2, "  %s: http response code = %ld", __func__, response_code);
             elog(DEBUG2, "  %s: http response size = %ld", __func__, chunk.size);
@@ -1638,6 +1684,9 @@ static int ExecuteRequest(NominatimFDWState *state)
      * We thrown an error in case the SPARQL endpoint returns an empty XML doc
      */
     if (!state->xmldoc)
+        return REQUEST_FAIL;
+
+    if(strcmp(state->request_type, NOMINATIM_REQUEST_STATUS) ==0 && response_code != 200)
         return REQUEST_FAIL;
 
     return REQUEST_SUCCESS;
