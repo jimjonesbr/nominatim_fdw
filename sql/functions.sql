@@ -92,7 +92,7 @@ FROM nominatim_search(
 SELECT pg_sleep(2);
 
 SELECT 
-    osm_id, 
+    osm_id > 0 AS valid_osm_id, 
 	osm_type, 
 	result IS NOT NULL AND result <> '' valid_result,
 	ref IS NOT NULL AND ref <> '' valid_ref,
