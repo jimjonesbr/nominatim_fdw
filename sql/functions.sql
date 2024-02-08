@@ -93,7 +93,7 @@ SELECT pg_sleep(2);
 
 SELECT 
     osm_id > 0 AS valid_osm_id, 
-	osm_type, 
+	osm_type IS NOT NULL AND osm_type <> '' AS valid_osm_type, 
 	result IS NOT NULL AND result <> '' valid_result,
 	ref IS NOT NULL AND ref <> '' valid_ref,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
