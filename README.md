@@ -1,6 +1,6 @@
 
 ---------------------------------------------
-# PostgreSQL Foreign Data Wrapper for Nominatim (nominatim_fdw)
+# Nominatim Foreign Data Wrapper for PostgreSQL (nominatim_fdw)
 
 The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [Nominatim](https://nominatim.org/) servers using simple function calls.
 

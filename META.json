@@ -1,0 +1,50 @@
+{
+    "name": "nominatim_fdw",
+    "abstract": "Nominatim Foreign Data Wrapper for PostgreSQL",
+    "description": "A PostgreSQL Foreign Data Wrapper to access data from Nominatim servers using simple function calls.",
+    "version": "1.0.0",
+    "maintainer": [
+       "Jim Jones <jim.jones@uni-muenster.de>"
+    ],
+    "license": "MIT",
+    "provides": {
+       "nominatim_fdw": {
+          "abstract": "Nominatim Foreign Data Wrapper for PostgreSQL",
+          "file": "nominatim_fdw--1.0.sql",
+          "docfile": "README.md",
+          "version": "1.0.0"
+       }
+    },
+    "prereqs": {
+       "runtime": {
+          "requires": {
+             "PostgreSQL": "11.0"
+          }
+       },
+       "test": {
+          "requires": {
+             "plpgsql": 0
+          }
+       }
+    },
+    "resources": {
+       "bugtracker": {
+          "web": "https://github.com/jimjonesbr/nominatim_fdw/issues"
+       },
+       "repository": {
+          "url": "https://github.com/jimjonesbr/nominatim_fdw.git",
+          "web": "https://github.com/jimjonesbr/nominatim_fdw",
+          "type": "git"
+       }
+    },
+    "generated_by": "Jim Jones",
+    "meta-spec": {
+       "version": "1.0.0",
+       "url": "https://pgxn.org/meta/spec.txt"
+    },
+    "tags": [
+       "foreign data wrapper",
+       "nominatim",
+       "geocoding"
+    ]
+ }

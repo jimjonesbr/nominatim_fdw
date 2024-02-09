@@ -4,11 +4,14 @@ on:
     paths-ignore:
       - '*.md'
       - 'LICENSE'
+      - 'examples/'
+      - '*.json'
   pull_request:
     paths-ignore:
       - '*.md'
       - 'LICENSE'
       - 'examples/'
+      - '*.json'
 jobs:
   test:
     strategy:
