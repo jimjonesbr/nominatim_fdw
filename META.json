@@ -6,7 +6,7 @@
     "maintainer": [
        "Jim Jones <jim.jones@uni-muenster.de>"
     ],
-    "license": "MIT",
+    "license": "mit",
     "provides": {
        "nominatim_fdw": {
           "abstract": "Nominatim Foreign Data Wrapper for PostgreSQL",
@@ -18,7 +18,7 @@
     "prereqs": {
        "runtime": {
           "requires": {
-             "PostgreSQL": "11.0"
+             "PostgreSQL": "11.0.0"
           }
        },
        "test": {
