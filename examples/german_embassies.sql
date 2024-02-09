@@ -1,25 +1,31 @@
 /*
- * nominatim_reverse() example - Find addresses for given geo coordinates
+ * == Examples ==
+ * nominatim_reverse() - Find addresses for given geo coordinates
+ * nominatims_search() - Search coordinates for given addresses
  * Requires PostGIS
+ *
+ * DROP SERVER IF EXISTS osm;
+ * DROP TABLE IF EXISTS public.german_embasssy;
  */
- 
-DROP SERVER IF EXISTS osm;
-DROP TABLE IF EXISTS public.german_embasssy;
 
-CREATE SERVER osm 
+CREATE EXTENSION IF NOT EXISTS nominatim_fdw;
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE SERVER IF NOT EXISTS osm 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'https://nominatim.openstreetmap.org');
 
-CREATE TABLE public.german_embasssy (
+CREATE TABLE IF NOT EXISTS public.german_embassy (
   id int GENERATED ALWAYS AS IDENTITY,
   country text,
   wikidataid text,
   city text,
   geom geometry(point,4326),
-  address text
+  address text,
+  distance numeric
 );
 
-INSERT INTO public.german_embasssy (country, wikidataid, city, geom)
+INSERT INTO public.german_embassy (country, wikidataid, city, geom)
 VALUES
 (E'Afghanistan', 'http://www.wikidata.org/entity/Q889',E'Kabul District', ST_MakePoint(69.180307,34.5319485)),
 (E'Albania', 'http://www.wikidata.org/entity/Q222',E'Tirana', ST_MakePoint(19.807508333,41.329397222)),
@@ -186,26 +192,58 @@ VALUES
 (E'Zimbabwe', 'http://www.wikidata.org/entity/Q954',E'Harare Province', ST_MakePoint(31.0378,-17.7866));
 
 
+/*
+ * Resolving the coordinates stored in 'geom' and to retrieve the full address of each 
+ * embassy using nominatim_reverse()
+ */
 DO $$
 DECLARE 
- rec german_embasssy%rowtype;
+ rec german_embassy%rowtype;
  addr text;
 BEGIN
   FOR rec IN
-    SELECT * FROM public.german_embasssy
+    SELECT * FROM public.german_embassy
   LOOP
-   RAISE NOTICE 'Resolving coordinates "%" (%) ...',ST_AsEWKT(rec.geom), rec.country;
+   RAISE NOTICE 'Resolving coordinates "%" (%) ...',ST_AsLatLonText(rec.geom), rec.country;
    SELECT result INTO addr 
    FROM nominatim_reverse(
           server_name => 'osm', 
 					lon => ST_X(rec.geom), 
 					lat => ST_Y(rec.geom));
    IF addr IS NOT NULL THEN
-     UPDATE german_embasssy SET address = addr WHERE id = rec.id;
+     UPDATE german_embassy 
+	 SET address = addr 
+	 WHERE id = rec.id;
 	 EXECUTE pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
    END IF;    
   END LOOP;
 END; $$;
 
+/*
+ * This uses the function nominatim_search() to retrieve coordiantes from the addresses
+ * we retrieved using nomimatim_reverse(). Since we already have the original coordinates 
+ * in the table, we can check if the coordinates retrieved match the orginal ones and 
+ * caculate their distance in case they differ. The distances are caculated in metres and 
+ * are stored in the column 'distance'.
+ */
+DO $$
+DECLARE 
+ rec german_embassy%rowtype;
+ g geometry(point,4326);
+BEGIN
+  FOR rec IN
+    SELECT * FROM public.german_embassy
+  LOOP
+   RAISE NOTICE 'Resolving addresses "%" ...', rec.address;
+   SELECT ST_MakePoint(lon,lat) INTO g
+   FROM nominatim_search(
+          server_name => 'osm', 
+		  q => rec.address);
+   UPDATE german_embassy 
+   SET distance = ST_Distance(g::geography,rec.geom::geography) 
+   WHERE id = rec.id;   
+   EXECUTE pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
+  END LOOP;
+END; $$;
 
-SELECT * FROM german_embasssy;
+SELECT * FROM german_embassy;
