@@ -370,9 +370,9 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 
 ```sql
 SELECT nominatim_fdw_version();
-                                                                                 nominatim_fdw_version                                                                                 
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- nominatim_fdw = 1.0.0-dev, libxml/2.9.10 libcurl/7.74.0 OpenSSL/1.1.1w zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+                                                                               nominatim_fdw_version                                                                               
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ nominatim_fdw = 1.0.0, libxml/2.9.10 libcurl/7.74.0 OpenSSL/1.1.1w zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
 (1 row)
 ```
 

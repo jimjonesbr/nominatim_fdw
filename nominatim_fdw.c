@@ -70,7 +70,7 @@
 #include <utils/elog.h>
 #include <access/tupdesc.h>
 
-#define FDW_VERSION "1.0.0-dev"
+#define FDW_VERSION "1.0.0"
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 
@@ -937,7 +937,6 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
  */
 static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
 {
-
     regproc typinput;
 
     tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
@@ -1081,7 +1080,6 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp)
 {
-
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)userp;
     char *ptr;
