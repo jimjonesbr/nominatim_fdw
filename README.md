@@ -173,7 +173,7 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `email` | optional | valid email address (default *unset*) |
 | `dedupe` | optional | discards duplicated entries (default `true`) |
 
-As in the Nominatim API, the free-form query string parameter `q` cannot be combined with the parameters `amenity`, `street`, `city`, `county`, `state`, `country` and `postalcode, as they are used in structured calls.
+As in the Nominatim API, the free-form query string parameter `q` cannot be combined with the parameters `amenity`, `street`, `city`, `county`, `state`, `country` and `postalcode`, as they are used in structured calls.
 
 
 ----------------------
