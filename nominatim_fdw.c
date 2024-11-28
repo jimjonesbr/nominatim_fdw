@@ -261,9 +261,11 @@ static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid
                                                  NIL,               /* no pathkeys */
                                                  NULL,              /* no required outer relids */
                                                  NULL,              /* no fdw_outerpath */
-                                                 NIL);              /* no fdw_private */
-    add_path(baserel, path);
-}
+#if PG_VERSION_NUM >= 170000
+                                                 NIL,   			/* no fdw_restrictinfo */
+#endif  /* PG_VERSION_NUM */
+                                                 NULL);				/* no fdw_private */
+                                                 add_path(baserel, path);}
 
 static ForeignScan *NominatimGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan)
 {
