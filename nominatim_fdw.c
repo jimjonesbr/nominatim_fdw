@@ -1626,7 +1626,6 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         if (res != CURLE_OK)
         {
-            size_t len = strlen(errbuf);
             fprintf(stderr, "\nlibcurl: (%d) ", res);
 
             xmlFreeDoc(state->xmldoc);
