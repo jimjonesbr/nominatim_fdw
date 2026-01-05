@@ -119,24 +119,24 @@ OPTIONS (url 'http://server.im',
          max_connect_retry '5',
          connect_timeout '10');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
-WARNING:  HeaderCallbackFunction: unsupported header entry: "Content-Type: text/html"
-WARNING:  HeaderCallbackFunction: unsupported header entry: "Content-Type: text/html"
-WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 301 (1)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "Content-Type: text/html"
-WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 301 (2)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "Content-Type: text/html"
-WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 301 (3)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "Content-Type: text/html"
-WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 301 (4)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "Content-Type: text/html"
-WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 301 (5)
-ERROR:  ExecuteRequest => (23) Failed writing header
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (1)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (2)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (3)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (4)
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
+WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (5)
+ERROR:  ExecuteRequest => (23) Failure writing output to destination, passed 25 returned 0
 
 /* no retry! */
 ALTER SERVER srv OPTIONS (SET max_connect_retry '0');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
-WARNING:  HeaderCallbackFunction: unsupported header entry: "Content-Type: text/html"
-ERROR:  ExecuteRequest => (23) Failed writing header
+WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
+ERROR:  ExecuteRequest => (23) Failure writing output to destination, passed 25 returned 0
 
 DROP SERVER srv;
 /* server does not exist */

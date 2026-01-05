@@ -1,4 +1,3 @@
-
 /**********************************************************************
  *
  * nominatim_fdw - PostgreSQL Nominatim Extension
@@ -6,7 +5,7 @@
  * nominatim_fdw is free software: you can redistribute it and/or modify
  * it under the terms of the MIT Licence.
  *
- * Copyright (C) 2024 University of Münster, Germany
+ * Copyright (C) 2024-2026 University of Münster, Germany
  * Written by Jim Jones <jim.jones@uni-muenster.de>
  *
  **********************************************************************/
@@ -97,6 +96,14 @@
 
 PG_MODULE_MAGIC;
 
+typedef struct NominatimFDWOption
+{
+    const char *optname;
+    Oid optcontext;   /* Oid of catalog in which option may appear */
+    bool optrequired; /* Flag mandatory options */
+    bool optfound;    /* Flag whether options was specified by user */
+} NominatimFDWOption;
+
 typedef struct NominatimFDWState
 {
     int numcols;               /* Total number of columns in the foreign table. */
@@ -145,14 +152,6 @@ typedef struct NominatimFDWState
     xmlDocPtr xmldoc;          /* XML document where the results from the request will be stored before parsing */
     List *records;             /* List of records retrieved from the server after parsing */
 } NominatimFDWState;
-
-struct NominatimFDWOption
-{
-    const char *optname;
-    Oid optcontext;   /* Oid of catalog in which option may appear */
-    bool optrequired; /* Flag mandatory options */
-    bool optfound;    /* Flag whether options was specified by user */
-} NomiatimFDWOption;
 
 typedef struct NominatimRecord
 {
@@ -252,20 +251,37 @@ static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, O
 
 static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
+    Path *path;
 
-    Path *path = (Path *)create_foreignscan_path(root, baserel,
-                                                 NULL,              /* default pathtarget */
-                                                 baserel->rows,     /* rows */
-                                                 1,                 /* startup cost */
-                                                 1 + baserel->rows, /* total cost */
-                                                 NIL,               /* no pathkeys */
-                                                 NULL,              /* no required outer relids */
-                                                 NULL,              /* no fdw_outerpath */
+#if PG_VERSION_NUM >= 180000
+    path = (Path *)create_foreignscan_path(root, baserel,
+                                          NULL,              /* default pathtarget */
+                                          baserel->rows,     /* rows */
+                                          0,                 /* disabled_nodes */
+                                          1,                 /* startup cost */
+                                          1 + baserel->rows, /* total cost */
+                                          NIL,               /* no pathkeys */
+                                          NULL,              /* no required outer relids */
+                                          NULL,              /* no fdw_outerpath */
+                                          NIL,               /* no fdw_restrictinfo */
+                                          NULL);             /* no fdw_private */
+#else
+    path = (Path *)create_foreignscan_path(root, baserel,
+                                          NULL,              /* default pathtarget */
+                                          baserel->rows,     /* rows */
+                                          1,                 /* startup cost */
+                                          1 + baserel->rows, /* total cost */
+                                          NIL,               /* no pathkeys */
+                                          NULL,              /* no required outer relids */
+                                          NULL,              /* no fdw_outerpath */
 #if PG_VERSION_NUM >= 170000
-                                                 NIL,   			/* no fdw_restrictinfo */
-#endif  /* PG_VERSION_NUM */
-                                                 NULL);				/* no fdw_private */
-                                                 add_path(baserel, path);}
+                                          NIL,               /* no fdw_restrictinfo */
+#endif
+                                          NULL);             /* no fdw_private */
+#endif
+
+    add_path(baserel, path);
+}
 
 static ForeignScan *NominatimGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan)
 {
@@ -1139,6 +1155,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     struct NominatimRecord *place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
     xmlNodePtr reversegeocode;
     xmlNodePtr tag;
+    xmlNodePtr root;
     StringInfoData addressparts;
     StringInfoData extratags;
     StringInfoData namedetails;
@@ -1163,7 +1180,12 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
     place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
 
-    for (reversegeocode = xmlDocGetRootElement(state->xmldoc)->children; reversegeocode != NULL; reversegeocode = reversegeocode->next)
+    root = xmlDocGetRootElement(state->xmldoc);
+
+    if (!root)
+        elog(ERROR, "unable to parse root element: '%s'", state->url);
+
+    for (reversegeocode = root->children; reversegeocode != NULL; reversegeocode = reversegeocode->next)
     {
 
         if (xmlStrcmp(reversegeocode->name, (xmlChar *)"result") == 0)
@@ -1255,6 +1277,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
     xmlNodePtr searchresults;
     xmlNodePtr places;
     xmlNodePtr tag;
+    xmlNodePtr root;
 
     state->records = NIL;
 
@@ -1265,7 +1288,12 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
 
     Assert(state->xmldoc);
 
-    for (searchresults = xmlDocGetRootElement(state->xmldoc)->children; searchresults != NULL; searchresults = searchresults->next)
+    root = xmlDocGetRootElement(state->xmldoc);
+
+    if (!root)
+        elog(ERROR, "unable to parse XML document: '%s'", state->url);
+
+    for (searchresults = root->children; searchresults != NULL; searchresults = searchresults->next)
     {
 
         if (xmlStrcmp(searchresults->name, (xmlChar *)"place") == 0)
@@ -1336,8 +1364,13 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                 }
                 else if (xmlStrcmp(places->name, (xmlChar *)"geokml") == 0)
                 {
+                    int bytes;
                     xmlBufferPtr buffer = xmlBufferCreate();
-                    xmlNodeDump(buffer, state->xmldoc, places->children, 0, 0);
+                    bytes = xmlNodeDump(buffer, state->xmldoc, places->children, 0, 0);
+
+                    if (bytes == -1)
+                        elog(ERROR, "unable to dump XML node: '%s'", state->url);
+
                     place->polygon = pstrdup((char *)buffer->content);
                     xmlBufferFree(buffer);
                 }
@@ -1428,6 +1461,7 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     if (!state->format)
         appendStringInfo(&url_buffer, "format=%s&", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+
 
     if (state->lon)
         appendStringInfo(&url_buffer, "lon=%f&", state->lon);
