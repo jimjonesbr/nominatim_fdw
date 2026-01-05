@@ -1636,19 +1636,9 @@ static int ExecuteRequest(NominatimFDWState *state)
             curl_easy_cleanup(curl);
             curl_global_cleanup();
 
-            if (len)
-            {
-                ereport(ERROR,
-                        (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-                         errmsg("%s => (%u) %s%s", __func__, res, errbuf,
-                                ((errbuf[len - 1] != '\n') ? "\n" : ""))));
-            }
-            else
-            {
-                ereport(ERROR,
-                        (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-                         errmsg("%s => (%u) '%s'\n", __func__, res, curl_easy_strerror(res))));
-            }
+            ereport(ERROR,
+                    (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
+                     errmsg("unable to connect to the Nominatim endpoint: '%s'", state->url)));
         }
         else
         {

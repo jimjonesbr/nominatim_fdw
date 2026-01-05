@@ -130,14 +130,12 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (4)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
 WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 200 (5)
-ERROR:  ExecuteRequest => (23) Failure writing output to destination, passed 25 returned 0
-
+ERROR:  unable to connect to the Nominatim endpoint: 'http://server.im'
 /* no retry! */
 ALTER SERVER srv OPTIONS (SET max_connect_retry '0');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/html"
-ERROR:  ExecuteRequest => (23) Failure writing output to destination, passed 25 returned 0
-
+ERROR:  unable to connect to the Nominatim endpoint: 'http://server.im'
 DROP SERVER srv;
 /* server does not exist */
 SELECT * FROM nominatim_search(server_name => 'foo', q => 'bar');
