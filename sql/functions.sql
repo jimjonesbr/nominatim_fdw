@@ -7,7 +7,6 @@ SELECT nominatim_fdw_version() IS NOT NULL,
 
 SELECT 
     osm_id, osm_type, 
-	ref, 
 	class, 
 	display_name IS NOT NULL AND display_name <> '' valid_display_name,
 	display_rank, 
@@ -48,7 +47,6 @@ SELECT pg_sleep(2);
 
 SELECT 
     osm_id, osm_type, 
-	ref, 
 	class, 
 	display_name IS NOT NULL AND display_name <> '' valid_display_name,
 	display_rank, 
@@ -95,7 +93,6 @@ SELECT
     osm_id > 0 AS valid_osm_id, 
 	osm_type IS NOT NULL AND osm_type <> '' AS valid_osm_type, 
 	result IS NOT NULL AND result <> '' AS valid_result,
-	ref IS NOT NULL AND ref <> '' AS valid_ref,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank, 
 	lon > 0 AS valid_lon, lat > 0 AS valid_lat, 
@@ -122,7 +119,6 @@ SELECT pg_sleep(2);
 		
 SELECT 
     osm_id, osm_type, 
-	ref, 
 	class, 
 	display_name IS NOT NULL AND display_name <> '' valid_display_name,
 	display_rank, 

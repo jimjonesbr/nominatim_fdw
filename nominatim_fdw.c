@@ -1626,8 +1626,6 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         if (res != CURLE_OK)
         {
-            fprintf(stderr, "\nlibcurl: (%d) ", res);
-
             xmlFreeDoc(state->xmldoc);
             pfree(chunk.memory);
             pfree(chunk_header.memory);
