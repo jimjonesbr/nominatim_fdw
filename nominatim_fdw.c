@@ -69,7 +69,7 @@
 #include <utils/elog.h>
 #include <access/tupdesc.h>
 
-#define FDW_VERSION "1.0.0"
+#define FDW_VERSION "1.1.0"
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 

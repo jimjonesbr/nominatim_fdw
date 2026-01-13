@@ -26,7 +26,7 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
 
 * [libxml2](http://www.xmlsoft.org/): version 2.5.0 or higher.
 * [libcurl](https://curl.se/libcurl/): version 7.74.0 or higher.
-* [PostgreSQL](https://www.postgresql.org): version 11 or higher.
+* [PostgreSQL](https://www.postgresql.org): version 12 or higher.
 
 ## [Build and Install](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#build_and_install)
 
@@ -370,9 +370,9 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 
 ```sql
 SELECT nominatim_fdw_version();
-                                                                               nominatim_fdw_version                                                                               
------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- nominatim_fdw = 1.0.0, libxml/2.9.10 libcurl/7.74.0 OpenSSL/1.1.1w zlib/1.2.11 brotli/1.0.9 libidn2/2.3.0 libpsl/0.21.0 (+libidn2/2.3.0) libssh2/1.9.0 nghttp2/1.43.0 librtmp/2.3
+                                                                                          nominatim_fdw_version                                                                                           
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ nominatim_fdw = 1.1.0, libxml/2.9.14 libcurl/8.14.1 OpenSSL/3.5.4 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
 (1 row)
 ```
 

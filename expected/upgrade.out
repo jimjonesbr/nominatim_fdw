@@ -1,0 +1,17 @@
+SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
+ extversion 
+------------
+ 1.0
+(1 row)
+
+CREATE SERVER osm 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'https://nominatim.openstreetmap.org');
+ALTER EXTENSION nominatim_fdw UPDATE TO '1.1';
+SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
+ extversion 
+------------
+ 1.1
+(1 row)
+
+DROP SERVER osm CASCADE;
