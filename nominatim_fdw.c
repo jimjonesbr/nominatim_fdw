@@ -5,8 +5,7 @@
  * nominatim_fdw is free software: you can redistribute it and/or modify
  * it under the terms of the MIT Licence.
  *
- * Copyright (C) 2024-2026 University of Münster, Germany
- * Written by Jim Jones <jim.jones@uni-muenster.de>
+ * Copyright (C) 2024-2026 Jim Jones <jim.jones@uni-muenster.de>
  *
  **********************************************************************/
 
