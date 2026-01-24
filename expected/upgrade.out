@@ -14,4 +14,11 @@ SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
  1.1
 (1 row)
 
+ALTER EXTENSION nominatim_fdw UPDATE TO '1.2';
+SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
+ extversion 
+------------
+ 1.2
+(1 row)
+
 DROP SERVER osm CASCADE;

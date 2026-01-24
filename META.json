@@ -2,7 +2,7 @@
     "name": "nominatim_fdw",
     "abstract": "Nominatim Foreign Data Wrapper for PostgreSQL",
     "description": "A PostgreSQL Foreign Data Wrapper to access data from Nominatim servers using simple function calls.",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "maintainer": [
        "Jim Jones <jim.jones@uni-muenster.de>"
     ],
@@ -10,9 +10,9 @@
     "provides": {
        "nominatim_fdw": {
           "abstract": "Nominatim Foreign Data Wrapper for PostgreSQL",
-          "file": "nominatim_fdw--1.1.sql",
+          "file": "nominatim_fdw--1.2.sql",
           "docfile": "README.md",
-          "version": "1.1.0"
+          "version": "1.2.0"
        }
     },
     "prereqs": {
