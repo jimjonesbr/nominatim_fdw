@@ -254,29 +254,29 @@ static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid
 
 #if PG_VERSION_NUM >= 180000
     path = (Path *)create_foreignscan_path(root, baserel,
-                                          NULL,              /* default pathtarget */
-                                          baserel->rows,     /* rows */
-                                          0,                 /* disabled_nodes */
-                                          1,                 /* startup cost */
-                                          1 + baserel->rows, /* total cost */
-                                          NIL,               /* no pathkeys */
-                                          NULL,              /* no required outer relids */
-                                          NULL,              /* no fdw_outerpath */
-                                          NIL,               /* no fdw_restrictinfo */
-                                          NULL);             /* no fdw_private */
+                                           NULL,              /* default pathtarget */
+                                           baserel->rows,     /* rows */
+                                           0,                 /* disabled_nodes */
+                                           1,                 /* startup cost */
+                                           1 + baserel->rows, /* total cost */
+                                           NIL,               /* no pathkeys */
+                                           NULL,              /* no required outer relids */
+                                           NULL,              /* no fdw_outerpath */
+                                           NIL,               /* no fdw_restrictinfo */
+                                           NULL);             /* no fdw_private */
 #else
     path = (Path *)create_foreignscan_path(root, baserel,
-                                          NULL,              /* default pathtarget */
-                                          baserel->rows,     /* rows */
-                                          1,                 /* startup cost */
-                                          1 + baserel->rows, /* total cost */
-                                          NIL,               /* no pathkeys */
-                                          NULL,              /* no required outer relids */
-                                          NULL,              /* no fdw_outerpath */
+                                           NULL,              /* default pathtarget */
+                                           baserel->rows,     /* rows */
+                                           1,                 /* startup cost */
+                                           1 + baserel->rows, /* total cost */
+                                           NIL,               /* no pathkeys */
+                                           NULL,              /* no required outer relids */
+                                           NULL,              /* no fdw_outerpath */
 #if PG_VERSION_NUM >= 170000
-                                          NIL,               /* no fdw_restrictinfo */
+                                           NIL, /* no fdw_restrictinfo */
 #endif
-                                          NULL);             /* no fdw_private */
+                                           NULL); /* no fdw_private */
 #endif
 
     add_path(baserel, path);
@@ -378,11 +378,9 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                 opt->optfound = optfound = true;
 
                 if (strlen(defGetString(def)) == 0)
-                {
                     ereport(ERROR,
                             (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                              errmsg("empty value in option '%s'", opt->optname)));
-                }
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_URL) == 0 ||
                     strcmp(opt->optname, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0 ||
@@ -391,11 +389,9 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                     int return_code = CheckURL(defGetString(def));
 
                     if (return_code != REQUEST_SUCCESS)
-                    {
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", opt->optname, defGetString(def))));
-                    }
                 }
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
@@ -405,12 +401,10 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                     long timeout_val = strtol(timeout_str, &endptr, 0);
 
                     if (timeout_str[0] == '\0' || *endptr != '\0' || timeout_val < 0)
-                    {
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, timeout_str),
                                  errhint("expected values are positive integers (timeout in seconds)")));
-                    }
                 }
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0 || strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
@@ -420,33 +414,27 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                     long retry_val = strtol(retry_str, &endptr, 0);
 
                     if (retry_str[0] == '\0' || *endptr != '\0' || retry_val < 0)
-                    {
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, retry_str),
                                  errhint("expected values are positive integers")));
-                    }
                 }
             }
         }
 
         if (!optfound)
-        {
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
                      errmsg("invalid rdf_fdw option '%s'", def->defname)));
-        }
     }
 
     for (opt = valid_options; opt->optname; opt++)
     {
         /* Required option for this catalog type is missing? */
         if (catalog == opt->optcontext && opt->optrequired && !opt->optfound)
-        {
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_DYNAMIC_PARAMETER_VALUE_NEEDED),
                      errmsg("required option '%s' is missing", opt->optname)));
-        }
     }
 
     PG_RETURN_VOID();
@@ -467,9 +455,9 @@ Datum nominatim_fdw_version(PG_FUNCTION_ARGS)
 /*
  * nominatim_fdw_reverse
  * ----------
- * Reverse geocoding generates an address from a coordinate given as latitude 
+ * Reverse geocoding generates an address from a coordinate given as latitude
  * and longitude.
- * 
+ *
  * returns SETOF NominatimRecord
  */
 Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
@@ -509,12 +497,11 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         state->extratags = extratags;
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
-        
-        if(state->layer && !IsLayerValid(state->layer))
+
+        if (state->layer && !IsLayerValid(state->layer))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
                             errmsg("invalid layer '%s'", state->layer),
                             errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
-
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -580,16 +567,14 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         SRF_RETURN_NEXT(funcctx, result);
     }
     else
-    {
         SRF_RETURN_DONE(funcctx);
-    }
 }
 
 /*
  * nominatim_fdw_search
  * ----------
  * Look up a location from a textual description or structured address.
- * 
+ *
  * returns SETOF NominatimRecord
  */
 Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
@@ -671,8 +656,8 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
             ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
                             errmsg("bad request => nothing to search for."),
                             errhint("a '%s' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)", __func__)));
-        
-        if(state->layer && !IsLayerValid(state->layer))
+
+        if (state->layer && !IsLayerValid(state->layer))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
                             errmsg("invalid layer '%s'", state->layer),
                             errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
@@ -738,17 +723,15 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         SRF_RETURN_NEXT(funcctx, result);
     }
     else
-    {
         SRF_RETURN_DONE(funcctx);
-    }
 }
 
 /*
  * nominatim_fdw_lookup
  * ----------
- * Query the address and other details of one or multiple OSM objects like node, 
+ * Query the address and other details of one or multiple OSM objects like node,
  * way or relation.
- * 
+ *
  * returns SETOF NominatimRecord
  */
 Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
@@ -800,7 +783,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         state->namedetails = namedetails;
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
 
-        if(state->layer && !IsLayerValid(state->layer))
+        if (state->layer && !IsLayerValid(state->layer))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
                             errmsg("invalid layer '%s'", state->layer),
                             errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
@@ -866,9 +849,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         SRF_RETURN_NEXT(funcctx, result);
     }
     else
-    {
         SRF_RETURN_DONE(funcctx);
-    }
 }
 
 /*
@@ -876,7 +857,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
  * ----------
  * Extracts the value of a given attribute and sets the correspondent property
  * in the NominatimRecord struct. It returs NULL in case of no match.
- * 
+ *
  * att: a Form_pg_attribute attribute
  * place: a NominatimRecord variable
  *
@@ -942,10 +923,10 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
 /*
  * CreateDatum
  * ----------
- * 
+ *
  * Creates a Datum from a given value based on the postgres types and modifiers.
- * 
- * tuple: a Heaptuple 
+ *
+ * tuple: a Heaptuple
  * pgtype: postgres type
  * pgtypemod: postgres type modifier
  * value: value to be converted
@@ -959,11 +940,9 @@ static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
     tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
 
     if (!HeapTupleIsValid(tuple))
-    {
         ereport(ERROR,
                 (errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
                  errmsg("cache lookup failed for type %u (osm_id)", pgtype)));
-    }
 
     typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
     ReleaseSysCache(tuple);
@@ -986,10 +965,10 @@ static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
 /*
  * InitSession
  * ----------
- * 
- * This function loads all session info from a specific foreign server data 
- * into a NominatimFDWState. 
- * 
+ *
+ * This function loads all session info from a specific foreign server data
+ * into a NominatimFDWState.
+ *
  * srvname: foreign server's name
  *
  * returns NominatimFDWState with the loaded session values
@@ -1018,9 +997,7 @@ static NominatimFDWState *InitSession(const char *srvname)
             elog(DEBUG1, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
 
             if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_URL) == 0)
-            {
                 state->url = defGetString(def);
-            }
 
             if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0)
             {
@@ -1029,14 +1006,10 @@ static NominatimFDWState *InitSession(const char *srvname)
             }
 
             if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_PROXY_USER) == 0)
-            {
                 state->proxy_user = defGetString(def);
-            }
 
             if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD) == 0)
-            {
                 state->proxy_user_password = defGetString(def);
-            }
 
             if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
             {
@@ -1067,11 +1040,9 @@ static NominatimFDWState *InitSession(const char *srvname)
         }
     }
     else
-    {
         ereport(ERROR,
                 (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
                  errmsg("FOREIGN SERVER does not exist: '%s'", srvname)));
-    }
 
     return state;
 }
@@ -1124,11 +1095,9 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
     ptr = repalloc(mem->memory, mem->size + realsize + 1);
 
     if (!ptr)
-    {
         ereport(ERROR,
                 (errcode(ERRCODE_FDW_OUT_OF_MEMORY),
                  errmsg("[%s] out of memory (repalloc returned NULL)", __func__)));
-    }
 
     mem->memory = ptr;
     memcpy(&(mem->memory[mem->size]), contents, realsize);
@@ -1141,11 +1110,11 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 /*
  * ParseNominatimReverseData
  * ----------
- * 
- * Parses the XML document returned from the Nominatim reverse endpoint 
- * and creates a List of NominatimRecord. The paresed records are stored 
+ *
+ * Parses the XML document returned from the Nominatim reverse endpoint
+ * and creates a List of NominatimRecord. The paresed records are stored
  * in state->records.
- * 
+ *
  * state: NominatimFDWState containing all session data
  *
  */
@@ -1263,11 +1232,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
 /*
  * ParseNominatimSearchData
  * ----------
- * 
- * Parses the XML document returned from the Nominatim search and lookup 
- * endpoints, and creates a List of NominatimRecord. The paresed records 
+ *
+ * Parses the XML document returned from the Nominatim search and lookup
+ * endpoints, and creates a List of NominatimRecord. The paresed records
  * are stored in state->records.
- * 
+ *
  * state: NominatimFDWState containing all session data
  *
  */
@@ -1460,7 +1429,6 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     if (!state->format)
         appendStringInfo(&url_buffer, "format=%s&", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
-
 
     if (state->lon)
         appendStringInfo(&url_buffer, "lon=%f&", state->lon);
@@ -1697,9 +1665,9 @@ static int CheckURL(char *url)
 /*
  * IsPolygonTypeSupported
  * ----------
- * 
+ *
  * Checks if a polygon type is supported by the nominatim endpoint
- * 
+ *
  * returns boolean (true: valid, false: invalid)
  */
 static bool IsPolygonTypeSupported(char *polygon_type)
@@ -1717,9 +1685,9 @@ static bool IsPolygonTypeSupported(char *polygon_type)
 /*
  * IsLayerValid
  * ----------
- * 
+ *
  * Checks if a polygon type is supported by the nominatim endpoint
- * 
+ *
  * returns boolean (true: valid, false: invalid)
  */
 static bool IsLayerValid(char *layer)
