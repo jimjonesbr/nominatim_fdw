@@ -114,7 +114,7 @@ All options and parameters set to a `SERVER` can be changed, dropped, and new on
 Adding options
 
 ```sql
-ALTER SERVER osm OPTIONS (ADD max_connect_rety '5');
+ALTER SERVER osm OPTIONS (ADD max_connect_retry '5');
 ```
 
 Changing previously configured options
@@ -136,7 +136,7 @@ This section describes the `nominatim_fdw` functions, which are mapped to the No
 
 **Description**
 
-The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports [structured](https://nominatim.org/release-docs/develop/api/Search/#structured-query) and [free-form](https://nominatim.org/release-docs/develop/api/Search/#free-form-query) search queries, which are distinguished by either spliting the address components into different paramenteres, such as `street`, `county`, `state`, or  providing a single string in the parameter `q`.
+The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports [structured](https://nominatim.org/release-docs/develop/api/Search/#structured-query) and [free-form](https://nominatim.org/release-docs/develop/api/Search/#free-form-query) search queries, which are distinguished by either splitting the address components into different parameters, such as `street`, `county`, `state`, or providing a single string in the parameter `q`.
 
 **Availability**: 1.0.0
 
@@ -215,7 +215,7 @@ FROM nominatim_search(server_name => 'osm',
  121736959 | Theater Münster | 7.6293918 | 51.9648162 | 51.9644060,51.9652417,7.6286897,7.6304381
 (1 row)
 ```
- Strcutured search with `extratags`
+ Structured search with `extratags`
 
 ```sql
 SELECT osm_id, ref, lon, lat, jsonb_pretty(extratags) AS extratags 

@@ -1,11 +1,11 @@
 /*
  * == Examples ==
  * nominatim_reverse() - Find addresses for given geo coordinates
- * nominatims_search() - Search coordinates for given addresses
+ * nominatim_search() - Search coordinates for given addresses
  * Requires PostGIS
  *
  * DROP SERVER IF EXISTS osm;
- * DROP TABLE IF EXISTS public.german_embasssy;
+ * DROP TABLE IF EXISTS public.german_embassy;
  */
 
 CREATE EXTENSION IF NOT EXISTS nominatim_fdw;
