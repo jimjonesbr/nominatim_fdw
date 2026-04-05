@@ -1,6 +1,6 @@
 # 1.2.0
 
-Release date: **YYYY-MM-DD**
+Release date: **2026-04-05**
 
 ## Bug fixes
 

@@ -73,7 +73,7 @@ ALTER EXTENSION nominatim_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION nominatim_fdw UPDATE TO '1.1';
+ALTER EXTENSION nominatim_fdw UPDATE TO '1.2';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#usage)
@@ -378,21 +378,21 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 
 ```sql
 SELECT nominatim_fdw_version();
-                                                                                           nominatim_fdw_version                                                                                            
-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- nominatim_fdw = 1.2-dev, libxml/2.9.14 libcurl/8.14.1 OpenSSL/3.5.4 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
+                                                                                         nominatim_fdw_version                                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ nominatim_fdw = 1.2, libxml/2.9.14 libcurl/8.14.1 OpenSSL/3.5.4 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
 (1 row)
 ```
 
 ## [Deploy with Docker](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#deploy-with-docker)
 
-To deploy `nominatim_fdw` with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/nominatim_fdw/releases). For instance, a `nominatim_fdw` `Dockerfile` for PostgreSQL 15 should look like this (minimal example):
+To deploy `nominatim_fdw` with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/nominatim_fdw/releases). For instance, a `nominatim_fdw` `Dockerfile` for PostgreSQL 18 should look like this (minimal example):
 
 ```dockerfile
-FROM postgres:15
+FROM postgres:18
 
 RUN apt-get update && \
-    apt-get install -y make gcc postgresql-server-dev-15 libxml2-dev libcurl4-openssl-dev
+    apt-get install -y make gcc postgresql-server-dev-18 libxml2-dev libcurl4-openssl-dev
 
 RUN tar xvzf nominatim_fdw-[VERSION].tar.gz && \
     cd nominatim_fdw-[VERSION] && \
@@ -426,10 +426,10 @@ Dockerfile
 
 
 ```dockerfile
-FROM postgres:15
+FROM postgres:18
 
 RUN apt-get update && \
-    apt-get install -y git make gcc postgresql-server-dev-15 libxml2-dev libcurl4-openssl-dev
+    apt-get install -y git make gcc postgresql-server-dev-18 libxml2-dev libcurl4-openssl-dev
 
 WORKDIR /
 
