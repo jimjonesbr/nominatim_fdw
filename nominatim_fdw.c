@@ -77,12 +77,10 @@
 #define NOMINATIM_REQUEST_LOOKUP "lookup"
 
 #define NOMINATIM_SERVER_OPTION_URL "url"
-#define NOMINATIM_SERVER_OPTION_FORMAT "format"
 #define NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT "connect_timeout"
 #define NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY "max_connect_retry"
 #define NOMINATIM_SERVER_OPTION_MAXREDIRECT "max_connect_redirect"
 #define NOMINATIM_SERVER_OPTION_HTTP_PROXY "http_proxy"
-#define NOMINATIM_SERVER_OPTION_HTTPS_PROXY "https_proxy"
 #define NOMINATIM_SERVER_OPTION_PROXY_USER "proxy_user"
 #define NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD "proxy_user_password"
 #define NOMINATIM_SERVER_OPTION_LANGUAGE "accept_language"
@@ -90,10 +88,22 @@
 #define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300
 #define NOMINATIM_DEFAULT_MAXRETRY 3
 #define NOMINATIM_DEFAULT_MAXREDIRECT 1
-#define NOMINATIM_DEFAULT_FORMAT "xml"
 #define NOMINATIM_DEFAULT_LANGUAGE "en-US,en;q=0.9"
 
 PG_MODULE_MAGIC;
+
+void _PG_init(void);
+void _PG_fini(void);
+
+void _PG_init(void)
+{
+    curl_global_init(CURL_GLOBAL_ALL);
+}
+
+void _PG_fini(void)
+{
+    curl_global_cleanup();
+}
 
 typedef struct NominatimFDWOption
 {
@@ -107,7 +117,6 @@ typedef struct NominatimFDWState
 {
     int numcols;               /* Total number of columns in the foreign table. */
     int rowcount;              /* Number of rows currently returned to the client */
-    int pagesize;              /* Total number of records retrieved from the SPARQL endpoint*/
     int zoom;                  /* Level of detail required for the address. */
     int limit;                 /* Limit the maximum number of returned results. */
     int offset;                /* */
@@ -126,7 +135,6 @@ typedef struct NominatimFDWState
     char *proxy_user;          /* User name for proxy authentication. */
     char *proxy_user_password; /* Password for proxy authentication. */
     char *custom_params;       /* Custom parameters used to compose the request URL */
-    char *format;              /* API result format. Only xml is currently supported! */
     char *query;               /* Free-form query string to search for */
     char *layer;               /* Comma-separated list of: address, poi, railway, natural, manmade*/
     char *countrycodes;        /* Comma-separated list of country codes */
@@ -143,8 +151,8 @@ typedef struct NominatimFDWState
     bool namedetails;          /* Include a full list of names for the result? */
     bool addressdetails;       /* Include a breakdown of the address into elements? */
     long request_max_redirect; /* Limit of how many times the URL redirection (jump) may occur. */
-    long connect_timeout;      /* Timeout for SPARQL queries */
-    long max_retries;          /* Number of re-try attemtps for failed SPARQL queries */
+    long connect_timeout;      /* Request timeout in seconds */
+    long max_retries;          /* Number of re-try attemtps for failed requests */
     float8 lon;                /* Longitude (x) */
     float8 lat;                /* Latitude (y) */
     float8 polygon_threshold;  /* Tolerance in degrees with which the geometry may differ from the original geometry */
@@ -182,11 +190,11 @@ typedef struct NominatimRecord
     char *result;
 } NominatimRecord;
 
-struct string
-{
-    char *ptr;
-    size_t len;
-};
+// struct string
+// {
+//     char *ptr;
+//     size_t len;
+// };
 
 struct MemoryStruct
 {
@@ -198,9 +206,7 @@ static struct NominatimFDWOption valid_options[] =
     {
         /* Foreign Servers */
         {NOMINATIM_SERVER_OPTION_URL, ForeignServerRelationId, true, false},
-        {NOMINATIM_SERVER_OPTION_FORMAT, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_HTTP_PROXY, ForeignServerRelationId, false, false},
-        {NOMINATIM_SERVER_OPTION_HTTPS_PROXY, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_PROXY_USER, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
@@ -383,8 +389,7 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                              errmsg("empty value in option '%s'", opt->optname)));
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_URL) == 0 ||
-                    strcmp(opt->optname, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0 ||
-                    strcmp(opt->optname, NOMINATIM_SERVER_OPTION_HTTPS_PROXY) == 0)
+                    strcmp(opt->optname, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0)
                 {
                     int return_code = CheckURL(defGetString(def));
 
@@ -425,7 +430,7 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
         if (!optfound)
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_INVALID_OPTION_NAME),
-                     errmsg("invalid rdf_fdw option '%s'", def->defname)));
+                     errmsg("invalid nominatim_fdw option '%s'", def->defname)));
     }
 
     for (opt = valid_options; opt->optname; opt++)
@@ -607,7 +612,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
-    NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
+    NominatimFDWState *state;
 
     if (SRF_IS_FIRSTCALL())
     {
@@ -621,7 +626,6 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
             state->accept_language = text_to_cstring(language_text);
 
         state->query = text_to_cstring(query_text);
-        state->amenity = text_to_cstring(amenity_text);
         state->amenity = text_to_cstring(amenity_text);
         state->street = text_to_cstring(street);
         state->city = text_to_cstring(city);
@@ -755,7 +759,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
-    NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
+    NominatimFDWState *state;
 
     if (SRF_IS_FIRSTCALL())
     {
@@ -878,7 +882,7 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
         return place->display_name;
     else if (strcmp(NameStr(att->attname), "display_rank") == 0)
         return place->display_rank;
-    else if (strcmp(att->attname.data, "place_id") == 0)
+    else if (strcmp(NameStr(att->attname), "place_id") == 0)
         return place->place_id;
     else if (strcmp(NameStr(att->attname), "place_rank") == 0)
         return place->place_rank;
@@ -1071,19 +1075,19 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)userp;
     char *ptr;
-    char *sparqlxml = "content-type: text/xml";
-    char *sparqlxmlutf8 = "content-type: text/xml; charset=utf-8";
+    char *content_xml = "content-type: text/xml";
+    char *content_xml_utf8 = "content-type: text/xml; charset=utf-8";
 
     Assert(contents);
 
     // elog(DEBUG2,"Contents > %s", contents);
 
     /* is it a "content-type" entry? "*/
-    if (strncasecmp(contents, sparqlxml, 13) == 0)
+    if (strncasecmp(contents, content_xml, 13) == 0)
     {
 
-        if (strncasecmp(contents, sparqlxml, strlen(sparqlxml)) != 0 &&
-            strncasecmp(contents, sparqlxmlutf8, strlen(sparqlxmlutf8)) != 0)
+        if (strncasecmp(contents, content_xml, strlen(content_xml)) != 0 &&
+            strncasecmp(contents, content_xml_utf8, strlen(content_xml_utf8)) != 0)
         {
             /* remove crlf */
             contents[strlen(contents) - 2] = '\0';
@@ -1143,7 +1147,6 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
 
     Assert(state->xmldoc);
 
-    place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
     place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
     place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
     place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
@@ -1193,7 +1196,6 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
                                  (char *)xmlNodeGetContent(tag));
             }
 
-            place->addressparts = NameStr(addressparts);
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"extratags") == 0)
         {
@@ -1227,6 +1229,9 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     place->namedetails = NameStr(namedetails);
 
     state->records = lappend(state->records, place);
+
+    xmlFreeDoc(state->xmldoc);
+    state->xmldoc = NULL;
 }
 
 /*
@@ -1363,14 +1368,15 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
         }
     }
 
-    if (tag)
-        xmlFreeNode(tag);
+    xmlFreeDoc(state->xmldoc);
+    state->xmldoc = NULL;
+}
 
-    if (places)
-        xmlFreeNode(places);
-
-    if (searchresults)
-        xmlFreeNode(searchresults);
+static void AppendUrlParam(StringInfo buf, CURL *curl, const char *param, const char *value)
+{
+    char *escaped = curl_easy_escape(curl, value, 0);
+    appendStringInfo(buf, "%s=%s&", param, escaped);
+    curl_free(escaped);
 }
 
 static int ExecuteRequest(NominatimFDWState *state)
@@ -1392,7 +1398,6 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     elog(DEBUG1, "%s called", __func__);
 
-    curl_global_init(CURL_GLOBAL_ALL);
     curl = curl_easy_init();
 
     initStringInfo(&url_buffer);
@@ -1401,40 +1406,39 @@ static int ExecuteRequest(NominatimFDWState *state)
     appendStringInfo(&url_buffer, "/%s?", state->request_type);
 
     if (state->query && strlen(state->query) > 0)
-        appendStringInfo(&url_buffer, "q=%s&", curl_easy_escape(curl, state->query, 0));
+        AppendUrlParam(&url_buffer, curl, "q", state->query);
 
     if (state->amenity && strlen(state->amenity) > 0)
-        appendStringInfo(&url_buffer, "amenity=%s&", curl_easy_escape(curl, state->amenity, 0));
+        AppendUrlParam(&url_buffer, curl, "amenity", state->amenity);
 
     if (state->osm_ids && strlen(state->osm_ids) > 0)
-        appendStringInfo(&url_buffer, "osm_ids=%s&", curl_easy_escape(curl, state->osm_ids, 0));
+        AppendUrlParam(&url_buffer, curl, "osm_ids", state->osm_ids);
 
     if (state->street && strlen(state->street) > 0)
-        appendStringInfo(&url_buffer, "street=%s&", curl_easy_escape(curl, state->street, 0));
+        AppendUrlParam(&url_buffer, curl, "street", state->street);
 
     if (state->city && strlen(state->city) > 0)
-        appendStringInfo(&url_buffer, "city=%s&", curl_easy_escape(curl, state->city, 0));
+        AppendUrlParam(&url_buffer, curl, "city", state->city);
 
     if (state->county && strlen(state->county) > 0)
-        appendStringInfo(&url_buffer, "county=%s&", curl_easy_escape(curl, state->county, 0));
+        AppendUrlParam(&url_buffer, curl, "county", state->county);
 
     if (state->state && strlen(state->state) > 0)
-        appendStringInfo(&url_buffer, "state=%s&", curl_easy_escape(curl, state->state, 0));
+        AppendUrlParam(&url_buffer, curl, "state", state->state);
 
     if (state->country && strlen(state->country) > 0)
-        appendStringInfo(&url_buffer, "country=%s&", curl_easy_escape(curl, state->country, 0));
+        AppendUrlParam(&url_buffer, curl, "country", state->country);
 
     if (state->postalcode && strlen(state->postalcode) > 0)
-        appendStringInfo(&url_buffer, "postalcode=%s&", curl_easy_escape(curl, state->postalcode, 0));
+        AppendUrlParam(&url_buffer, curl, "postalcode", state->postalcode);
 
-    if (!state->format)
-        appendStringInfo(&url_buffer, "format=%s&", curl_easy_escape(curl, NOMINATIM_DEFAULT_FORMAT, 0));
+    appendStringInfo(&url_buffer, "format=xml&");
 
-    if (state->lon)
+    if (strcmp(state->request_type, NOMINATIM_REQUEST_REVERSE) == 0)
+    {
         appendStringInfo(&url_buffer, "lon=%f&", state->lon);
-
-    if (state->lat)
         appendStringInfo(&url_buffer, "lat=%f&", state->lat);
+    }
 
     if (state->zoom)
         appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
@@ -1454,22 +1458,22 @@ static int ExecuteRequest(NominatimFDWState *state)
         appendStringInfo(&url_buffer, "%s=1&", state->polygon_type);
 
     if (state->accept_language && strlen(state->accept_language) > 0)
-        appendStringInfo(&url_buffer, "accept-language=%s&", curl_easy_escape(curl, state->accept_language, 0));
+        AppendUrlParam(&url_buffer, curl, "accept-language", state->accept_language);
 
     if (state->countrycodes && strlen(state->countrycodes) > 0)
-        appendStringInfo(&url_buffer, "countrycodes=%s&", curl_easy_escape(curl, state->countrycodes, 0));
+        AppendUrlParam(&url_buffer, curl, "countrycodes", state->countrycodes);
 
     if (state->layer && strlen(state->layer) > 0)
-        appendStringInfo(&url_buffer, "layer=%s&", curl_easy_escape(curl, state->layer, 0));
+        AppendUrlParam(&url_buffer, curl, "layer", state->layer);
 
     if (state->feature_type && strlen(state->feature_type) > 0)
-        appendStringInfo(&url_buffer, "featureType=%s&", curl_easy_escape(curl, state->feature_type, 0));
+        AppendUrlParam(&url_buffer, curl, "featureType", state->feature_type);
 
     if (state->exclude_place_ids && strlen(state->exclude_place_ids) > 0)
-        appendStringInfo(&url_buffer, "exclude_place_ids=%s&", curl_easy_escape(curl, state->exclude_place_ids, 0));
+        AppendUrlParam(&url_buffer, curl, "exclude_place_ids", state->exclude_place_ids);
 
     if (state->viewbox && strlen(state->viewbox) > 0)
-        appendStringInfo(&url_buffer, "viewbox=%s&", curl_easy_escape(curl, state->viewbox, 0));
+        AppendUrlParam(&url_buffer, curl, "viewbox", state->viewbox);
 
     if (state->bounded)
         appendStringInfo(&url_buffer, "bounded=1&");
@@ -1480,7 +1484,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         appendStringInfo(&url_buffer, "polygon_threshold=%f&", state->polygon_threshold);
 
     if (state->email && strlen(state->email) > 0)
-        appendStringInfo(&url_buffer, "email=%s&", curl_easy_escape(curl, state->email, 0));
+        AppendUrlParam(&url_buffer, curl, "email", state->email);
 
     if (!state->dedupe)
         appendStringInfo(&url_buffer, "dedupe=0&");
@@ -1522,12 +1526,6 @@ static int ExecuteRequest(NominatimFDWState *state)
                 elog(DEBUG1, "  %s: proxy protocol > 'HTTP'", __func__);
                 curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
             }
-            else if (strcmp(state->proxy_type, NOMINATIM_SERVER_OPTION_HTTPS_PROXY) == 0)
-            {
-                elog(DEBUG1, "  %s: proxy protocol > 'HTTPS'", __func__);
-                curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTPS);
-            }
-
             if (state->proxy_user)
             {
                 elog(DEBUG1, "  %s: entering proxy user ('%s').", __func__, state->proxy_user);
@@ -1553,7 +1551,7 @@ static int ExecuteRequest(NominatimFDWState *state)
             }
         }
 
-        curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
@@ -1561,7 +1559,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
 
         curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
-        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0);
+        curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 
         initStringInfo(&user_agent);
         appendStringInfo(&user_agent, "PostgreSQL/%s nominatim_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
@@ -1598,7 +1596,6 @@ static int ExecuteRequest(NominatimFDWState *state)
             pfree(chunk_header.memory);
             curl_slist_free_all(headers);
             curl_easy_cleanup(curl);
-            curl_global_cleanup();
 
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
@@ -1620,10 +1617,9 @@ static int ExecuteRequest(NominatimFDWState *state)
     pfree(chunk_header.memory);
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
-    curl_global_cleanup();
 
     /*
-     * We thrown an error in case the SPARQL endpoint returns an empty XML doc
+     * We thrown an error in case the server returns an empty XML doc
      */
     if (!state->xmldoc)
         return REQUEST_FAIL;
@@ -1686,19 +1682,30 @@ static bool IsPolygonTypeSupported(char *polygon_type)
  * IsLayerValid
  * ----------
  *
- * Checks if a polygon type is supported by the nominatim endpoint
+ * Checks if a comma-separated list of layer values is valid.
+ * Accepted tokens: address, poi, railway, natural, manmade
  *
  * returns boolean (true: valid, false: invalid)
  */
 static bool IsLayerValid(char *layer)
 {
+    char *copy;
+    char *token;
+
     if (!layer)
         return false;
 
-    return (strcmp(layer, "") == 0 ||
-            strcmp(layer, "address") == 0 ||
-            strcmp(layer, "poi") == 0 ||
-            strcmp(layer, "railway") == 0 ||
-            strcmp(layer, "natural") == 0 ||
-            strcmp(layer, "manmade") == 0);
+    copy = pstrdup(layer);
+    token = strtok(copy, ",");
+    while (token != NULL)
+    {
+        if (strcmp(token, "address") != 0 &&
+            strcmp(token, "poi") != 0 &&
+            strcmp(token, "railway") != 0 &&
+            strcmp(token, "natural") != 0 &&
+            strcmp(token, "manmade") != 0)
+            return false;
+        token = strtok(NULL, ",");
+    }
+    return true;
 }

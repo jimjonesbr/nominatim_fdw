@@ -1,4 +1,4 @@
-comment = 'foreign-data wrappwer for nominatim servers'
+comment = 'foreign-data wrapper for nominatim servers'
 default_version = '1.2'
 module_pathname = '$libdir/nominatim_fdw'
 relocatable = true

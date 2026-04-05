@@ -21,4 +21,11 @@ SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
  1.2
 (1 row)
 
+/* verify functions are still callable after upgrade */
+SELECT nominatim_fdw_version() IS NOT NULL;
+ ?column? 
+----------
+ t
+(1 row)
+
 DROP SERVER osm CASCADE;

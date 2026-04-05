@@ -38,7 +38,7 @@ FROM nominatim_search(
       exclude_place_ids => '42,73',
       viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
       polygon_threshold => 0.1,
-      layer => 'address',
+      layer => 'address,poi',
       limit_result => 1,
       bounded => false,
       accept_language => 'de_DE,de,q=0.9');
@@ -113,7 +113,8 @@ FROM nominatim_reverse(
         extratags => true,
         addressdetails => true,
         namedetails => true,
-        accept_language => 'de_DE,de,q=0.9');
+        accept_language => 'de_DE,de,q=0.9',
+        zoom => 18);
 
 SELECT pg_sleep(2);
 		
