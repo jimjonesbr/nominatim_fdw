@@ -1,8 +1,19 @@
 MODULE_big = nominatim_fdw
 OBJS = nominatim_fdw.o
 EXTENSION = nominatim_fdw
-DATA = nominatim_fdw--1.2.sql nominatim_fdw--1.1.sql nominatim_fdw--1.0.sql nominatim_fdw--1.0--1.1.sql nominatim_fdw--1.1--1.2.sql
+DATA = nominatim_fdw--1.3.sql \
+       nominatim_fdw--1.2.sql \
+	   nominatim_fdw--1.1.sql \
+	   nominatim_fdw--1.0.sql \
+	   nominatim_fdw--1.0--1.1.sql \
+	   nominatim_fdw--1.1--1.2.sql \
+	   nominatim_fdw--1.2--1.3.sql
+
 REGRESS = create-extension upgrade exceptions functions 
+
+ifndef SKIP_PROXY_TESTS
+  REGRESS += proxy	
+endif
 
 CURL_CONFIG = curl-config
 PG_CONFIG = pg_config
