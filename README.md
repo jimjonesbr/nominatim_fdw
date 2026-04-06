@@ -13,7 +13,8 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
 - [Update](#update)
 - [Usage](#usage)
   - [CREATE SERVER](#create-server)
-  - [ALTER SERVER](#alter-server)  
+  - [ALTER SERVER](#alter-server)
+  - [CREATE USER MAPPING](#create-user-mapping)
   - [Functions](#functions)
     - [Nominatim_Search](#nominatim_search)
     - [Nominatim_Reverse](#nominatim_reverse)
@@ -52,7 +53,7 @@ CREATE EXTENSION nominatim_fdw;
 To install an specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION nominatim_fdw WITH VERSION '1.0';
+CREATE EXTENSION nominatim_fdw WITH VERSION '1.3';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -73,7 +74,7 @@ ALTER EXTENSION nominatim_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION nominatim_fdw UPDATE TO '1.2';
+ALTER EXTENSION nominatim_fdw UPDATE TO '1.3';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#usage)
@@ -99,8 +100,6 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 |---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
 | `url`     | **required**            | URL address of the Nominatim endpoint.
 | `http_proxy` | optional            | Proxy for HTTP requests.
-| `proxy_user` | optional            | User for proxy server authentication.
-| `proxy_user_password` | optional            | Password for proxy server authentication.
 | `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default `300` seconds).
 | `max_connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3` times).
 | `max_connect_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` will allow an infinite number of redirects.
@@ -127,6 +126,31 @@ Dropping options
 
 ```sql
 ALTER SERVER osm OPTIONS (DROP http_proxy);
+```
+### [CREATE USER MAPPING](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create-user-mapping)
+
+Proxy credentials for authenticating with a proxy server are stored in a [`USER MAPPING`](https://www.postgresql.org/docs/current/sql-createusermapping.html) rather than in the `SERVER` itself. This keeps credentials separate per database user.
+
+**User Mapping Options**
+
+| Option | Type | Description |
+|---|---|---|
+| `proxy_user` | optional | User name for proxy server authentication. |
+| `proxy_password` | optional | Password for proxy server authentication. |
+
+The following example creates a user mapping with proxy credentials for the current user:
+
+```sql
+CREATE USER MAPPING FOR current_user
+SERVER osm_proxy
+OPTIONS (proxy_user 'myuser', proxy_password 'mysecret');
+```
+
+Credentials can be updated with `ALTER USER MAPPING`:
+
+```sql
+ALTER USER MAPPING FOR current_user
+SERVER osm_proxy OPTIONS (SET proxy_password 'newpassword');
 ```
 ### [Functions](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#functions)
 
@@ -378,9 +402,9 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 
 ```sql
 SELECT nominatim_fdw_version();
-                                                                                         nominatim_fdw_version                                                                                          
---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- nominatim_fdw = 1.2, libxml/2.9.14 libcurl/8.14.1 OpenSSL/3.5.4 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
+                                                                                                  nominatim_fdw_version                                                                                                  
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ nominatim_fdw = 1.3-dev, libxml/2.9.14 libcurl/8.14.1 GnuTLS/3.8.9 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 ngtcp2/1.11.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
 (1 row)
 ```
 

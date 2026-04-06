@@ -67,8 +67,9 @@
 #include "utils/date.h"
 #include <utils/elog.h>
 #include <access/tupdesc.h>
+#include "miscadmin.h"
 
-#define FDW_VERSION "1.2"
+#define FDW_VERSION "1.3-dev"
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 
@@ -81,8 +82,8 @@
 #define NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY "max_connect_retry"
 #define NOMINATIM_SERVER_OPTION_MAXREDIRECT "max_connect_redirect"
 #define NOMINATIM_SERVER_OPTION_HTTP_PROXY "http_proxy"
-#define NOMINATIM_SERVER_OPTION_PROXY_USER "proxy_user"
-#define NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD "proxy_user_password"
+#define NOMINATIM_USERMAPPING_OPTION_PROXYUSER "proxy_user"
+#define NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD "proxy_password"
 #define NOMINATIM_SERVER_OPTION_LANGUAGE "accept_language"
 
 #define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300
@@ -158,6 +159,7 @@ typedef struct NominatimFDWState
     float8 polygon_threshold;  /* Tolerance in degrees with which the geometry may differ from the original geometry */
     xmlDocPtr xmldoc;          /* XML document where the results from the request will be stored before parsing */
     List *records;             /* List of records retrieved from the server after parsing */
+    ForeignServer *server;     /* Foreign server associated with the request */
 } NominatimFDWState;
 
 typedef struct NominatimRecord
@@ -190,12 +192,6 @@ typedef struct NominatimRecord
     char *result;
 } NominatimRecord;
 
-// struct string
-// {
-//     char *ptr;
-//     size_t len;
-// };
-
 struct MemoryStruct
 {
     char *memory;
@@ -207,12 +203,14 @@ static struct NominatimFDWOption valid_options[] =
         /* Foreign Servers */
         {NOMINATIM_SERVER_OPTION_URL, ForeignServerRelationId, true, false},
         {NOMINATIM_SERVER_OPTION_HTTP_PROXY, ForeignServerRelationId, false, false},
-        {NOMINATIM_SERVER_OPTION_PROXY_USER, ForeignServerRelationId, false, false},
-        {NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_MAXREDIRECT, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_LANGUAGE, ForeignServerRelationId, false, false},
+        /* User Mapping */
+        {NOMINATIM_USERMAPPING_OPTION_PROXYUSER, UserMappingRelationId, false, false},
+        {NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD, UserMappingRelationId, false, false},
+
         /* EOList option */
         {NULL, InvalidOid, false, false}};
 
@@ -966,6 +964,83 @@ static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
         return OidFunctionCall1(typinput, CStringGetDatum(value));
 }
 
+static void LoadNominatimUserMapping(NominatimFDWState *state)
+{
+
+	Datum datum;
+	HeapTuple tp;
+	bool isnull;
+	UserMapping *um;
+	List *options = NIL;
+	ListCell *cell;
+	bool usermatch = true;
+
+	elog(DEBUG1, "%s called", __func__);
+
+	tp = SearchSysCache2(USERMAPPINGUSERSERVER,
+						 ObjectIdGetDatum(GetUserId()),
+						 ObjectIdGetDatum(state->server->serverid));
+
+	if (!HeapTupleIsValid(tp))
+	{
+		elog(DEBUG2, "%s: not found for the specific user -- try PUBLIC", __func__);
+		tp = SearchSysCache2(USERMAPPINGUSERSERVER,
+							 ObjectIdGetDatum(InvalidOid),
+							 ObjectIdGetDatum(state->server->serverid));
+	}
+
+	if (!HeapTupleIsValid(tp))
+	{
+		elog(DEBUG2, "%s: user mapping not found for user \"%s\", server \"%s\"",
+			 __func__, MappingUserName(GetUserId()), state->server->servername);
+
+		usermatch = false;
+	}
+
+	if (usermatch)
+	{
+		elog(DEBUG2, "%s: setting UserMapping", __func__);
+		um = (UserMapping *)palloc(sizeof(UserMapping));
+		um->umid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
+		um->userid = GetUserId();
+		um->serverid = state->server->serverid;
+
+		elog(DEBUG2, "%s: extract the umoptions", __func__);
+		datum = SysCacheGetAttr(USERMAPPINGUSERSERVER,
+								tp,
+								Anum_pg_user_mapping_umoptions,
+								&isnull);
+		if (isnull)
+			um->options = NIL;
+		else
+			um->options = untransformRelOptions(datum);
+
+		if (um->options != NIL)
+		{
+			options = list_concat(options, um->options);
+
+			foreach (cell, options)
+			{
+				DefElem *def = (DefElem *)lfirst(cell);
+
+				if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PROXYUSER) == 0)
+				{
+					state->proxy_user = pstrdup(defGetString(def));
+					elog(DEBUG2, "%s: proxy user '%s'", __func__, def->defname);
+				}
+				else if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD) == 0)
+				{
+					state->proxy_user_password = pstrdup(defGetString(def));
+					elog(DEBUG2, "%s: proxy password '*******'", __func__);
+				}
+			}
+		}
+
+		ReleaseSysCache(tp);
+	}
+
+	elog(DEBUG1, "%s exit", __func__);
+}
 /*
  * InitSession
  * ----------
@@ -981,6 +1056,7 @@ static NominatimFDWState *InitSession(const char *srvname)
 {
     NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
     ForeignServer *server = GetForeignServerByName(srvname, true);
+    ListCell *cell;
 
     state->request_redirect = 1L;
     state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;
@@ -988,65 +1064,58 @@ static NominatimFDWState *InitSession(const char *srvname)
     state->accept_language = NOMINATIM_DEFAULT_LANGUAGE;
     state->connect_timeout = NOMINATIM_DEFAULT_CONNECTTIMEOUT;
 
-    elog(DEBUG1, "%s called: '%s'", __func__, srvname);
-
-    if (server)
-    {
-        ListCell *cell;
-
-        foreach (cell, server->options)
-        {
-            DefElem *def = lfirst_node(DefElem, cell);
-
-            elog(DEBUG1, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
-
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_URL) == 0)
-                state->url = defGetString(def);
-
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0)
-            {
-                state->proxy = defGetString(def);
-                state->proxy_type = NOMINATIM_SERVER_OPTION_HTTP_PROXY;
-            }
-
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_PROXY_USER) == 0)
-                state->proxy_user = defGetString(def);
-
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_PROXY_USER_PASSWORD) == 0)
-                state->proxy_user_password = defGetString(def);
-
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
-            {
-                char *tailpt;
-                char *timeout_str = defGetString(def);
-
-                state->connect_timeout = strtol(timeout_str, &tailpt, 0);
-            }
-
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
-            {
-                char *tailpt;
-                char *maxredirect_str = defGetString(def);
-
-                state->request_max_redirect = strtol(maxredirect_str, &tailpt, 10);
-            }
-
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0)
-            {
-                char *tailpt;
-                char *val = defGetString(def);
-
-                state->max_retries = strtol(val, &tailpt, 10);
-            }
-
-            if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
-                state->accept_language = defGetString(def);
-        }
-    }
-    else
+    if (!server)
         ereport(ERROR,
                 (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
                  errmsg("FOREIGN SERVER does not exist: '%s'", srvname)));
+
+    state->server = server;
+    LoadNominatimUserMapping(state);
+
+    elog(DEBUG1, "%s called: '%s'", __func__, srvname);
+
+    foreach (cell, server->options)
+    {
+        DefElem *def = lfirst_node(DefElem, cell);
+
+        elog(DEBUG1, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
+
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_URL) == 0)
+            state->url = defGetString(def);
+
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0)
+        {
+            state->proxy = defGetString(def);
+            state->proxy_type = NOMINATIM_SERVER_OPTION_HTTP_PROXY;
+        }
+
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
+        {
+            char *tailpt;
+            char *timeout_str = defGetString(def);
+
+            state->connect_timeout = strtol(timeout_str, &tailpt, 0);
+        }
+
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
+        {
+            char *tailpt;
+            char *maxredirect_str = defGetString(def);
+
+            state->request_max_redirect = strtol(maxredirect_str, &tailpt, 10);
+        }
+
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0)
+        {
+            char *tailpt;
+            char *val = defGetString(def);
+
+            state->max_retries = strtol(val, &tailpt, 10);
+        }
+
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
+            state->accept_language = defGetString(def);
+    }
 
     return state;
 }
@@ -1535,7 +1604,7 @@ static int ExecuteRequest(NominatimFDWState *state)
             if (state->proxy_user_password)
             {
                 elog(DEBUG1, "  %s: entering proxy user's password.", __func__);
-                curl_easy_setopt(curl, CURLOPT_PROXYUSERPWD, state->proxy_user_password);
+                curl_easy_setopt(curl, CURLOPT_PROXYPASSWORD, state->proxy_user_password);
             }
         }
 

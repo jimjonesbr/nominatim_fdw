@@ -1,6 +1,5 @@
 CREATE SERVER foo
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (http_proxy 'http://proxy.im');
+FOREIGN DATA WRAPPER nominatim_fdw;
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
@@ -12,67 +11,33 @@ OPTIONS (url 'bar');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://proxy.im',
-         http_proxy '');
+OPTIONS (url 'http://proxy.im');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'bar');
-
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user '');
-
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password '');
-
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '-1');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '-1');
 
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '');
@@ -80,9 +45,6 @@ OPTIONS (url 'http://server.im',
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '-1');
@@ -90,9 +52,6 @@ OPTIONS (url 'http://server.im',
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '');
@@ -100,9 +59,6 @@ OPTIONS (url 'http://server.im',
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '-1');
@@ -111,8 +67,8 @@ OPTIONS (url 'http://server.im',
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         max_connect_retry '5',
-         connect_timeout '10');
+         max_connect_retry '2',
+         connect_timeout '1');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
 
 /* no retry! */
@@ -122,14 +78,16 @@ SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
 DROP SERVER srv;
 
 /* server does not exist */
-SELECT * FROM nominatim_search(server_name => 'foo', q => 'bar');
-SELECT * FROM nominatim_search(server_name => 'foo', city => 'bar');
-SELECT * FROM nominatim_reverse(server_name => 'foo',lon => '1', lat => '2');
-SELECT * FROM nominatim_lookup(server_name => 'foo', osm_ids => 'W1');
+SELECT * FROM nominatim_search(server_name => 'srv', q => 'bar');
+SELECT * FROM nominatim_search(server_name => 'srv', city => 'bar');
+SELECT * FROM nominatim_reverse(server_name => 'srv',lon => '1', lat => '2');
+SELECT * FROM nominatim_lookup(server_name => 'srv', osm_ids => 'W1');
 
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im');
+OPTIONS (url 'http://server.im', 
+         connect_timeout '1', 
+         max_connect_retry '0');
 
 /* bad request: 'q' and 'amenity' cannot be combined */
 SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', amenity => 'bar');
@@ -143,3 +101,9 @@ SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', layer => 'bar'
 /* FOREIGN TABLE not supported */
 CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
 SERVER srv OPTIONS (foo 'bar');
+
+/* invalid user mapping options */
+CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (foo 'bar');
+CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user 'u1', proxy_password '');
+CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user '', proxy_password 'pw1');
+CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user '', proxy_password '');

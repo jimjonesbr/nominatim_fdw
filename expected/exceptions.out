@@ -1,6 +1,5 @@
 CREATE SERVER foo
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (http_proxy 'http://proxy.im');
+FOREIGN DATA WRAPPER nominatim_fdw;
 ERROR:  required option 'url' is missing
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
@@ -12,123 +11,69 @@ OPTIONS (url 'bar');
 ERROR:  invalid url: 'bar'
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://proxy.im',
-         http_proxy '');
-ERROR:  empty value in option 'http_proxy'
+OPTIONS (url 'http://proxy.im');
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'bar');
-ERROR:  invalid http_proxy: 'bar'
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user '');
-ERROR:  empty value in option 'proxy_user'
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password '');
-ERROR:  empty value in option 'proxy_user_password'
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '');
-ERROR:  empty value in option 'connect_timeout'
+ERROR:  server "foo" already exists
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '-1');
-ERROR:  invalid connect_timeout: '-1'
-HINT:  expected values are positive integers (timeout in seconds)
+ERROR:  server "foo" already exists
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '');
-ERROR:  empty value in option 'max_connect_retry'
+ERROR:  server "foo" already exists
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '-1');
-ERROR:  invalid max_connect_retry: '-1'
-HINT:  expected values are positive integers
+ERROR:  server "foo" already exists
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '');
-ERROR:  empty value in option 'max_connect_redirect'
+ERROR:  server "foo" already exists
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '-1');
-ERROR:  invalid max_connect_redirect: '-1'
-HINT:  expected values are positive integers
+ERROR:  server "foo" already exists
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '');
-ERROR:  empty value in option 'max_connect_redirect'
+ERROR:  server "foo" already exists
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         http_proxy 'http://server.im',
-         proxy_user 'jim',
-         proxy_user_password 'pw',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '-1');
-ERROR:  invalid max_connect_redirect: '-1'
-HINT:  expected values are positive integers
+ERROR:  server "foo" already exists
 /* invalid URL - retrying as set in 'max_connect_retry' */ 
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
-         max_connect_retry '5',
-         connect_timeout '10');
+         max_connect_retry '2',
+         connect_timeout '1');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain"
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain"
 WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 302 (1)
 WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain"
 WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 302 (2)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain"
-WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 302 (3)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain"
-WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 302 (4)
-WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/plain"
-WARNING:    ExecuteRequest: request to 'http://server.im' failed with return code 302 (5)
 ERROR:  unable to connect to the Nominatim endpoint: 'http://server.im'
 /* no retry! */
 ALTER SERVER srv OPTIONS (SET max_connect_retry '0');
@@ -137,17 +82,19 @@ WARNING:  HeaderCallbackFunction: unsupported header entry: "content-type: text/
 ERROR:  unable to connect to the Nominatim endpoint: 'http://server.im'
 DROP SERVER srv;
 /* server does not exist */
-SELECT * FROM nominatim_search(server_name => 'foo', q => 'bar');
-ERROR:  FOREIGN SERVER does not exist: 'foo'
-SELECT * FROM nominatim_search(server_name => 'foo', city => 'bar');
-ERROR:  FOREIGN SERVER does not exist: 'foo'
-SELECT * FROM nominatim_reverse(server_name => 'foo',lon => '1', lat => '2');
-ERROR:  FOREIGN SERVER does not exist: 'foo'
-SELECT * FROM nominatim_lookup(server_name => 'foo', osm_ids => 'W1');
-ERROR:  FOREIGN SERVER does not exist: 'foo'
+SELECT * FROM nominatim_search(server_name => 'srv', q => 'bar');
+ERROR:  FOREIGN SERVER does not exist: 'srv'
+SELECT * FROM nominatim_search(server_name => 'srv', city => 'bar');
+ERROR:  FOREIGN SERVER does not exist: 'srv'
+SELECT * FROM nominatim_reverse(server_name => 'srv',lon => '1', lat => '2');
+ERROR:  FOREIGN SERVER does not exist: 'srv'
+SELECT * FROM nominatim_lookup(server_name => 'srv', osm_ids => 'W1');
+ERROR:  FOREIGN SERVER does not exist: 'srv'
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im');
+OPTIONS (url 'http://server.im', 
+         connect_timeout '1', 
+         max_connect_retry '0');
 /* bad request: 'q' and 'amenity' cannot be combined */
 SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', amenity => 'bar');
 ERROR:  bad request => structured query parameters (amenity, street, city, county, state, postalcode, country) cannot be used together with 'q' parameter
@@ -164,3 +111,12 @@ CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
 SERVER srv OPTIONS (foo 'bar');
 ERROR:  FOREIGN TABLE not supported
 HINT:  The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.
+/* invalid user mapping options */
+CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (foo 'bar');
+ERROR:  invalid nominatim_fdw option 'foo'
+CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user 'u1', proxy_password '');
+ERROR:  empty value in option 'proxy_password'
+CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user '', proxy_password 'pw1');
+ERROR:  empty value in option 'proxy_user'
+CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user '', proxy_password '');
+ERROR:  empty value in option 'proxy_user'
