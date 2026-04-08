@@ -141,7 +141,7 @@ Proxy credentials for authenticating with a proxy server are stored in a [`USER 
 The following example creates a user mapping with proxy credentials for the current user:
 
 ```sql
-CREATE USER MAPPING FOR current_user
+CREATE USER MAPPING FOR pguser
 SERVER osm_proxy
 OPTIONS (proxy_user 'myuser', proxy_password 'mysecret');
 ```
@@ -149,7 +149,7 @@ OPTIONS (proxy_user 'myuser', proxy_password 'mysecret');
 Credentials can be updated with `ALTER USER MAPPING`:
 
 ```sql
-ALTER USER MAPPING FOR current_user
+ALTER USER MAPPING FOR pguser
 SERVER osm_proxy OPTIONS (SET proxy_password 'newpassword');
 ```
 ### [Functions](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#functions)
