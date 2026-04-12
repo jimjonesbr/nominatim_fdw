@@ -2,6 +2,8 @@
 
 ## Breaking Changes
 
+Release date: **2026-04-12**
+
 Proxy authentication credentials moved to `USER MAPPING`: For improved security, proxy authentication credentials (proxy_user and proxy_password) must now be specified in `USER MAPPING` instead of `SERVER` options. This change prevents proxy passwords from being visible to all users with `USAGE` privilege on the foreign server, as PostgreSQL automatically hides `USER MAPPING` passwords from non-owners.
 
 # 1.2.0

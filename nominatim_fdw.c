@@ -69,7 +69,7 @@
 #include <access/tupdesc.h>
 #include "miscadmin.h"
 
-#define FDW_VERSION "1.3-dev"
+#define FDW_VERSION "1.3"
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 
