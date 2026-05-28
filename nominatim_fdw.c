@@ -235,7 +235,7 @@ static void NominatimBeginForeignScan(ForeignScanState *node, int eflags);
 static TupleTableSlot *NominatimIterateForeignScan(ForeignScanState *node);
 static void NominatimReScanForeignScan(ForeignScanState *node);
 static void NominatimEndForeignScan(ForeignScanState *node);
-static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypemod, char *value);
+static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
 static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place);
 static NominatimFDWState *InitSession(const char *srvname);
 
@@ -555,7 +555,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
             char *value = GetAttributeValue(att, place);
 
             if (value)
-                values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, value);
+                values[i] = CreateDatum(att->atttypid, att->atttypmod, value);
             else
                 nulls[i] = true;
 
@@ -710,7 +710,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
             char *value = GetAttributeValue(att, place);
 
             if (value)
-                values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, value);
+                values[i] = CreateDatum(att->atttypid, att->atttypmod, value);
             else
                 nulls[i] = true;
 
@@ -836,7 +836,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
             char *value = GetAttributeValue(att, place);
 
             if (value)
-                values[i] = CreateDatum(tuple, att->atttypid, att->atttypmod, value);
+                values[i] = CreateDatum(att->atttypid, att->atttypmod, value);
             else
                 nulls[i] = true;
 
@@ -935,11 +935,10 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
  *
  * returns Datum
  */
-static Datum CreateDatum(HeapTuple tuple, int pgtype, int pgtypmod, char *value)
+static Datum CreateDatum(int pgtype, int pgtypmod, char *value)
 {
     regproc typinput;
-
-    tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
+    HeapTuple tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
 
     if (!HeapTupleIsValid(tuple))
         ereport(ERROR,
@@ -1181,6 +1180,34 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 }
 
 /*
+ * xml_get_prop / xml_node_content
+ * ----------
+ *
+ * Wrappers around xmlGetProp / xmlNodeGetContent that copy the result
+ * into palloc'd memory and immediately free the libxml2 heap string.
+ * Returns NULL when the attribute or content is absent.
+ */
+static char *
+xml_get_prop(xmlNodePtr node, const char *name)
+{
+    xmlChar *val = xmlGetProp(node, (xmlChar *) name);
+    char    *result = val ? pstrdup((char *) val) : NULL;
+
+    xmlFree(val);
+    return result;
+}
+
+static char *
+xml_node_content(xmlNodePtr node)
+{
+    xmlChar *val = xmlNodeGetContent(node);
+    char    *result = val ? pstrdup((char *) val) : NULL;
+
+    xmlFree(val);
+    return result;
+}
+
+/*
  * ParseNominatimReverseData
  * ----------
  *
@@ -1216,9 +1243,9 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
 
     Assert(state->xmldoc);
 
-    place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
-    place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
-    place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
+    place->timestamp   = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "timestamp");
+    place->attribution = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "attribution");
+    place->querystring = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "querystring");
 
     root = xmlDocGetRootElement(state->xmldoc);
 
@@ -1231,27 +1258,26 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
         if (xmlStrcmp(reversegeocode->name, (xmlChar *)"result") == 0)
         {
 
-            place->ref = (char *)xmlGetProp(reversegeocode, (xmlChar *)"ref");
-            place->address_rank = (char *)xmlGetProp(reversegeocode, (xmlChar *)"address_rank");
-            place->boundingbox = (char *)xmlGetProp(reversegeocode, (xmlChar *)"boundingbox");
-            place->class = (char *)xmlGetProp(reversegeocode, (xmlChar *)"class");
-            place->icon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"icon");
-            place->importance = (char *)xmlGetProp(reversegeocode, (xmlChar *)"importance");
-            place->lat = (char *)xmlGetProp(reversegeocode, (xmlChar *)"lat");
-            place->lon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"lon");
-            place->osm_id = (char *)xmlGetProp(reversegeocode, (xmlChar *)"osm_id");
-            place->osm_type = (char *)xmlGetProp(reversegeocode, (xmlChar *)"osm_type");
-            place->place_id = (char *)xmlGetProp(reversegeocode, (xmlChar *)"place_id");
-            place->place_rank = (char *)xmlGetProp(reversegeocode, (xmlChar *)"place_rank");
+            place->ref          = xml_get_prop(reversegeocode, "ref");
+            place->address_rank = xml_get_prop(reversegeocode, "address_rank");
+            place->boundingbox  = xml_get_prop(reversegeocode, "boundingbox");
+            place->class        = xml_get_prop(reversegeocode, "class");
+            place->icon         = xml_get_prop(reversegeocode, "icon");
+            place->importance   = xml_get_prop(reversegeocode, "importance");
+            place->lat          = xml_get_prop(reversegeocode, "lat");
+            place->lon          = xml_get_prop(reversegeocode, "lon");
+            place->osm_id       = xml_get_prop(reversegeocode, "osm_id");
+            place->osm_type     = xml_get_prop(reversegeocode, "osm_type");
+            place->place_id     = xml_get_prop(reversegeocode, "place_id");
+            place->place_rank   = xml_get_prop(reversegeocode, "place_rank");
 
-            if (xmlGetProp(reversegeocode, (xmlChar *)"geotext"))
-                place->polygon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"geotext");
-            else if (xmlGetProp(reversegeocode, (xmlChar *)"geojson"))
-                place->polygon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"geojson");
-            else if (xmlGetProp(reversegeocode, (xmlChar *)"geosvg"))
-                place->polygon = (char *)xmlGetProp(reversegeocode, (xmlChar *)"geosvg");
+            place->polygon = xml_get_prop(reversegeocode, "geotext");
+            if (!place->polygon)
+                place->polygon = xml_get_prop(reversegeocode, "geojson");
+            if (!place->polygon)
+                place->polygon = xml_get_prop(reversegeocode, "geosvg");
 
-            place->result = pstrdup((char *)xmlNodeGetContent(reversegeocode));
+            place->result = xml_node_content(reversegeocode);
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"addressparts") == 0)
         {
@@ -1259,10 +1285,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
             {
 
+                char *content = xml_node_content(tag);
                 appendStringInfo(&addressparts, "%s\"%s\":\"%s\"",
                                  addressparts.len == 1 ? "" : ",",
                                  (char *)tag->name,
-                                 (char *)xmlNodeGetContent(tag));
+                                 content ? content : "");
             }
 
         }
@@ -1271,20 +1298,24 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
 
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
             {
+                char *key   = xml_get_prop(tag, "key");
+                char *value = xml_get_prop(tag, "value");
                 appendStringInfo(&extratags, "%s\"%s\":\"%s\"",
                                  extratags.len == 1 ? "" : ",",
-                                 (char *)xmlGetProp(tag, (xmlChar *)"key"),
-                                 (char *)xmlGetProp(tag, (xmlChar *)"value"));
+                                 key   ? key   : "",
+                                 value ? value : "");
             }
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"namedetails") == 0)
         {
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
             {
+                char *desc    = xml_get_prop(tag, "desc");
+                char *content = xml_node_content(tag);
                 appendStringInfo(&namedetails, "%s\"%s\":\"%s\"",
                                  namedetails.len == 1 ? "" : ",",
-                                 (char *)xmlGetProp(tag, (xmlChar *)"desc"),
-                                 (char *)xmlNodeGetContent(tag));
+                                 desc    ? desc    : "",
+                                 content ? content : "");
             }
         }
     }
@@ -1354,33 +1385,32 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             appendStringInfo(&addressdetails, "{");
             appendStringInfo(&namedetails, "{");
 
-            place->ref = (char *)xmlGetProp(searchresults, (xmlChar *)"ref");
-            place->address_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"address_rank");
-            place->attribution = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"attribution");
-            place->boundingbox = (char *)xmlGetProp(searchresults, (xmlChar *)"boundingbox");
-            place->class = (char *)xmlGetProp(searchresults, (xmlChar *)"class");
-            place->display_name = (char *)xmlGetProp(searchresults, (xmlChar *)"display_name");
-            place->display_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"display_rank");
-            place->exclude_place_ids = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"exclude_place_ids");
-            place->icon = (char *)xmlGetProp(searchresults, (xmlChar *)"icon");
-            place->importance = (char *)xmlGetProp(searchresults, (xmlChar *)"importance");
-            place->lat = (char *)xmlGetProp(searchresults, (xmlChar *)"lat");
-            place->lon = (char *)xmlGetProp(searchresults, (xmlChar *)"lon");
-            place->more_url = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"more_url");
-            place->osm_id = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_id");
-            place->osm_type = (char *)xmlGetProp(searchresults, (xmlChar *)"osm_type");
-            place->place_id = (char *)xmlGetProp(searchresults, (xmlChar *)"place_id");
-            place->place_rank = (char *)xmlGetProp(searchresults, (xmlChar *)"place_rank");
+            place->ref               = xml_get_prop(searchresults, "ref");
+            place->address_rank      = xml_get_prop(searchresults, "address_rank");
+            place->attribution       = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "attribution");
+            place->boundingbox       = xml_get_prop(searchresults, "boundingbox");
+            place->class             = xml_get_prop(searchresults, "class");
+            place->display_name      = xml_get_prop(searchresults, "display_name");
+            place->display_rank      = xml_get_prop(searchresults, "display_rank");
+            place->exclude_place_ids = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "exclude_place_ids");
+            place->icon              = xml_get_prop(searchresults, "icon");
+            place->importance        = xml_get_prop(searchresults, "importance");
+            place->lat               = xml_get_prop(searchresults, "lat");
+            place->lon               = xml_get_prop(searchresults, "lon");
+            place->more_url          = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "more_url");
+            place->osm_id            = xml_get_prop(searchresults, "osm_id");
+            place->osm_type          = xml_get_prop(searchresults, "osm_type");
+            place->place_id          = xml_get_prop(searchresults, "place_id");
+            place->place_rank        = xml_get_prop(searchresults, "place_rank");
 
-            if (xmlGetProp(searchresults, (xmlChar *)"geotext"))
-                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geotext");
-            else if (xmlGetProp(searchresults, (xmlChar *)"geojson"))
-                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geojson");
-            else if (xmlGetProp(searchresults, (xmlChar *)"geosvg"))
-                place->polygon = (char *)xmlGetProp(searchresults, (xmlChar *)"geosvg");
+            place->polygon = xml_get_prop(searchresults, "geotext");
+            if (!place->polygon)
+                place->polygon = xml_get_prop(searchresults, "geojson");
+            if (!place->polygon)
+                place->polygon = xml_get_prop(searchresults, "geosvg");
 
-            place->querystring = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"querystring");
-            place->timestamp = (char *)xmlGetProp(xmlDocGetRootElement(state->xmldoc), (xmlChar *)"timestamp");
+            place->querystring = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "querystring");
+            place->timestamp   = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "timestamp");
 
             for (places = searchresults->children; places != NULL; places = places->next)
             {
@@ -1388,20 +1418,24 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                 {
                     for (tag = places->children; tag != NULL; tag = tag->next)
                     {
+                        char *key   = xml_get_prop(tag, "key");
+                        char *value = xml_get_prop(tag, "value");
                         appendStringInfo(&xtags, "%s\"%s\":\"%s\"",
                                          xtags.len == 1 ? "" : ",",
-                                         (char *)xmlGetProp(tag, (xmlChar *)"key"),
-                                         (char *)xmlGetProp(tag, (xmlChar *)"value"));
+                                         key   ? key   : "",
+                                         value ? value : "");
                     }
                 }
                 else if (xmlStrcmp(places->name, (xmlChar *)"namedetails") == 0)
                 {
                     for (tag = places->children; tag != NULL; tag = tag->next)
                     {
+                        char *desc    = xml_get_prop(tag, "desc");
+                        char *content = xml_node_content(tag);
                         appendStringInfo(&namedetails, "%s\"%s\":\"%s\"",
                                          namedetails.len == 1 ? "" : ",",
-                                         (char *)xmlGetProp(tag, (xmlChar *)"desc"),
-                                         (char *)xmlNodeGetContent(tag));
+                                         desc    ? desc    : "",
+                                         content ? content : "");
                     }
                 }
                 else if (xmlStrcmp(places->name, (xmlChar *)"geokml") == 0)
@@ -1418,10 +1452,11 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                 }
                 else
                 {
+                    char *content = xml_node_content(places);
                     appendStringInfo(&addressdetails, "%s\"%s\":\"%s\"",
                                      addressdetails.len == 1 ? "" : ",",
                                      (char *)places->name,
-                                     (char *)xmlNodeGetContent(places));
+                                     content ? content : "");
                 }
             }
 
@@ -1438,7 +1473,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
     }
 
     xmlFreeDoc(state->xmldoc);
-    state->xmldoc = NULL;
+    state->xmldoc = NULL;    
 }
 
 static void AppendUrlParam(StringInfo buf, CURL *curl, const char *param, const char *value)
