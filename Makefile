@@ -16,9 +16,10 @@ ifndef SKIP_PROXY_TESTS
 endif
 
 CURL_CONFIG = curl-config
+XML2_CONFIG = xml2-config
 PG_CONFIG = pg_config
 
-CFLAGS += $(shell $(CURL_CONFIG) --cflags)
+PG_CPPFLAGS += $(shell $(CURL_CONFIG) --cflags) $(shell $(XML2_CONFIG) --cflags)
 LIBS += $(shell $(CURL_CONFIG) --libs)
 
 SHLIB_LINK := $(LIBS)
