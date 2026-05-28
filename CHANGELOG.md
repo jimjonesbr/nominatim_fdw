@@ -1,8 +1,16 @@
+# 1.4
+
+Release date: **YYYY-MM-DD**
+
+## Bug fixes
+
+* Fixed `nominatim_search`, `nominatim_lookup`, and `nominatim_reverse` incorrectly declared as `IMMUTABLE`, which allowed PostgreSQL to cache or optimize away repeated calls and return stale results. Functions are now correctly declared `VOLATILE`.
+
 # 1.3
 
-## Breaking Changes
-
 Release date: **2026-04-12**
+
+## Breaking Changes
 
 Proxy authentication credentials moved to `USER MAPPING`: For improved security, proxy authentication credentials (proxy_user and proxy_password) must now be specified in `USER MAPPING` instead of `SERVER` options. This change prevents proxy passwords from being visible to all users with `USAGE` privilege on the foreign server, as PostgreSQL automatically hides `USER MAPPING` passwords from non-owners.
 
