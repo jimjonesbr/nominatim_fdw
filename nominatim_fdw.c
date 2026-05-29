@@ -1709,7 +1709,8 @@ static int ExecuteRequest(NominatimFDWState *state)
         {
             long response_code;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-            state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL, XML_PARSE_NOBLANKS);
+            state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL,
+                                          XML_PARSE_NOBLANKS | XML_PARSE_NONET);
 
             elog(DEBUG2, "  %s: http response code = %ld", __func__, response_code);
             elog(DEBUG2, "  %s: http response size = %ld", __func__, chunk.size);
