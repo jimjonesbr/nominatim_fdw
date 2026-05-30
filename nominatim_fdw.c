@@ -44,6 +44,7 @@
 #include "lib/stringinfo.h"
 #include <utils/lsyscache.h>
 #include "utils/datetime.h"
+#include "utils/json.h"
 #include "utils/timestamp.h"
 #include "utils/formatting.h"
 #include "catalog/pg_operator.h"
@@ -1286,10 +1287,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             {
 
                 char *content = xml_node_content(tag);
-                appendStringInfo(&addressparts, "%s\"%s\":\"%s\"",
-                                 addressparts.len == 1 ? "" : ",",
-                                 (char *)tag->name,
-                                 content ? content : "");
+                if (addressparts.len > 1)
+                    appendStringInfoChar(&addressparts, ',');
+                escape_json(&addressparts, (char *) tag->name);
+                appendStringInfoChar(&addressparts, ':');
+                escape_json(&addressparts, content ? content : "");
             }
 
         }
@@ -1300,10 +1302,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             {
                 char *key   = xml_get_prop(tag, "key");
                 char *value = xml_get_prop(tag, "value");
-                appendStringInfo(&extratags, "%s\"%s\":\"%s\"",
-                                 extratags.len == 1 ? "" : ",",
-                                 key   ? key   : "",
-                                 value ? value : "");
+                if (extratags.len > 1)
+                    appendStringInfoChar(&extratags, ',');
+                escape_json(&extratags, key   ? key   : "");
+                appendStringInfoChar(&extratags, ':');
+                escape_json(&extratags, value ? value : "");
             }
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"namedetails") == 0)
@@ -1312,10 +1315,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             {
                 char *desc    = xml_get_prop(tag, "desc");
                 char *content = xml_node_content(tag);
-                appendStringInfo(&namedetails, "%s\"%s\":\"%s\"",
-                                 namedetails.len == 1 ? "" : ",",
-                                 desc    ? desc    : "",
-                                 content ? content : "");
+                if (namedetails.len > 1)
+                    appendStringInfoChar(&namedetails, ',');
+                escape_json(&namedetails, desc    ? desc    : "");
+                appendStringInfoChar(&namedetails, ':');
+                escape_json(&namedetails, content ? content : "");
             }
         }
     }
@@ -1420,10 +1424,11 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                     {
                         char *key   = xml_get_prop(tag, "key");
                         char *value = xml_get_prop(tag, "value");
-                        appendStringInfo(&xtags, "%s\"%s\":\"%s\"",
-                                         xtags.len == 1 ? "" : ",",
-                                         key   ? key   : "",
-                                         value ? value : "");
+                        if (xtags.len > 1)
+                            appendStringInfoChar(&xtags, ',');
+                        escape_json(&xtags, key   ? key   : "");
+                        appendStringInfoChar(&xtags, ':');
+                        escape_json(&xtags, value ? value : "");
                     }
                 }
                 else if (xmlStrcmp(places->name, (xmlChar *)"namedetails") == 0)
@@ -1432,10 +1437,11 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                     {
                         char *desc    = xml_get_prop(tag, "desc");
                         char *content = xml_node_content(tag);
-                        appendStringInfo(&namedetails, "%s\"%s\":\"%s\"",
-                                         namedetails.len == 1 ? "" : ",",
-                                         desc    ? desc    : "",
-                                         content ? content : "");
+                        if (namedetails.len > 1)
+                            appendStringInfoChar(&namedetails, ',');
+                        escape_json(&namedetails, desc    ? desc    : "");
+                        appendStringInfoChar(&namedetails, ':');
+                        escape_json(&namedetails, content ? content : "");
                     }
                 }
                 else if (xmlStrcmp(places->name, (xmlChar *)"geokml") == 0)
@@ -1453,10 +1459,11 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                 else
                 {
                     char *content = xml_node_content(places);
-                    appendStringInfo(&addressdetails, "%s\"%s\":\"%s\"",
-                                     addressdetails.len == 1 ? "" : ",",
-                                     (char *)places->name,
-                                     content ? content : "");
+                    if (addressdetails.len > 1)
+                        appendStringInfoChar(&addressdetails, ',');
+                    escape_json(&addressdetails, (char *) places->name);
+                    appendStringInfoChar(&addressdetails, ':');
+                    escape_json(&addressdetails, content ? content : "");
                 }
             }
 
