@@ -102,7 +102,7 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 | `http_proxy` | optional            | Proxy for HTTP requests.
 | `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default `300` seconds).
 | `max_connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3` times).
-| `max_connect_redirect`         | optional            | Limit of how many times the URL redirection may occur. If that many redirections have been followed, the next redirect will cause an error. Not setting this parameter or setting it to `0` will allow an infinite number of redirects.
+| `max_connect_redirect`         | optional            | Limit of how many times URL redirection may follow (default `1`). Set to `-1` to allow unlimited redirects.
 
 
 ### [ALTER SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#alter-foreign-table-and-alter-server)
@@ -185,14 +185,14 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
 | `namedetails` | optional | include a full list of names for the result. (default `false`) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `countrycodes` | optional | comma-separated list of [country codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) (default *unset*) |
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
-| `featureType` | optional | one of: `country`, `state`, `city`, `settlement` (default *unset*) |
-| `exclude_place_ids` | optional | comma-separeted list of place ids (default *unset*) |
+| `featuretype` | optional | one of: `country`, `state`, `city`, `settlement` (default *unset*) |
+| `exclude_place_ids` | optional | comma-separated list of place ids (default *unset*) |
 | `viewbox` | optional | bounding box as in `<x1>,<y1>,<x2>,<y2>` (default *unset*) |
 | `bounded` | optional | When `bounded` is set to `true` and the `viewbox` is small enough, then an amenity-only search is allowed. Give the special keyword for the amenity in square brackets, e.g. [pub] and a selection of objects of this type is returned. There is no guarantee that the result returns all objects in the area. (default `false`) |
-| `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text (default *unset*) |
+| `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | valid email address (default *unset*) |
 | `dedupe` | optional | discards duplicated entries (default `true`) |
@@ -294,12 +294,12 @@ FROM nominatim_search(server_name => 'osm',
 | Parameter | Type | Description |
 |---|---|---
 | `server_name` | **required** | Foreign Data Wrapper server created using the `CREATE SERVER` statement. |
-| `lon` | **required** | longitude of the location to generate an address for (default `0`) |
-| `lat` | **required** | latitude of the location to generate an address for (default `0`) |
+| `lon` | optional | longitude of the location to generate an address for (default `0`) |
+| `lat` | optional | latitude of the location to generate an address for (default `0`) |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
 | `namedetails` | optional | includes a full list of names for the result. (default `false`) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `zoom` | optional | Level of detail required for the address. This is a number that corresponds roughly to the zoom level used in XYZ tile sources in frameworks like Leaflet.js, Openlayers etc. In terms of address details the zoom levels are as follows: `3` country, `5` state, `8` county, `10` city, `12` town / borough, `13` village / suburb, `14` neighbourhood, `15` any settlement, `16` major streets, `17` major and minor streets, `18` building (default `18`) |
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
 | `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
@@ -352,8 +352,8 @@ The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows 
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
 | `namedetails` | optional | include a full list of names for the result. (default `false`) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en_US`). This overrides the `accept_language` set in the `CREATE SERVER` |
-| `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text (default *unset*) |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` |
+| `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `countrycodes` | optional | comma-separated list of [country codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) (default *unset*) |
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
