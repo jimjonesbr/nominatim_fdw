@@ -649,7 +649,13 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->offset = offset;
         state->request_type = NOMINATIM_REQUEST_SEARCH;
 
-        if (state->amenity && strlen(state->amenity) > 0 &&
+        if (((state->amenity && strlen(state->amenity) > 0) ||
+             (state->street && strlen(state->street) > 0) ||
+             (state->city && strlen(state->city) > 0) ||
+             (state->county && strlen(state->county) > 0) ||
+             (state->state && strlen(state->state) > 0) ||
+             (state->country && strlen(state->country) > 0) ||
+             (state->postalcode && strlen(state->postalcode) > 0)) &&
             state->query && strlen(state->query) > 0)
             ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
                             errmsg("bad request => structured query parameters (amenity, street, city, county, state, postalcode, country) cannot be used together with 'q' parameter")));
@@ -1159,7 +1165,8 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
             strncasecmp(contents, content_xml_utf8, strlen(content_xml_utf8)) != 0)
         {
             /* remove crlf */
-            contents[strlen(contents) - 2] = '\0';
+            if (realsize >= 2)
+                contents[realsize - 2] = '\0';
             elog(WARNING, "%s: unsupported header entry: \"%s\"", __func__, contents);
             return 0;
         }
