@@ -53,7 +53,7 @@ CREATE EXTENSION nominatim_fdw;
 To install an specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION nominatim_fdw WITH VERSION '1.3';
+CREATE EXTENSION nominatim_fdw WITH VERSION '1.4';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -74,7 +74,7 @@ ALTER EXTENSION nominatim_fdw UPDATE;
 To update to an specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION nominatim_fdw UPDATE TO '1.3';
+ALTER EXTENSION nominatim_fdw UPDATE TO '1.4';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#usage)
@@ -402,9 +402,9 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 
 ```sql
 SELECT nominatim_fdw_version();
-                                                                                                nominatim_fdw_version                                                                                                
----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- nominatim_fdw = 1.3, libxml/2.9.14 libcurl/8.14.1 GnuTLS/3.8.9 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 ngtcp2/1.11.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
+                                                                                                  nominatim_fdw_version                                                                                                  
+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ nominatim_fdw = 1.4-dev, libxml/2.9.14 libcurl/8.14.1 GnuTLS/3.8.9 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 ngtcp2/1.11.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
 (1 row)
 ```
 

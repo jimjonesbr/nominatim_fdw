@@ -84,7 +84,7 @@ CREATE FUNCTION nominatim_search(
     limit_result int DEFAULT 0,
     offset_result int DEFAULT 0)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_search'
-LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 
 CREATE FUNCTION nominatim_lookup(
     server_name text, 
@@ -104,7 +104,7 @@ CREATE FUNCTION nominatim_lookup(
     email text DEFAULT '',
     dedupe boolean DEFAULT true)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_lookup'
-LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 
 CREATE FUNCTION nominatim_reverse(
     server_name text, 
@@ -118,7 +118,7 @@ CREATE FUNCTION nominatim_reverse(
     polygon text DEFAULT '',
     accept_language text DEFAULT '')
 RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_reverse'
-LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 
 CREATE FOREIGN DATA WRAPPER nominatim_fdw
 HANDLER nominatim_fdw_handler

@@ -16,5 +16,5 @@ docker exec -itw /nominatim_fdw/ -u postgres $CONTAINER_NAME psql -d postgres \
 
 # SKIP_PROXY_TESTS=1 - skip proxy tests since we don't have a proxy set up in this environment
 
-docker exec -itw /nominatim_fdw/ $CONTAINER_NAME make PGUSER=postgres installcheck 
+docker exec -itw /nominatim_fdw/ $CONTAINER_NAME make PGUSER=postgres SKIP_PROXY_TESTS=1 installcheck 
 echo -e "\n== Tests completed ==\n"
