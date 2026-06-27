@@ -50,7 +50,7 @@ After building and installing the extension you're ready to create the extension
 CREATE EXTENSION nominatim_fdw;
 ```
 
-To install an specific version add the full version number in the `WITH VERSION` clause
+To install a specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
 CREATE EXTENSION nominatim_fdw WITH VERSION '1.4';
@@ -71,7 +71,7 @@ To update the extension's version you must first build and install the binaries 
 ALTER EXTENSION nominatim_fdw UPDATE;
 ```
 
-To update to an specific version use `UPDATE TO` and the full version number
+To update to a specific version use `UPDATE TO` and the full version number
 
 ```sql
 ALTER EXTENSION nominatim_fdw UPDATE TO '1.4';
@@ -83,7 +83,7 @@ To use the `nominatim_fdw` you must first create a `SERVER` to connect to a Nomi
 
 ### [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server)
 
-The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server, which in this case means a Nominatim server. The user who defines the server becomes its owner. A `SERVER` requires an `url`, so that `nominatim_fdw` knows where to sent the requests.
+The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server, which in this case means a Nominatim server. The user who defines the server becomes its owner. A `SERVER` requires an `url`, so that `nominatim_fdw` knows where to send the requests.
 
 The following example creates a `SERVER` that connects to the [OpenStreetMap Nominatim Server](https://nominatim.openstreetmap.org):
 
@@ -184,7 +184,7 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `limit` | optional | limits the maximum number of returned results (default `10`) |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
-| `namedetails` | optional | include a full list of names for the result. (default `false`) |
+| `namedetails` | optional | includes a full list of names for the result. (default `false`) |
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `countrycodes` | optional | comma-separated list of [country codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) (default *unset*) |
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
@@ -351,7 +351,7 @@ The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows 
 | `osm_ids` | **required** | comma-separated list of OSM ids, each prefixed with its type: `N` (node), `W` (way) or `R` (relation), e.g. `N123,W456,R789` |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
-| `namedetails` | optional | include a full list of names for the result. (default `false`) |
+| `namedetails` | optional | includes a full list of names for the result. (default `false`) |
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` |
 | `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
@@ -424,19 +424,19 @@ RUN tar xvzf nominatim_fdw-[VERSION].tar.gz && \
     make install
 ```
 
-To build the image save it in a `Dockerfile` and  run the following command in the root directory - this will create an image called `nominatim_fdw_image`.:
+To build the image save it in a `Dockerfile` and  run the following command in the root directory - this will create an image called `nominatim_fdw_image`:
  
 ```bash
  $ docker build -t nominatim_fdw_image .
 ```
 
-After successfully building the image you're ready to `run` or `create` the container ..
+After successfully building the image you're ready to `run` or `create` the container ...
  
 ```bash
 $ docker run --name my_container -e POSTGRES_HOST_AUTH_METHOD=trust nominatim_fdw_image
 ```
 
-.. and then finally you're able to create and use the extension!
+... and then finally you're able to create and use the extension!
 
 ```bash
 $ docker exec -u postgres my_container psql -d mydatabase -c "CREATE EXTENSION nominatim_fdw;"
