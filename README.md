@@ -355,13 +355,6 @@ The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows 
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` |
 | `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
-| `countrycodes` | optional | comma-separated list of [country codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) (default *unset*) |
-| `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
-| `featuretype` | optional | one of: `country`, `state`, `city`, `settlement` (default *unset*) |
-| `exclude_place_ids` | optional | comma-separated list of place IDs to exclude from the results (default *unset*) |
-| `viewbox` | optional | bounding box as `<x1>,<y1>,<x2>,<y2>` to focus the search (default *unset*) |
-| `bounded` | optional | restrict results to those within the viewbox (default `false`) |
-| `dedupe` | optional | remove duplicate results (default `true`) |
 | `email` | optional | valid email address (default *unset*) |
 
 **Usage**
