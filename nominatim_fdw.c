@@ -248,11 +248,8 @@ static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
 static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
-
 static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
-{
-}
-
+{}
 static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
 {
     Path *path;
@@ -1696,15 +1693,20 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         res = curl_easy_perform(curl);
 
-        if (res != CURLE_OK)
+        for (long i = 1; res != CURLE_OK && i <= state->max_retries; i++)
         {
+            long response_code;
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+            elog(WARNING, "  %s: request to '%s' failed with return code %ld (%ld)",
+                 __func__, state->url, response_code, i);
 
-            for (long i = 1; i <= state->max_retries && (res = curl_easy_perform(curl)) != CURLE_OK; i++)
-            {
-                long response_code;
-                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-                elog(WARNING, "  %s: request to '%s' failed with return code %ld (%ld)", __func__, state->url, response_code, i);
-            }
+            /* discard whatever the failed attempt left behind before retrying */
+            chunk.size = 0;
+            chunk.memory[0] = '\0';
+            chunk_header.size = 0;
+            chunk_header.memory[0] = '\0';
+
+            res = curl_easy_perform(curl);
         }
 
         if (res != CURLE_OK)
