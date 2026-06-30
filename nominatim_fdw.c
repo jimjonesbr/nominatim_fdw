@@ -557,7 +557,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
             else
                 nulls[i] = true;
 
-            elog(DEBUG2, "  %s = '%s'", NameStr(att->attname), value);
+            elog(DEBUG2, "  %s = '%s'", att->attname.data, value);
         }
 
         elog(DEBUG2, "  %s: creating heap tuple", __func__);
@@ -718,7 +718,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
             else
                 nulls[i] = true;
 
-            elog(DEBUG2, "  %s = '%s'", NameStr(att->attname), value);
+            elog(DEBUG2, "  %s = '%s'", att->attname.data, value);
         }
 
         elog(DEBUG2, "  %s: creating heap tuple", __func__);
@@ -844,7 +844,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
             else
                 nulls[i] = true;
 
-            elog(DEBUG2, "  %s: %s = '%s'", __func__, NameStr(att->attname), value);
+            elog(DEBUG2, "  %s: %s = '%s'", __func__, att->attname.data, value);
         }
 
         elog(DEBUG2, "  %s: creating heap tuple", __func__);
@@ -1332,9 +1332,9 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     appendStringInfo(&extratags, "}");
     appendStringInfo(&namedetails, "}");
 
-    place->addressparts = NameStr(addressparts);
-    place->extratags = NameStr(extratags);
-    place->namedetails = NameStr(namedetails);
+    place->addressparts = addressparts.data;
+    place->extratags = extratags.data;
+    place->namedetails = namedetails.data;
 
     state->records = lappend(state->records, place);
 
@@ -1475,9 +1475,9 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             appendStringInfo(&addressdetails, "}");
             appendStringInfo(&namedetails, "}");
 
-            place->extratags = NameStr(xtags);
-            place->addressdetails = NameStr(addressdetails);
-            place->namedetails = NameStr(namedetails);
+            place->extratags = xtags.data;
+            place->addressdetails = addressdetails.data;
+            place->namedetails = namedetails.data;
 
             state->records = lappend(state->records, place);
         }
@@ -1679,14 +1679,14 @@ static int ExecuteRequest(NominatimFDWState *state)
         initStringInfo(&user_agent);
         appendStringInfo(&user_agent, "PostgreSQL/%s nominatim_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
 
-        elog(DEBUG1, "  %s: \"Agent: %s\"", __func__, NameStr(user_agent));
+        elog(DEBUG1, "  %s: \"Agent: %s\"", __func__, user_agent.data);
 
-        curl_easy_setopt(curl, CURLOPT_USERAGENT, NameStr(user_agent));
+        curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
 
         initStringInfo(&accept_header);
         appendStringInfo(&accept_header, "Accept-Language: %s", state->accept_language);
-        headers = curl_slist_append(headers, NameStr(accept_header));
-        elog(DEBUG1, "  adding header: %s", NameStr(accept_header));
+        headers = curl_slist_append(headers, accept_header.data);
+        elog(DEBUG1, "  adding header: %s", accept_header.data);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
         elog(DEBUG2, "  %s: performing cURL request ... ", __func__);
