@@ -5,7 +5,7 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 SELECT nominatim_fdw_version() IS NOT NULL, 
        nominatim_fdw_version() <> '';
 
-SELECT 
+SELECT
     osm_id, osm_type, 
 	class, 
 	display_name IS NOT NULL AND display_name <> '' valid_display_name,
@@ -44,6 +44,45 @@ FROM nominatim_search(
       accept_language => 'de_DE,de,q=0.9');
 
 SELECT pg_sleep(2);
+
+/* unknown address */
+SELECT
+    osm_id, osm_type, 
+	class, 
+	display_name IS NOT NULL AND display_name <> '' valid_display_name,
+	display_rank, 
+	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
+	place_rank,
+    lon, lat, boundingbox, 
+	importance, 
+	icon, 
+	timestamp IS NOT NULL AS valid_timestamp, 
+	attribution,
+    querystring, 
+	length(polygon) AS polygon_length, 
+	exclude_place_ids IS NOT NULL AS valid_exclude_place_ids, 
+	more_url IS NOT NULL AND more_url <> '' AS valid_more_url,
+    jsonb_pretty(extratags) AS extratags, 
+	jsonb_pretty(namedetails) AS namedetails,
+    jsonb_pretty(addressdetails) AS addressdetails
+FROM nominatim_search(
+      server_name => 'osm',
+      q => 'foo 42, bar',
+      extratags => true,
+      addressdetails => true,
+      namedetails => true,
+      polygon => 'polygon_text',
+      email => 'jim.jones@uni-muenster.de',
+      countrycodes => 'DE,BR,US',
+      featuretype => 'poi',
+      dedupe => true,
+      exclude_place_ids => '42,73',
+      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
+      polygon_threshold => 0.1,
+      layer => 'address,poi',
+      limit_result => 1,
+      bounded => false,
+      accept_language => 'de_DE,de,q=0.9');
 
 SELECT 
     osm_id, osm_type, 
@@ -87,6 +126,21 @@ FROM nominatim_search(
       limit_result => 1,
       accept_language => 'de_DE,de,q=0.9');
 
+/* q combined with structured params => should error */
+SELECT * FROM nominatim_search(server_name => 'osm', q => 'foo', city => 'münster');
+
+/* nothing to search for => should error */
+SELECT * FROM nominatim_search(server_name => 'osm');
+
+/* invalid polygon type */
+SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', polygon => 'polygon_foo');
+
+/* invalid layer */
+SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', layer => 'address,bogus');
+
+/* nonexistent server */
+SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat => 0);
+
 SELECT pg_sleep(2);
 
 SELECT 
@@ -117,7 +171,56 @@ FROM nominatim_reverse(
         zoom => 18);
 
 SELECT pg_sleep(2);
-		
+
+/* invalid coordinates */
+SELECT osm_id, result, boundingbox
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 4200.37,
+        lat => 9999.99,
+        extratags => true);
+
+SELECT pg_sleep(2);
+
+/* longitude out of range */
+SELECT *
+FROM nominatim_reverse(
+        server_name => 'osm',
+        lon => 200,
+        lat => 50);
+
+SELECT pg_sleep(2);
+
+/* boundary values must be ACCEPTED (inclusive endpoints) */
+SELECT osm_id IS NOT NULL
+FROM nominatim_reverse(
+    server_name => 'osm',
+    lon => 180,
+    lat => 90);
+
+SELECT pg_sleep(2);
+
+SELECT osm_id IS NOT NULL
+FROM nominatim_reverse(
+        server_name => 'osm',
+        lon => -180,
+        lat => -90);
+
+SELECT pg_sleep(2);
+
+/* valid coordinates but no location */
+SELECT osm_id, result
+FROM nominatim_reverse(
+        server_name => 'osm', lon => 0, lat => -60);
+
+SELECT pg_sleep(2);
+
+SELECT osm_id, result
+FROM nominatim_reverse(
+        server_name => 'osm', lon => 0, lat => 0);
+
+/* nominatim look up */
+
 SELECT 
     osm_id, osm_type, 
 	class, 
@@ -150,4 +253,4 @@ FROM nominatim_lookup(
       viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
       polygon_threshold => 0.1,
       layer => 'address',
-      accept_language => 'de_DE,de,q=0.9');		
+      accept_language => 'de_DE,de,q=0.9');

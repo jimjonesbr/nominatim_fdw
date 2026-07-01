@@ -509,6 +509,18 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
                             errmsg("invalid polygon type '%s'", state->polygon_type),
                             errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
+        if (lat < -90.0 || lat > 90.0)
+            ereport(ERROR,
+                    (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+                     errmsg("latitude out of range: %f", lat),
+                     errhint("latitude must be between -90 and 90")));
+
+        if (lon < -180.0 || lon > 180.0)
+            ereport(ERROR,
+                    (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+                     errmsg("longitude out of range: %f", lon),
+                     errhint("longitude must be between -180 and 180")));
+
         elog(DEBUG1, "\n\n\t=== %s ===\n\tlon: '%f'\n\tlat: '%f'\n\tzoom: '%d'\n\tpolygon_type: '%s'\n\tlayer: '%s'\n", __func__,
              state->lon,
              state->lat,
@@ -1225,21 +1237,14 @@ xml_node_content(xmlNodePtr node)
  */
 static void ParseNominatimReverseData(NominatimFDWState *state)
 {
-    struct NominatimRecord *place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
+    struct NominatimRecord *place;
     xmlNodePtr reversegeocode;
     xmlNodePtr tag;
     xmlNodePtr root;
     StringInfoData addressparts;
     StringInfoData extratags;
     StringInfoData namedetails;
-
-    initStringInfo(&addressparts);
-    initStringInfo(&extratags);
-    initStringInfo(&namedetails);
-
-    appendStringInfo(&addressparts, "{");
-    appendStringInfo(&extratags, "{");
-    appendStringInfo(&namedetails, "{");
+    bool found = false;
 
     elog(DEBUG1, "%s called", __func__);
 
@@ -1248,33 +1253,42 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
 
     Assert(state->xmldoc);
 
-    place->timestamp   = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "timestamp");
-    place->attribution = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "attribution");
-    place->querystring = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "querystring");
-
     root = xmlDocGetRootElement(state->xmldoc);
 
     if (!root)
         elog(ERROR, "unable to parse root element: '%s'", state->url);
 
+    place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
+
+    initStringInfo(&addressparts);
+    initStringInfo(&extratags);
+    initStringInfo(&namedetails);
+    appendStringInfoChar(&addressparts, '{');
+    appendStringInfoChar(&extratags, '{');
+    appendStringInfoChar(&namedetails, '{');
+
+    place->timestamp = xml_get_prop(root, "timestamp");
+    place->attribution = xml_get_prop(root, "attribution");
+    place->querystring = xml_get_prop(root, "querystring");
+
     for (reversegeocode = root->children; reversegeocode != NULL; reversegeocode = reversegeocode->next)
     {
-
         if (xmlStrcmp(reversegeocode->name, (xmlChar *)"result") == 0)
         {
+            found = true; /* <-- only now do we have a real row */
 
-            place->ref          = xml_get_prop(reversegeocode, "ref");
+            place->ref = xml_get_prop(reversegeocode, "ref");
             place->address_rank = xml_get_prop(reversegeocode, "address_rank");
-            place->boundingbox  = xml_get_prop(reversegeocode, "boundingbox");
-            place->class        = xml_get_prop(reversegeocode, "class");
-            place->icon         = xml_get_prop(reversegeocode, "icon");
-            place->importance   = xml_get_prop(reversegeocode, "importance");
-            place->lat          = xml_get_prop(reversegeocode, "lat");
-            place->lon          = xml_get_prop(reversegeocode, "lon");
-            place->osm_id       = xml_get_prop(reversegeocode, "osm_id");
-            place->osm_type     = xml_get_prop(reversegeocode, "osm_type");
-            place->place_id     = xml_get_prop(reversegeocode, "place_id");
-            place->place_rank   = xml_get_prop(reversegeocode, "place_rank");
+            place->boundingbox = xml_get_prop(reversegeocode, "boundingbox");
+            place->class = xml_get_prop(reversegeocode, "class");
+            place->icon = xml_get_prop(reversegeocode, "icon");
+            place->importance = xml_get_prop(reversegeocode, "importance");
+            place->lat = xml_get_prop(reversegeocode, "lat");
+            place->lon = xml_get_prop(reversegeocode, "lon");
+            place->osm_id = xml_get_prop(reversegeocode, "osm_id");
+            place->osm_type = xml_get_prop(reversegeocode, "osm_type");
+            place->place_id = xml_get_prop(reversegeocode, "place_id");
+            place->place_rank = xml_get_prop(reversegeocode, "place_rank");
 
             place->polygon = xml_get_prop(reversegeocode, "geotext");
             if (!place->polygon)
@@ -1286,29 +1300,25 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"addressparts") == 0)
         {
-
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
             {
-
                 char *content = xml_node_content(tag);
                 if (addressparts.len > 1)
                     appendStringInfoChar(&addressparts, ',');
-                escape_json(&addressparts, (char *) tag->name);
+                escape_json(&addressparts, (char *)tag->name);
                 appendStringInfoChar(&addressparts, ':');
                 escape_json(&addressparts, content ? content : "");
             }
-
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"extratags") == 0)
         {
-
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
             {
-                char *key   = xml_get_prop(tag, "key");
+                char *key = xml_get_prop(tag, "key");
                 char *value = xml_get_prop(tag, "value");
                 if (extratags.len > 1)
                     appendStringInfoChar(&extratags, ',');
-                escape_json(&extratags, key   ? key   : "");
+                escape_json(&extratags, key ? key : "");
                 appendStringInfoChar(&extratags, ':');
                 escape_json(&extratags, value ? value : "");
             }
@@ -1317,26 +1327,27 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
         {
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
             {
-                char *desc    = xml_get_prop(tag, "desc");
+                char *desc = xml_get_prop(tag, "desc");
                 char *content = xml_node_content(tag);
                 if (namedetails.len > 1)
                     appendStringInfoChar(&namedetails, ',');
-                escape_json(&namedetails, desc    ? desc    : "");
+                escape_json(&namedetails, desc ? desc : "");
                 appendStringInfoChar(&namedetails, ':');
                 escape_json(&namedetails, content ? content : "");
             }
         }
     }
 
-    appendStringInfo(&addressparts, "}");
-    appendStringInfo(&extratags, "}");
-    appendStringInfo(&namedetails, "}");
+    appendStringInfoChar(&addressparts, '}');
+    appendStringInfoChar(&extratags, '}');
+    appendStringInfoChar(&namedetails, '}');
 
-    place->addressparts = addressparts.data;
+    place->addressparts = addressparts.data; /* was NameStr(...) — see note */
     place->extratags = extratags.data;
     place->namedetails = namedetails.data;
 
-    state->records = lappend(state->records, place);
+    if (found) /* <-- the actual fix */
+        state->records = lappend(state->records, place);
 
     xmlFreeDoc(state->xmldoc);
     state->xmldoc = NULL;
