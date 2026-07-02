@@ -180,6 +180,20 @@ SELECT pg_sleep(2);
  
 (1 row)
 
+SELECT count(*) <= 3 AS respects_limit
+FROM nominatim_search(server_name => 'osm', q => 'münster', limit_result => 3);
+ respects_limit 
+----------------
+ t
+(1 row)
+
+SELECT pg_sleep(2);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+/* nominatim reverse */
 SELECT 
     osm_id > 0 AS valid_osm_id, 
 	osm_type IS NOT NULL AND osm_type <> '' AS valid_osm_type, 
@@ -298,7 +312,22 @@ FROM nominatim_reverse(
 --------+--------
 (0 rows)
 
-/* nominatim look up */
+SELECT pg_sleep(2);
+ pg_sleep 
+----------
+ 
+(1 row)
+
+SELECT count(*) 
+FROM nominatim_lookup(
+        server_name => 'osm',
+        osm_ids => 'W88291927,R62591');
+ count 
+-------
+     2
+(1 row)
+
+/* nominatim lookup */
 SELECT 
     osm_id, osm_type, 
 	class, 

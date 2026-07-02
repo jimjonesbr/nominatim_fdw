@@ -1,0 +1,55 @@
+/* missing required url */
+CREATE SERVER bad1 FOREIGN DATA WRAPPER nominatim_fdw;
+ERROR:  required option 'url' is missing
+/* invalid url */
+CREATE SERVER bad2 FOREIGN DATA WRAPPER nominatim_fdw OPTIONS (url 'not a url');
+ERROR:  invalid url: 'not a url'
+/* empty option value */
+CREATE SERVER bad3 FOREIGN DATA WRAPPER nominatim_fdw OPTIONS (url '');
+ERROR:  empty value in option 'url'
+/* invalid connect_timeout (non-integer / negative) */
+CREATE SERVER bad4 FOREIGN DATA WRAPPER nominatim_fdw 
+  OPTIONS (url 'https://x.org', connect_timeout 'abc');
+ERROR:  invalid connect_timeout: 'abc'
+HINT:  expected values are positive integers (timeout in seconds)
+CREATE SERVER bad5 FOREIGN DATA WRAPPER nominatim_fdw 
+  OPTIONS (url 'https://x.org', connect_timeout '-5');
+ERROR:  invalid connect_timeout: '-5'
+HINT:  expected values are positive integers (timeout in seconds)
+/* unknown option */
+CREATE SERVER bad6 FOREIGN DATA WRAPPER nominatim_fdw 
+  OPTIONS (url 'https://x.org', bogus_option 'x');
+ERROR:  invalid nominatim_fdw option 'bogus_option'
+/* FOREIGN TABLE explicitly unsupported */
+CREATE SERVER osm 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'https://nominatim.openstreetmap.org');
+CREATE FOREIGN TABLE ft (x int) SERVER osm;
+ERROR:  FOREIGN TABLE not supported
+HINT:  The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.
+ALTER SERVER osm OPTIONS (ADD connect_timeout '60');
+\des+
+                                                                    List of foreign servers
+ Name |  Owner   | Foreign-data wrapper | Access privileges | Type | Version |                            FDW options                            | Description 
+------+----------+----------------------+-------------------+------+---------+-------------------------------------------------------------------+-------------
+ osm  | postgres | nominatim_fdw        |                   |      |         | (url 'https://nominatim.openstreetmap.org', connect_timeout '60') | 
+(1 row)
+
+ALTER SERVER osm OPTIONS (SET connect_timeout '120');
+\des+
+                                                                    List of foreign servers
+ Name |  Owner   | Foreign-data wrapper | Access privileges | Type | Version |                            FDW options                             | Description 
+------+----------+----------------------+-------------------+------+---------+--------------------------------------------------------------------+-------------
+ osm  | postgres | nominatim_fdw        |                   |      |         | (url 'https://nominatim.openstreetmap.org', connect_timeout '120') | 
+(1 row)
+
+ALTER SERVER osm OPTIONS (DROP connect_timeout);
+\des+
+                                                         List of foreign servers
+ Name |  Owner   | Foreign-data wrapper | Access privileges | Type | Version |                 FDW options                 | Description 
+------+----------+----------------------+-------------------+------+---------+---------------------------------------------+-------------
+ osm  | postgres | nominatim_fdw        |                   |      |         | (url 'https://nominatim.openstreetmap.org') | 
+(1 row)
+
+/* clean up */
+DROP SERVER osm;

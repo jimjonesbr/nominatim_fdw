@@ -1,0 +1,31 @@
+CREATE SERVER osm 
+FOREIGN DATA WRAPPER nominatim_fdw 
+OPTIONS (url 'https://nominatim.openstreetmap.org');
+CREATE USER MAPPING FOR foo SERVER osm 
+  OPTIONS (proxy_user 'u', proxy_password 'p');
+ERROR:  role "foo" does not exist
+CREATE USER MAPPING FOR CURRENT_USER SERVER osm 
+  OPTIONS (proxy_user 'u', proxy_password 'p');
+\deu+
+                   List of user mappings
+ Server | User name |             FDW options              
+--------+-----------+--------------------------------------
+ osm    | postgres  | (proxy_user 'u', proxy_password 'p')
+(1 row)
+
+ALTER USER MAPPING FOR CURRENT_USER SERVER osm
+  OPTIONS (SET proxy_password 'p2');
+\deu+
+                   List of user mappings
+ Server | User name |              FDW options              
+--------+-----------+---------------------------------------
+ osm    | postgres  | (proxy_user 'u', proxy_password 'p2')
+(1 row)
+
+/* unknown user mapping option */
+CREATE USER MAPPING FOR CURRENT_USER SERVER osm
+  OPTIONS (bogus 'x');
+ERROR:  user mapping for "postgres" already exists for server "osm"
+DROP USER MAPPING FOR CURRENT_USER SERVER osm;
+/* clean up */
+DROP SERVER osm;

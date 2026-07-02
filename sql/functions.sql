@@ -143,6 +143,13 @@ SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat =
 
 SELECT pg_sleep(2);
 
+SELECT count(*) <= 3 AS respects_limit
+FROM nominatim_search(server_name => 'osm', q => 'münster', limit_result => 3);
+
+SELECT pg_sleep(2);
+
+/* nominatim reverse */
+
 SELECT 
     osm_id > 0 AS valid_osm_id, 
 	osm_type IS NOT NULL AND osm_type <> '' AS valid_osm_type, 
@@ -219,7 +226,16 @@ SELECT osm_id, result
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => 0);
 
-/* nominatim look up */
+SELECT pg_sleep(2);
+
+SELECT count(*) 
+FROM nominatim_lookup(
+        server_name => 'osm',
+        osm_ids => 'W88291927,R62591');
+
+SELECT pg_sleep(2);
+
+/* nominatim lookup */
 
 SELECT 
     osm_id, osm_type, 
