@@ -712,15 +712,18 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
 
     if (funcctx->call_cntr < funcctx->max_calls)
     {
-        Datum values[23];
-        bool nulls[23];
+        int natts = funcctx->attinmeta->tupdesc->natts;
+        Datum *values = palloc(natts * sizeof(Datum));
+        bool *nulls = palloc(natts * sizeof(bool));
         HeapTuple tuple;
         Datum result;
-        NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
+        NominatimRecord *place =
+            (NominatimRecord *)list_nth((List *)funcctx->user_fctx,
+                                        (int)funcctx->call_cntr);
 
-        memset(nulls, 0, sizeof(nulls));
+        memset(nulls, 0, natts * sizeof(bool));
 
-        for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+        for (int i = 0; i < natts; i++)
         {
             Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
             char *value = GetAttributeValue(att, place);
@@ -729,11 +732,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
                 values[i] = CreateDatum(att->atttypid, att->atttypmod, value);
             else
                 nulls[i] = true;
-
-            elog(DEBUG2, "  %s = '%s'", att->attname.data, value);
         }
-
-        elog(DEBUG2, "  %s: creating heap tuple", __func__);
 
         tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
         result = HeapTupleGetDatum(tuple);
@@ -838,15 +837,18 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
 
     if (funcctx->call_cntr < funcctx->max_calls)
     {
-        Datum values[23];
-        bool nulls[23];
+        int natts = funcctx->attinmeta->tupdesc->natts;
+        Datum *values = palloc(natts * sizeof(Datum));
+        bool *nulls = palloc(natts * sizeof(bool));
         HeapTuple tuple;
         Datum result;
-        NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
+        NominatimRecord *place =
+            (NominatimRecord *)list_nth((List *)funcctx->user_fctx,
+                                        (int)funcctx->call_cntr);
 
-        memset(nulls, 0, sizeof(nulls));
+        memset(nulls, 0, natts * sizeof(bool));
 
-        for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+        for (int i = 0; i < natts; i++)
         {
             Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
             char *value = GetAttributeValue(att, place);
@@ -855,11 +857,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
                 values[i] = CreateDatum(att->atttypid, att->atttypmod, value);
             else
                 nulls[i] = true;
-
-            elog(DEBUG2, "  %s: %s = '%s'", __func__, att->attname.data, value);
         }
-
-        elog(DEBUG2, "  %s: creating heap tuple", __func__);
 
         tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
         result = HeapTupleGetDatum(tuple);
@@ -892,10 +890,10 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
         return place->ref;
     else if (strcmp(NameStr(att->attname), "class") == 0)
         return place->class;
+    else if (strcmp(NameStr(att->attname), "type") == 0)
+        return place->type;        
     else if (strcmp(NameStr(att->attname), "display_name") == 0)
         return place->display_name;
-    else if (strcmp(NameStr(att->attname), "display_rank") == 0)
-        return place->display_rank;
     else if (strcmp(NameStr(att->attname), "place_id") == 0)
         return place->place_id;
     else if (strcmp(NameStr(att->attname), "place_rank") == 0)
@@ -1281,6 +1279,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             place->address_rank = xml_get_prop(reversegeocode, "address_rank");
             place->boundingbox = xml_get_prop(reversegeocode, "boundingbox");
             place->class = xml_get_prop(reversegeocode, "class");
+            place->type = xml_get_prop(reversegeocode, "type");
             place->icon = xml_get_prop(reversegeocode, "icon");
             place->importance = xml_get_prop(reversegeocode, "importance");
             place->lat = xml_get_prop(reversegeocode, "lat");
@@ -1409,8 +1408,8 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             place->attribution       = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "attribution");
             place->boundingbox       = xml_get_prop(searchresults, "boundingbox");
             place->class             = xml_get_prop(searchresults, "class");
+            place->type              = xml_get_prop(searchresults, "type");
             place->display_name      = xml_get_prop(searchresults, "display_name");
-            place->display_rank      = xml_get_prop(searchresults, "display_rank");
             place->exclude_place_ids = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "exclude_place_ids");
             place->icon              = xml_get_prop(searchresults, "icon");
             place->importance        = xml_get_prop(searchresults, "importance");
@@ -1420,7 +1419,6 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             place->osm_id            = xml_get_prop(searchresults, "osm_id");
             place->osm_type          = xml_get_prop(searchresults, "osm_type");
             place->place_id          = xml_get_prop(searchresults, "place_id");
-            place->place_rank        = xml_get_prop(searchresults, "place_rank");
 
             place->polygon = xml_get_prop(searchresults, "geotext");
             if (!place->polygon)
@@ -1428,8 +1426,9 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             if (!place->polygon)
                 place->polygon = xml_get_prop(searchresults, "geosvg");
 
-            place->querystring = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "querystring");
+            //place->querystring = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "querystring");
             place->timestamp   = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "timestamp");
+            place->querystring = xml_get_prop(searchresults, "querystring");
 
             for (places = searchresults->children; places != NULL; places = places->next)
             {

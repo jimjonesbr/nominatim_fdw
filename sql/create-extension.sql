@@ -1,1 +1,1 @@
-CREATE EXTENSION nominatim_fdw WITH VERSION '1.0';
+CREATE EXTENSION nominatim_fdw;

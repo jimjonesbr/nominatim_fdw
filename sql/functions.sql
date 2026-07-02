@@ -8,8 +8,8 @@ SELECT nominatim_fdw_version() IS NOT NULL,
 SELECT
     osm_id, osm_type, 
 	class, 
+    type,
 	display_name IS NOT NULL AND display_name <> '' valid_display_name,
-	display_rank, 
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 
@@ -48,9 +48,9 @@ SELECT pg_sleep(2);
 /* unknown address */
 SELECT
     osm_id, osm_type, 
-	class, 
+	class,
+    type,
 	display_name IS NOT NULL AND display_name <> '' valid_display_name,
-	display_rank, 
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 
@@ -86,9 +86,9 @@ FROM nominatim_search(
 
 SELECT 
     osm_id, osm_type, 
-	class, 
+	class,
+    type,
 	display_name IS NOT NULL AND display_name <> '' valid_display_name,
-	display_rank, 
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 
@@ -241,7 +241,6 @@ SELECT
     osm_id, osm_type, 
 	class, 
 	display_name IS NOT NULL AND display_name <> '' valid_display_name,
-	display_rank, 
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 

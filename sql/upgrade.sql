@@ -1,4 +1,9 @@
-SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
+DROP EXTENSION IF EXISTS nominatim_fdw;
+CREATE EXTENSION nominatim_fdw WITH VERSION '1.0';
+
+SELECT extversion
+FROM pg_extension
+WHERE extname = 'nominatim_fdw';
 
 CREATE SERVER osm 
 FOREIGN DATA WRAPPER nominatim_fdw 
