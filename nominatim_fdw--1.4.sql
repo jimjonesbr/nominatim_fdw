@@ -16,7 +16,6 @@ CREATE TYPE NominatimRecord AS (
   ref text,
   class text,
   display_name text,
-  display_rank text,
   place_id bigint,
   place_rank int,
   address_rank int,
@@ -33,7 +32,8 @@ CREATE TYPE NominatimRecord AS (
   more_url text,
   extratags jsonb,
   namedetails jsonb,
-  addressdetails jsonb
+  addressdetails jsonb,
+  type text
 );
 
 CREATE TYPE NominatimReverseGeocode AS ( 

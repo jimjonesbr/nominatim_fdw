@@ -2,3 +2,7 @@
 ALTER FUNCTION nominatim_search(text, text, text, text, text, text, text, text, text, boolean, boolean, boolean, text, text, text, text, text, text, text, boolean, double precision, text, boolean, int, int) VOLATILE;
 ALTER FUNCTION nominatim_lookup(text, text, boolean, boolean, boolean, text, text, text, text, text, text, text, boolean, double precision, text, boolean) VOLATILE;
 ALTER FUNCTION nominatim_reverse(text, double precision, double precision, int, text, boolean, boolean, boolean, text, text) VOLATILE;
+
+/* unused attribute */
+ALTER TYPE NominatimRecord DROP ATTRIBUTE display_rank;
+ALTER TYPE NominatimRecord ADD ATTRIBUTE type text;
