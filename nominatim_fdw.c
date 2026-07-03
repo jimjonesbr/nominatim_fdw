@@ -1419,6 +1419,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             place->osm_id            = xml_get_prop(searchresults, "osm_id");
             place->osm_type          = xml_get_prop(searchresults, "osm_type");
             place->place_id          = xml_get_prop(searchresults, "place_id");
+            place->place_rank        = xml_get_prop(searchresults, "place_rank");
 
             place->polygon = xml_get_prop(searchresults, "geotext");
             if (!place->polygon)
