@@ -270,3 +270,9 @@ FROM nominatim_lookup(
       polygon_threshold => 0.1,
       layer => 'address',
       accept_language => 'de_DE,de,q=0.9');
+
+/* must error, since osm_ids is required */
+SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => '');
+
+/* returns 0 rows (STRICT function) */
+SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => NULL);

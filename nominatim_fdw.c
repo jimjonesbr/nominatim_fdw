@@ -785,6 +785,12 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
             state->accept_language = text_to_cstring(language_text);
 
         state->osm_ids = text_to_cstring(osm_ids_text);
+
+        if (!state->osm_ids || strlen(state->osm_ids) == 0)
+            ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
+                            errmsg("bad request => nothing to look up."),
+                            errhint("a nominatim lookup request requires the 'osm_ids' parameter (a comma-separated list of OSM ids)")));
+
         state->polygon_type = text_to_cstring(polygon_text);
         state->countrycodes = text_to_cstring(countrycodes_text);
         state->layer = text_to_cstring(layer_text);
@@ -957,7 +963,7 @@ static Datum CreateDatum(int pgtype, int pgtypmod, char *value)
     if (!HeapTupleIsValid(tuple))
         ereport(ERROR,
                 (errcode(ERRCODE_FDW_INVALID_DATA_TYPE),
-                 errmsg("cache lookup failed for type %u (osm_id)", pgtype)));
+                 errmsg("cache lookup failed for type %u", pgtype)));
 
     typinput = ((Form_pg_type)GETSTRUCT(tuple))->typinput;
     ReleaseSysCache(tuple);
@@ -1151,33 +1157,15 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 
     return realsize;
 }
-
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp)
 {
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)userp;
     char *ptr;
-    char *content_xml = "content-type: text/xml";
-    char *content_xml_utf8 = "content-type: text/xml; charset=utf-8";
 
     Assert(contents);
 
-    // elog(DEBUG2,"Contents > %s", contents);
-
-    /* is it a "content-type" entry? "*/
-    if (strncasecmp(contents, content_xml, 13) == 0)
-    {
-
-        if (strncasecmp(contents, content_xml, strlen(content_xml)) != 0 &&
-            strncasecmp(contents, content_xml_utf8, strlen(content_xml_utf8)) != 0)
-        {
-            /* remove crlf */
-            if (realsize >= 2)
-                contents[realsize - 2] = '\0';
-            elog(WARNING, "%s: unsupported header entry: \"%s\"", __func__, contents);
-            return 0;
-        }
-    }
+    elog(DEBUG1,"%s: header = \"%s\"", __func__, contents);
 
     ptr = repalloc(mem->memory, mem->size + realsize + 1);
 
@@ -1427,9 +1415,8 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             if (!place->polygon)
                 place->polygon = xml_get_prop(searchresults, "geosvg");
 
-            //place->querystring = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "querystring");
+            place->querystring = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "querystring");
             place->timestamp   = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "timestamp");
-            place->querystring = xml_get_prop(searchresults, "querystring");
 
             for (places = searchresults->children; places != NULL; places = places->next)
             {
