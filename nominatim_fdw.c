@@ -12,26 +12,15 @@
 #include "postgres.h"
 #include "fmgr.h"
 #include "foreign/fdwapi.h"
-#include "optimizer/restrictinfo.h"
-#include "optimizer/planmain.h"
 #include "utils/rel.h"
-
 #include "access/htup_details.h"
 #include "access/sysattr.h"
 #include "access/reloptions.h"
-
 #if PG_VERSION_NUM >= 120000
 #include "access/table.h"
 #endif
-
 #include "foreign/foreign.h"
 #include "commands/defrem.h"
-
-#include "nodes/makefuncs.h"
-#include "nodes/nodeFuncs.h"
-#include "nodes/pg_list.h"
-#include "optimizer/pathnode.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <curl/curl.h>
@@ -55,16 +44,6 @@
 #include "catalog/pg_type.h"
 #include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
-
-#if PG_VERSION_NUM < 120000
-#include "nodes/relation.h"
-#include "optimizer/var.h"
-#include "utils/tqual.h"
-#else
-#include "nodes/pathnodes.h"
-#include "optimizer/optimizer.h"
-#include "access/heapam.h"
-#endif
 #include "utils/date.h"
 #include <utils/elog.h>
 #include <access/tupdesc.h>
@@ -117,8 +96,6 @@ typedef struct NominatimFDWOption
 
 typedef struct NominatimFDWState
 {
-    int numcols;               /* Total number of columns in the foreign table. */
-    int rowcount;              /* Number of rows currently returned to the client */
     int zoom;                  /* Level of detail required for the address. */
     int limit;                 /* Limit the maximum number of returned results. */
     int offset;                /* */
@@ -229,17 +206,9 @@ PG_FUNCTION_INFO_V1(nominatim_fdw_search);
 PG_FUNCTION_INFO_V1(nominatim_fdw_reverse);
 PG_FUNCTION_INFO_V1(nominatim_fdw_lookup);
 
-static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
-static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid);
-static ForeignScan *NominatimGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan);
-static void NominatimBeginForeignScan(ForeignScanState *node, int eflags);
-static TupleTableSlot *NominatimIterateForeignScan(ForeignScanState *node);
-static void NominatimReScanForeignScan(ForeignScanState *node);
-static void NominatimEndForeignScan(ForeignScanState *node);
 static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
 static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place);
 static NominatimFDWState *InitSession(const char *srvname);
-
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp);
 static void ParseNominatimSearchData(NominatimFDWState *state);
@@ -248,103 +217,10 @@ static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
 static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
-static void NominatimGetForeignRelSize(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
-{}
-static void NominatimGetForeignPaths(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid)
-{
-    Path *path;
-
-#if PG_VERSION_NUM >= 180000
-    path = (Path *)create_foreignscan_path(root, baserel,
-                                           NULL,              /* default pathtarget */
-                                           baserel->rows,     /* rows */
-                                           0,                 /* disabled_nodes */
-                                           1,                 /* startup cost */
-                                           1 + baserel->rows, /* total cost */
-                                           NIL,               /* no pathkeys */
-                                           NULL,              /* no required outer relids */
-                                           NULL,              /* no fdw_outerpath */
-                                           NIL,               /* no fdw_restrictinfo */
-                                           NULL);             /* no fdw_private */
-#else
-    path = (Path *)create_foreignscan_path(root, baserel,
-                                           NULL,              /* default pathtarget */
-                                           baserel->rows,     /* rows */
-                                           1,                 /* startup cost */
-                                           1 + baserel->rows, /* total cost */
-                                           NIL,               /* no pathkeys */
-                                           NULL,              /* no required outer relids */
-                                           NULL,              /* no fdw_outerpath */
-#if PG_VERSION_NUM >= 170000
-                                           NIL, /* no fdw_restrictinfo */
-#endif
-                                           NULL); /* no fdw_private */
-#endif
-
-    add_path(baserel, path);
-}
-
-static ForeignScan *NominatimGetForeignPlan(PlannerInfo *root, RelOptInfo *baserel, Oid foreigntableid, ForeignPath *best_path, List *tlist, List *scan_clauses, Plan *outer_plan)
-{
-    List *fdw_private;
-    // NominatimFDWTable *opts = baserel->fdw_private;
-    NominatimFDWState *state = (NominatimFDWState *)palloc0(sizeof(NominatimFDWState));
-
-    fdw_private = list_make1(state);
-
-    scan_clauses = extract_actual_clauses(scan_clauses, false);
-
-    return make_foreignscan(tlist,
-                            scan_clauses,
-                            baserel->relid,
-                            NIL,         /* no expressions we will evaluate */
-                            fdw_private, /* pass along our start and end */
-                            NIL,         /* no custom tlist; our scan tuple looks like tlist */
-                            NIL,         /* no quals we will recheck */
-                            outer_plan);
-}
-
-static void NominatimBeginForeignScan(ForeignScanState *node, int eflags)
-{
-    ForeignScan *fs = (ForeignScan *)node->ss.ps.plan;
-    NominatimFDWState *state = (NominatimFDWState *)linitial(fs->fdw_private);
-
-    if (eflags & EXEC_FLAG_EXPLAIN_ONLY)
-        return;
-
-    node->fdw_state = (void *)state;
-}
-
-static TupleTableSlot *NominatimIterateForeignScan(ForeignScanState *node)
-{
-    TupleTableSlot *slot = node->ss.ss_ScanTupleSlot;
-
-    elog(DEBUG2, "%s called", __func__);
-
-    ExecClearTuple(slot);
-
-    return slot;
-}
-
-static void NominatimReScanForeignScan(ForeignScanState *node)
-{
-}
-
-static void NominatimEndForeignScan(ForeignScanState *node)
-{
-}
 
 Datum nominatim_fdw_handler(PG_FUNCTION_ARGS)
 {
     FdwRoutine *fdwroutine = makeNode(FdwRoutine);
-    fdwroutine->GetForeignRelSize = NominatimGetForeignRelSize;
-    fdwroutine->GetForeignPaths = NominatimGetForeignPaths;
-    fdwroutine->GetForeignPlan = NominatimGetForeignPlan;
-    fdwroutine->BeginForeignScan = NominatimBeginForeignScan;
-    fdwroutine->IterateForeignScan = NominatimIterateForeignScan;
-    fdwroutine->ReScanForeignScan = NominatimReScanForeignScan;
-    fdwroutine->EndForeignScan = NominatimEndForeignScan;
-
     PG_RETURN_POINTER(fdwroutine);
 }
 
