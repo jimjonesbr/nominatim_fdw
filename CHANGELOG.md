@@ -6,6 +6,8 @@ Release date: **YYYY-MM-DD**
 
 * Add error message for invalid coordinate pairs: this adds a check on the reverse call to reject invalid coordinate pairs before sending the request to the server, therefore avoiding a HTTP request that is doomed to fail.
 
+* Add `entrances` column to lookup, search, and reverse calls.
+
 ## Bug fixes
 
 * Fixed memory leaks in XML parsing: `xmlGetProp()` and `xmlNodeGetContent()` return libxml2-heap-allocated strings that were never freed with `xmlFree()`. Introduced `xml_get_prop()` and `xml_node_content()` helper functions that copy the result into palloc'd memory and immediately free the libxml2 string, making ownership clear at a glance.
@@ -13,7 +15,6 @@ Release date: **YYYY-MM-DD**
 * Fixed `nominatim_search`, `nominatim_lookup`, and `nominatim_reverse` incorrectly declared as `IMMUTABLE`, which allowed PostgreSQL to cache or optimize away repeated calls and return stale results. Functions are now correctly declared `VOLATILE`.
 * Fixed build failure when specifying a custom `PG_CONFIG` pointing to a PostgreSQL installation built without `--with-libxml`. The Makefile now uses `PG_CPPFLAGS` (instead of `CFLAGS`) and explicitly includes `xml2-config --cflags`, so libxml2 include paths are always passed to the compiler regardless of which `pg_config` is used.
 * Add missing `type` attribute: the custom data type `NominatimRecord` was missing the attribute `type`. Thid has been now fixed.
-* Add missing `place_rank` column to search and lookup calls: this attribute was not being populated for these functions. Now fixed.
 
 
 # 1.3

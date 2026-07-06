@@ -5,6 +5,8 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 SELECT nominatim_fdw_version() IS NOT NULL, 
        nominatim_fdw_version() <> '';
 
+\x
+
 SELECT
     osm_id, osm_type, 
 	class, 
@@ -21,6 +23,7 @@ SELECT
 	polygon AS geom,
 	exclude_place_ids IS NOT NULL AS valid_exclude_place_ids, 
 	more_url IS NOT NULL AND more_url <> '' AS valid_more_url,
+    jsonb_pretty(entrances) AS entrances,
     jsonb_pretty(extratags) AS extratags, 
 	jsonb_pretty(namedetails) AS namedetails,
     jsonb_pretty(addressdetails) AS addressdetails
@@ -41,7 +44,8 @@ FROM nominatim_search(
       layer => 'address,poi',
       limit_result => 1,
       bounded => false,
-      accept_language => 'de_DE,de,q=0.9');
+      accept_language => 'de_DE,de,q=0.9',
+      entrances => 1);
 
 SELECT pg_sleep(2);
 
@@ -162,10 +166,11 @@ SELECT
 	timestamp IS NOT NULL AS valid_timestamp, 
 	attribution IS NOT NULL AND attribution <> '' AS valid_attribution,  
 	querystring, 
-    polygon AS geom, 
-	jsonb_pretty(extratags) IS NOT NULL AS valid_extratags, 
-    jsonb_pretty(namedetails) IS NOT NULL AS valid_namedetails, 
-	jsonb_pretty(addressparts) IS NOT NULL AS valid_addressparts
+    polygon AS geom,
+    jsonb_pretty(entrances) AS entrances, 
+	jsonb_pretty(extratags) AS extratags, 
+    jsonb_pretty(namedetails) AS namedetails, 
+	jsonb_pretty(addressparts) AS addressparts
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
@@ -175,7 +180,8 @@ FROM nominatim_reverse(
         addressdetails => true,
         namedetails => true,
         accept_language => 'de_DE,de,q=0.9',
-        zoom => 18);
+        zoom => 18,
+        entrances => 1);
 
 SELECT pg_sleep(2);
 
@@ -251,6 +257,7 @@ SELECT
 	attribution,
     querystring, 
 	polygon AS geom, 
+    jsonb_pretty(entrances) AS entrances,
     jsonb_pretty(extratags) AS extratags, 
 	jsonb_pretty(namedetails) AS namedetails,
     jsonb_pretty(addressdetails) AS addressdetails
@@ -260,15 +267,10 @@ FROM nominatim_lookup(
       extratags => true,
       addressdetails => true,
       namedetails => true,
+      entrances => 1,
       polygon => 'polygon_text',
       email => 'jim.jones@uni-muenster.de',
-      countrycodes => 'DE,BR,US',
-      featuretype => 'office',
-      dedupe => true,
-      exclude_place_ids => '42,73',
-      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
       polygon_threshold => 0.1,
-      layer => 'address',
       accept_language => 'de_DE,de,q=0.9');
 
 /* must error, since osm_ids is required */

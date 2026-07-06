@@ -99,6 +99,7 @@ typedef struct NominatimFDWState
     int zoom;                  /* Level of detail required for the address. */
     int limit;                 /* Limit the maximum number of returned results. */
     int offset;                /* */
+    int entrances;             /* tagged entrances in the result */
     char *request_type;        /* one of: search, reverse or lookup*/
     char *url;                 /* URL of the Nominatim endpoint */
     char *osm_ids;             /* a comma-separated list of OSM ids each prefixed with its type: N, W or R */
@@ -167,6 +168,7 @@ typedef struct NominatimRecord
     char *addressdetails;
     char *namedetails;
     char *addressparts;
+    char *entrances;
     char *result;
 } NominatimRecord;
 
@@ -349,6 +351,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
     bool namedetails = PG_GETARG_BOOL(7);
     text *polygon_text = PG_GETARG_TEXT_P(8);
     text *language_text = PG_GETARG_TEXT_P(9);
+    int entrances = PG_GETARG_INT32(10);
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
@@ -374,6 +377,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         state->extratags = extratags;
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
+        state->entrances = entrances;
 
         if (state->layer && !IsLayerValid(state->layer))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -427,15 +431,18 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
 
     if (funcctx->call_cntr < funcctx->max_calls)
     {
-        Datum values[18];
-        bool nulls[18];
+        int natts = funcctx->attinmeta->tupdesc->natts;
+        Datum *values = palloc(natts * sizeof(Datum));
+        bool *nulls = palloc(natts * sizeof(bool));
         HeapTuple tuple;
         Datum result;
-        NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx, (int)funcctx->call_cntr);
+        NominatimRecord *place =
+            (NominatimRecord *)list_nth((List *)funcctx->user_fctx,
+                                        (int)funcctx->call_cntr);
 
-        memset(nulls, 0, sizeof(nulls));
+        memset(nulls, 0, natts * sizeof(nulls));
 
-        for (size_t i = 0; i < funcctx->attinmeta->tupdesc->natts; i++)
+        for (int i = 0; i < natts; i++)
         {
             Form_pg_attribute att = TupleDescAttr(funcctx->attinmeta->tupdesc, i);
             char *value = GetAttributeValue(att, place);
@@ -445,10 +452,10 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
             else
                 nulls[i] = true;
 
-            elog(DEBUG2, "  %s = '%s'", att->attname.data, value);
+            elog(DEBUG2, "%s: %s = '%s'",__func__, att->attname.data, value);
         }
 
-        elog(DEBUG2, "  %s: creating heap tuple", __func__);
+        elog(DEBUG2, "%s: creating heap tuple", __func__);
 
         tuple = heap_form_tuple(funcctx->attinmeta->tupdesc, values, nulls);
         result = HeapTupleGetDatum(tuple);
@@ -493,6 +500,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
     bool dedupe = PG_GETARG_BOOL(22);
     int limit = PG_GETARG_INT32(23);
     int offset = PG_GETARG_INT32(24);
+    int entrtances = PG_GETARG_INT32(25);
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
@@ -532,6 +540,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->namedetails = namedetails;
         state->limit = limit;
         state->offset = offset;
+        state->entrances = entrtances;
         state->request_type = NOMINATIM_REQUEST_SEARCH;
 
         if (((state->amenity && strlen(state->amenity) > 0) ||
@@ -635,16 +644,10 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
     bool addressdetails = PG_GETARG_BOOL(3);
     bool namedetails = PG_GETARG_BOOL(4);
     text *polygon_text = PG_GETARG_TEXT_P(5);
-    text *language_text = PG_GETARG_TEXT_P(6);
-    text *countrycodes_text = PG_GETARG_TEXT_P(7);
-    text *layer_text = PG_GETARG_TEXT_P(8);
-    text *featuretype_text = PG_GETARG_TEXT_P(9);
-    text *excludeids_text = PG_GETARG_TEXT_P(10);
-    text *viewbox_text = PG_GETARG_TEXT_P(11);
-    bool bounded = PG_GETARG_BOOL(12);
-    float8 polygon_threshold = PG_GETARG_FLOAT8(13);
-    text *email_text = PG_GETARG_TEXT_P(14);
-    bool dedupe = PG_GETARG_BOOL(15);
+    int entrances = PG_GETARG_INT32(6);
+    text *language_text = PG_GETARG_TEXT_P(7);
+    float8 polygon_threshold = PG_GETARG_FLOAT8(8);
+    text *email_text = PG_GETARG_TEXT_P(9);
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
@@ -657,9 +660,6 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         state = InitSession(text_to_cstring(srvname_text));
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        if (language_text && strlen(text_to_cstring(language_text)) > 0)
-            state->accept_language = text_to_cstring(language_text);
-
         state->osm_ids = text_to_cstring(osm_ids_text);
 
         if (!state->osm_ids || strlen(state->osm_ids) == 0)
@@ -667,25 +667,15 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
                             errmsg("bad request => nothing to look up."),
                             errhint("a nominatim lookup request requires the 'osm_ids' parameter (a comma-separated list of OSM ids)")));
 
-        state->polygon_type = text_to_cstring(polygon_text);
-        state->countrycodes = text_to_cstring(countrycodes_text);
-        state->layer = text_to_cstring(layer_text);
-        state->feature_type = text_to_cstring(featuretype_text);
-        state->exclude_place_ids = text_to_cstring(excludeids_text);
-        state->viewbox = text_to_cstring(viewbox_text);
-        state->bounded = bounded;
-        state->polygon_threshold = polygon_threshold;
-        state->email = text_to_cstring(email_text);
-        state->dedupe = dedupe;
         state->extratags = extratags;
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
+        state->polygon_type = text_to_cstring(polygon_text);
+        state->entrances = entrances;
+        state->accept_language = text_to_cstring(language_text);
+        state->polygon_threshold = polygon_threshold;
+        state->email = text_to_cstring(email_text);
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
-
-        if (state->layer && !IsLayerValid(state->layer))
-            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-                            errmsg("invalid layer '%s'", state->layer),
-                            errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -724,8 +714,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         bool *nulls = palloc(natts * sizeof(bool));
         HeapTuple tuple;
         Datum result;
-        NominatimRecord *place =
-            (NominatimRecord *)list_nth((List *)funcctx->user_fctx,
+        NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx,
                                         (int)funcctx->call_cntr);
 
         memset(nulls, 0, natts * sizeof(bool));
@@ -814,6 +803,8 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
         return place->result;
     else if (strcmp(NameStr(att->attname), "addressparts") == 0)
         return place->addressparts;
+    else if (strcmp(NameStr(att->attname), "entrances") == 0)
+        return place->entrances;
     else
         return NULL;
 }
@@ -1106,6 +1097,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     StringInfoData addressparts;
     StringInfoData extratags;
     StringInfoData namedetails;
+    StringInfoData entrances;
     bool found = false;
 
     elog(DEBUG1, "%s called", __func__);
@@ -1125,9 +1117,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     initStringInfo(&addressparts);
     initStringInfo(&extratags);
     initStringInfo(&namedetails);
+    initStringInfo(&entrances);
     appendStringInfoChar(&addressparts, '{');
     appendStringInfoChar(&extratags, '{');
     appendStringInfoChar(&namedetails, '{');
+    appendStringInfoChar(&entrances, '[');
 
     place->timestamp = xml_get_prop(root, "timestamp");
     place->attribution = xml_get_prop(root, "attribution");
@@ -1137,8 +1131,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     {
         if (xmlStrcmp(reversegeocode->name, (xmlChar *)"result") == 0)
         {
-            found = true; /* <-- only now do we have a real row */
-
+            found = true;
             place->ref = xml_get_prop(reversegeocode, "ref");
             place->address_rank = xml_get_prop(reversegeocode, "address_rank");
             place->boundingbox = xml_get_prop(reversegeocode, "boundingbox");
@@ -1186,6 +1179,37 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
                 escape_json(&extratags, value ? value : "");
             }
         }
+        else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"entrances") == 0)
+        {
+            bool first_entrance = true;
+
+            for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
+            {
+                xmlAttrPtr attr;
+                bool first_attr = true;
+
+                if (!first_entrance)
+                    appendStringInfoChar(&entrances, ',');
+                first_entrance = false;
+
+                appendStringInfoChar(&entrances, '{');
+
+                for (attr = tag->properties; attr != NULL; attr = attr->next)
+                {
+                    char *value = xml_get_prop(tag, (const char *)attr->name);
+
+                    if (!first_attr)
+                        appendStringInfoChar(&entrances, ',');
+                    first_attr = false;
+
+                    escape_json(&entrances, (char *)attr->name);
+                    appendStringInfoChar(&entrances, ':');
+                    escape_json(&entrances, value ? value : "");
+                }
+
+                appendStringInfoChar(&entrances, '}');
+            }
+        }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"namedetails") == 0)
         {
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
@@ -1204,12 +1228,14 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     appendStringInfoChar(&addressparts, '}');
     appendStringInfoChar(&extratags, '}');
     appendStringInfoChar(&namedetails, '}');
+    appendStringInfoChar(&entrances, ']');
 
-    place->addressparts = addressparts.data; /* was NameStr(...) — see note */
+    place->addressparts = addressparts.data;
     place->extratags = extratags.data;
     place->namedetails = namedetails.data;
+    place->entrances = entrances.data;
 
-    if (found) /* <-- the actual fix */
+    if (found)
         state->records = lappend(state->records, place);
 
     xmlFreeDoc(state->xmldoc);
@@ -1258,14 +1284,18 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             StringInfoData xtags;
             StringInfoData addressdetails;
             StringInfoData namedetails;
+            StringInfoData entrances;
 
             initStringInfo(&xtags);
             initStringInfo(&addressdetails);
             initStringInfo(&namedetails);
+            initStringInfo(&entrances);
 
             appendStringInfo(&xtags, "{");
             appendStringInfo(&addressdetails, "{");
             appendStringInfo(&namedetails, "{");
+            appendStringInfoChar(&entrances, '[');
+            
 
             place->ref               = xml_get_prop(searchresults, "ref");
             place->address_rank      = xml_get_prop(searchresults, "address_rank");
@@ -1334,6 +1364,37 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                     place->polygon = pstrdup((char *)buffer->content);
                     xmlBufferFree(buffer);
                 }
+                else if (xmlStrcmp(places->name, (xmlChar *)"entrances") == 0)
+                {
+                    bool first_entrance = true;
+
+                    for (tag = places->children; tag != NULL; tag = tag->next)
+                    {
+                        xmlAttrPtr attr;
+                        bool first_attr = true;
+
+                        if (!first_entrance)
+                            appendStringInfoChar(&entrances, ',');
+                        first_entrance = false;
+
+                        appendStringInfoChar(&entrances, '{');
+
+                        for (attr = tag->properties; attr != NULL; attr = attr->next)
+                        {
+                            char *value = xml_get_prop(tag, (const char *)attr->name);
+
+                            if (!first_attr)
+                                appendStringInfoChar(&entrances, ',');
+                            first_attr = false;
+
+                            escape_json(&entrances, (char *)attr->name);
+                            appendStringInfoChar(&entrances, ':');
+                            escape_json(&entrances, value ? value : "");
+                        }
+
+                        appendStringInfoChar(&entrances, '}');
+                    }
+                }
                 else
                 {
                     char *content = xml_node_content(places);
@@ -1348,10 +1409,12 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             appendStringInfo(&xtags, "}");
             appendStringInfo(&addressdetails, "}");
             appendStringInfo(&namedetails, "}");
+            appendStringInfoChar(&entrances, ']');
 
             place->extratags = xtags.data;
             place->addressdetails = addressdetails.data;
             place->namedetails = namedetails.data;
+            place->entrances = entrances.data;
 
             state->records = lappend(state->records, place);
         }
@@ -1431,6 +1494,9 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     if (state->zoom)
         appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
+
+    if (state->entrances)
+        appendStringInfo(&url_buffer, "entrances=%d&", state->entrances);
 
     if (state->extratags)
         appendStringInfo(&url_buffer, "extratags=1&");
@@ -1540,7 +1606,6 @@ static int ExecuteRequest(NominatimFDWState *state)
             }
         }
 
-        //curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
         curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);

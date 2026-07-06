@@ -33,6 +33,7 @@ CREATE TYPE NominatimRecord AS (
   extratags jsonb,
   namedetails jsonb,
   addressdetails jsonb,
+  entrances jsonb,
   type text
 );
 
@@ -54,7 +55,8 @@ CREATE TYPE NominatimReverseGeocode AS (
   polygon text,
   extratags jsonb,
   namedetails jsonb,
-  addressparts jsonb
+  addressparts jsonb,
+  entrances jsonb
 );
 
 CREATE FUNCTION nominatim_search(
@@ -82,7 +84,8 @@ CREATE FUNCTION nominatim_search(
     email text DEFAULT '',
     dedupe boolean DEFAULT true,
     limit_result int DEFAULT 0,
-    offset_result int DEFAULT 0)
+    offset_result int DEFAULT 0,
+    entrances int DEFAULT 0)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_search'
 LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 
@@ -93,16 +96,10 @@ CREATE FUNCTION nominatim_lookup(
     addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
     polygon text DEFAULT '',
+    entrances int DEFAULT 0,    
     accept_language text DEFAULT '',    
-    countrycodes text DEFAULT '',
-    layer text DEFAULT '',
-    featuretype text DEFAULT '',
-    exclude_place_ids text DEFAULT '',
-    viewbox text DEFAULT '',
-    bounded boolean DEFAULT false,
     polygon_threshold double precision DEFAULT 0.0,
-    email text DEFAULT '',
-    dedupe boolean DEFAULT true)
+    email text DEFAULT '')
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_lookup'
 LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 
@@ -116,7 +113,8 @@ CREATE FUNCTION nominatim_reverse(
     addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
     polygon text DEFAULT '',
-    accept_language text DEFAULT '')
+    accept_language text DEFAULT '',
+    entrances int DEFAULT 0)
 RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_reverse'
 LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 
