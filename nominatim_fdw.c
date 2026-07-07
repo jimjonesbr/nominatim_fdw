@@ -98,7 +98,6 @@ typedef struct NominatimFDWState
 {
     int zoom;                  /* Level of detail required for the address. */
     int limit;                 /* Limit the maximum number of returned results. */
-    int offset;                /* */
     int entrances;             /* tagged entrances in the result */
     char *request_type;        /* one of: search, reverse or lookup*/
     char *url;                 /* URL of the Nominatim endpoint */
@@ -499,8 +498,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
     text *email_text = PG_GETARG_TEXT_P(21);
     bool dedupe = PG_GETARG_BOOL(22);
     int limit = PG_GETARG_INT32(23);
-    int offset = PG_GETARG_INT32(24);
-    int entrtances = PG_GETARG_INT32(25);
+    int entrtances = PG_GETARG_INT32(24);
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
@@ -539,7 +537,6 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
         state->limit = limit;
-        state->offset = offset;
         state->entrances = entrtances;
         state->request_type = NOMINATIM_REQUEST_SEARCH;
 
@@ -1546,9 +1543,6 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     if (state->limit > 0)
         appendStringInfo(&url_buffer, "limit=%d&", state->limit);
-
-    if (state->offset > 0)
-        appendStringInfo(&url_buffer, "offset=%d&", state->offset);
 
     if (curl)
     {

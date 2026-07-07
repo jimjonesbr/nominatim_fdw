@@ -1,7 +1,7 @@
 /* Fix incorrect IMMUTABLE volatility on functions that make HTTP requests */
-ALTER FUNCTION nominatim_search(text, text, text, text, text, text, text, text, text, boolean, boolean, boolean, text, text, text, text, text, text, text, boolean, double precision, text, boolean, int, int) VOLATILE;
+--ALTER FUNCTION nominatim_search(text, text, text, text, text, text, text, text, text, boolean, boolean, boolean, text, text, text, text, text, text, text, boolean, double precision, text, boolean, int, int) VOLATILE;
 --ALTER FUNCTION nominatim_lookup(text, text, boolean, boolean, boolean, text, text, text, text, text, text, text, boolean, double precision, text, boolean) VOLATILE;
-ALTER FUNCTION nominatim_reverse(text, double precision, double precision, int, text, boolean, boolean, boolean, text, text) VOLATILE;
+--ALTER FUNCTION nominatim_reverse(text, double precision, double precision, int, text, boolean, boolean, boolean, text, text) VOLATILE;
 
 /* drop unused attribute */
 ALTER TYPE NominatimRecord DROP ATTRIBUTE display_rank;
@@ -52,7 +52,6 @@ CREATE FUNCTION nominatim_search(
     email text DEFAULT '',
     dedupe boolean DEFAULT true,
     limit_result int DEFAULT 0,
-    offset_result int DEFAULT 0,
     entrances int DEFAULT 0)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_search'
 LANGUAGE C VOLATILE STRICT PARALLEL SAFE;

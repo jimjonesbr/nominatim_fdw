@@ -84,7 +84,6 @@ CREATE FUNCTION nominatim_search(
     email text DEFAULT '',
     dedupe boolean DEFAULT true,
     limit_result int DEFAULT 0,
-    offset_result int DEFAULT 0,
     entrances int DEFAULT 0)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_search'
 LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
