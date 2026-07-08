@@ -50,43 +50,10 @@ FROM nominatim_search(
 SELECT pg_sleep(2);
 
 /* unknown address */
-SELECT
-    osm_id, osm_type, 
-	class,
-    type,
-	display_name IS NOT NULL AND display_name <> '' valid_display_name,
-	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
-	place_rank,
-    lon, lat, boundingbox, 
-	importance, 
-	icon, 
-	timestamp IS NOT NULL AS valid_timestamp, 
-	attribution,
-    querystring, 
-	polygon AS geom,
-	exclude_place_ids IS NOT NULL AS valid_exclude_place_ids, 
-	more_url IS NOT NULL AND more_url <> '' AS valid_more_url,
-    jsonb_pretty(extratags) AS extratags, 
-	jsonb_pretty(namedetails) AS namedetails,
-    jsonb_pretty(addressdetails) AS addressdetails
+SELECT *
 FROM nominatim_search(
       server_name => 'osm',
-      q => 'foo 42, bar',
-      extratags => true,
-      addressdetails => true,
-      namedetails => true,
-      polygon => 'polygon_text',
-      email => 'jim.jones@uni-muenster.de',
-      countrycodes => 'DE,BR,US',
-      featuretype => 'poi',
-      dedupe => true,
-      exclude_place_ids => '42,73',
-      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
-      polygon_threshold => 0.1,
-      layer => 'address,poi',
-      limit_result => 1,
-      bounded => false,
-      accept_language => 'de_DE,de,q=0.9');
+      q => 'foo 42, bar');
 
 SELECT 
     osm_id, osm_type, 
@@ -110,12 +77,8 @@ SELECT
     jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_search(
       server_name => 'osm',
-      amenity => 'wwu it',
+      amenity => 'cit',
       polygon => 'polygon_text',
-      extratags => true,
-      addressdetails => true,
-      namedetails => true,     
-      entrances => false, 
       street => 'einsteinstraße 60',
       city => 'münster',
       state => 'nordrhein westfalen',

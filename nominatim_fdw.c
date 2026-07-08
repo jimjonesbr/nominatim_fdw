@@ -1503,8 +1503,6 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     if (state->addressdetails)
         appendStringInfo(&url_buffer, "addressdetails=1&");
-    else
-        appendStringInfo(&url_buffer, "addressdetails=0&");
 
     if (state->polygon_type && strlen(state->polygon_type) > 0)
         appendStringInfo(&url_buffer, "%s=1&", state->polygon_type);
