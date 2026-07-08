@@ -13,7 +13,7 @@ SELECT
     osm_id, osm_type, 
 	class, 
     type,
-	display_name IS NOT NULL AND display_name <> '' valid_display_name,
+	display_name,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 
@@ -23,8 +23,8 @@ SELECT
 	attribution,
     querystring, 
 	polygon AS geom,
-	exclude_place_ids IS NOT NULL AS valid_exclude_place_ids, 
-	more_url IS NOT NULL AND more_url <> '' AS valid_more_url,
+	exclude_place_ids, 
+	more_url,
     jsonb_pretty(entrances) AS entrances,
     jsonb_pretty(extratags) AS extratags, 
 	jsonb_pretty(namedetails) AS namedetails,
@@ -48,63 +48,63 @@ FROM nominatim_search(
       bounded => false,
       accept_language => 'de_DE,de,q=0.9',
       entrances => true);
--[ RECORD 1 ]-----------+-----------------------------------------------------------------------------------------------
-osm_id                  | 88291927
-osm_type                | way
-class                   | office
-type                    | university
-valid_display_name      | t
-valid_place_id          | t
-place_rank              | 30
-lon                     | 7.6038115
-lat                     | 51.9660873
-boundingbox             | 51.9659397,51.9661584,7.6036345,7.6039893
-importance              | 7.215915159833703e-05
-icon                    | 
-valid_timestamp         | t
-attribution             | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
-querystring             | einsteinstraße 60, münster, germany
-geom                    | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
-valid_exclude_place_ids | t
-valid_more_url          | t
-entrances               | [                                                                                             +
-                        |     {                                                                                         +
-                        |         "lat": "51.9659399",                                                                  +
-                        |         "lon": "7.6038173",                                                                   +
-                        |         "type": "yes",                                                                        +
-                        |         "osm_id": "1025561849"                                                                +
-                        |     }                                                                                         +
-                        | ]
-extratags               | {                                                                                             +
-                        |     "building": "university",                                                                 +
-                        |     "roof:shape": "flat",                                                                     +
-                        |     "wheelchair": "yes",                                                                      +
-                        |     "roof:colour": "#A9A9A9",                                                                 +
-                        |     "old_short_name": "ZIV",                                                                  +
-                        |     "building:colour": "#D3D3D3",                                                             +
-                        |     "building:levels": "2",                                                                   +
-                        |     "contact:website": "https://www.uni-muenster.de/IT/"                                      +
-                        | }
-namedetails             | {                                                                                             +
-                        |     "name": "Center for Information Technology",                                              +
-                        |     "name:de": "Center for Information Technology",                                           +
-                        |     "old_name": "Zentrum für Informationsverarbeitung",                                       +
-                        |     "short_name": "CIT"                                                                       +
-                        | }
-addressdetails          | {                                                                                             +
-                        |     "city": "Münster",                                                                        +
-                        |     "road": "Einsteinstraße",                                                                 +
-                        |     "state": "Nordrhein-Westfalen",                                                           +
-                        |     "office": "Center for Information Technology",                                            +
-                        |     "suburb": "Innenstadtring",                                                               +
-                        |     "country": "Deutschland",                                                                 +
-                        |     "postcode": "48149",                                                                      +
-                        |     "country_code": "de",                                                                     +
-                        |     "house_number": "60",                                                                     +
-                        |     "city_district": "Münster-Mitte",                                                         +
-                        |     "neighbourhood": "Neutor",                                                                +
-                        |     "ISO3166-2-lvl4": "DE-NW"                                                                 +
-                        | }
+-[ RECORD 1 ]-----+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+osm_id            | 88291927
+osm_type          | way
+class             | office
+type              | university
+display_name      | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, Nordrhein-Westfalen, 48149, Deutschland
+valid_place_id    | t
+place_rank        | 30
+lon               | 7.6038115
+lat               | 51.9660873
+boundingbox       | 51.9659397,51.9661584,7.6036345,7.6039893
+importance        | 7.215915159833703e-05
+icon              | 
+valid_timestamp   | t
+attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
+querystring       | einsteinstraße 60, münster, germany
+geom              | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
+exclude_place_ids | W88291927,42,73
+more_url          | https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe+60%2C+m%C3%BCnster%2C+germany&polygon_text=1&addressdetails=1&entrances=1&namedetails=1&extratags=1&polygon_threshold=0.1&limit=2&countrycodes=de%2Cbr%2Cus&exclude_place_ids=W88291927%2C42%2C73&viewbox=7.603635%2C7.603989%2C51.96594%2C51.96616&format=xml
+entrances         | [                                                                                                                                                                                                                                                                                                                              +
+                  |     {                                                                                                                                                                                                                                                                                                                          +
+                  |         "lat": "51.9659399",                                                                                                                                                                                                                                                                                                   +
+                  |         "lon": "7.6038173",                                                                                                                                                                                                                                                                                                    +
+                  |         "type": "yes",                                                                                                                                                                                                                                                                                                         +
+                  |         "osm_id": "1025561849"                                                                                                                                                                                                                                                                                                 +
+                  |     }                                                                                                                                                                                                                                                                                                                          +
+                  | ]
+extratags         | {                                                                                                                                                                                                                                                                                                                              +
+                  |     "building": "university",                                                                                                                                                                                                                                                                                                  +
+                  |     "roof:shape": "flat",                                                                                                                                                                                                                                                                                                      +
+                  |     "wheelchair": "yes",                                                                                                                                                                                                                                                                                                       +
+                  |     "roof:colour": "#A9A9A9",                                                                                                                                                                                                                                                                                                  +
+                  |     "old_short_name": "ZIV",                                                                                                                                                                                                                                                                                                   +
+                  |     "building:colour": "#D3D3D3",                                                                                                                                                                                                                                                                                              +
+                  |     "building:levels": "2",                                                                                                                                                                                                                                                                                                    +
+                  |     "contact:website": "https://www.uni-muenster.de/IT/"                                                                                                                                                                                                                                                                       +
+                  | }
+namedetails       | {                                                                                                                                                                                                                                                                                                                              +
+                  |     "name": "Center for Information Technology",                                                                                                                                                                                                                                                                               +
+                  |     "name:de": "Center for Information Technology",                                                                                                                                                                                                                                                                            +
+                  |     "old_name": "Zentrum für Informationsverarbeitung",                                                                                                                                                                                                                                                                        +
+                  |     "short_name": "CIT"                                                                                                                                                                                                                                                                                                        +
+                  | }
+addressdetails    | {                                                                                                                                                                                                                                                                                                                              +
+                  |     "city": "Münster",                                                                                                                                                                                                                                                                                                         +
+                  |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                  +
+                  |     "state": "Nordrhein-Westfalen",                                                                                                                                                                                                                                                                                            +
+                  |     "office": "Center for Information Technology",                                                                                                                                                                                                                                                                             +
+                  |     "suburb": "Innenstadtring",                                                                                                                                                                                                                                                                                                +
+                  |     "country": "Deutschland",                                                                                                                                                                                                                                                                                                  +
+                  |     "postcode": "48149",                                                                                                                                                                                                                                                                                                       +
+                  |     "country_code": "de",                                                                                                                                                                                                                                                                                                      +
+                  |     "house_number": "60",                                                                                                                                                                                                                                                                                                      +
+                  |     "city_district": "Münster-Mitte",                                                                                                                                                                                                                                                                                          +
+                  |     "neighbourhood": "Neutor",                                                                                                                                                                                                                                                                                                 +
+                  |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                                                                                                                                                                                                  +
+                  | }
 
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
@@ -121,7 +121,7 @@ SELECT
     osm_id, osm_type, 
 	class,
     type,
-	display_name IS NOT NULL AND display_name <> '' valid_display_name,
+	display_name,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 
@@ -131,8 +131,8 @@ SELECT
 	attribution,
     querystring, 
 	polygon AS geom,
-	exclude_place_ids IS NOT NULL AS valid_exclude_place_ids, 
-	more_url IS NOT NULL AND more_url <> '' AS valid_more_url,
+	exclude_place_ids, 
+	more_url,
     jsonb_pretty(entrances) AS entrances, 
     jsonb_pretty(extratags) AS extratags, 
 	jsonb_pretty(namedetails) AS namedetails,
@@ -156,45 +156,45 @@ FROM nominatim_search(
       layer => 'address',
       limit_result => 1,
       accept_language => 'de_DE,de,q=0.9');
--[ RECORD 1 ]-----------+-----------------------------------------------------------------------------------------------
-osm_id                  | 88291927
-osm_type                | way
-class                   | office
-type                    | university
-valid_display_name      | t
-valid_place_id          | t
-place_rank              | 30
-lon                     | 7.6038115
-lat                     | 51.9660873
-boundingbox             | 51.9659397,51.9661584,7.6036345,7.6039893
-importance              | 7.215915159833703e-05
-icon                    | 
-valid_timestamp         | t
-attribution             | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
-querystring             | cit, einsteinstraße 60, münster, nordrhein westfalen, 48149, germany
-geom                    | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
-valid_exclude_place_ids | t
-valid_more_url          | t
-entrances               | [                                                                                             +
-                        | ]
-extratags               | {                                                                                             +
-                        | }
-namedetails             | {                                                                                             +
-                        | }
-addressdetails          | {                                                                                             +
-                        |     "city": "Münster",                                                                        +
-                        |     "road": "Einsteinstraße",                                                                 +
-                        |     "state": "Nordrhein-Westfalen",                                                           +
-                        |     "office": "Center for Information Technology",                                            +
-                        |     "suburb": "Innenstadtring",                                                               +
-                        |     "country": "Deutschland",                                                                 +
-                        |     "postcode": "48149",                                                                      +
-                        |     "country_code": "de",                                                                     +
-                        |     "house_number": "60",                                                                     +
-                        |     "city_district": "Münster-Mitte",                                                         +
-                        |     "neighbourhood": "Neutor",                                                                +
-                        |     "ISO3166-2-lvl4": "DE-NW"                                                                 +
-                        | }
+-[ RECORD 1 ]-----+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+osm_id            | 88291927
+osm_type          | way
+class             | office
+type              | university
+display_name      | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, Nordrhein-Westfalen, 48149, Deutschland
+valid_place_id    | t
+place_rank        | 30
+lon               | 7.6038115
+lat               | 51.9660873
+boundingbox       | 51.9659397,51.9661584,7.6036345,7.6039893
+importance        | 7.215915159833703e-05
+icon              | 
+valid_timestamp   | t
+attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
+querystring       | cit, einsteinstraße 60, münster, nordrhein westfalen, 48149, germany
+geom              | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
+exclude_place_ids | W88291927,42,73
+more_url          | https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe+60&city=m%C3%BCnster&state=nordrhein+westfalen&postalcode=48149&country=germany&polygon_text=1&addressdetails=1&polygon_threshold=0.1&limit=2&countrycodes=de%2Cbr%2Cus&exclude_place_ids=W88291927%2C42%2C73&viewbox=7.603635%2C7.603989%2C51.96594%2C51.96616&format=xml
+entrances         | [                                                                                                                                                                                                                                                                                                                                                           +
+                  | ]
+extratags         | {                                                                                                                                                                                                                                                                                                                                                           +
+                  | }
+namedetails       | {                                                                                                                                                                                                                                                                                                                                                           +
+                  | }
+addressdetails    | {                                                                                                                                                                                                                                                                                                                                                           +
+                  |     "city": "Münster",                                                                                                                                                                                                                                                                                                                                      +
+                  |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                                               +
+                  |     "state": "Nordrhein-Westfalen",                                                                                                                                                                                                                                                                                                                         +
+                  |     "office": "Center for Information Technology",                                                                                                                                                                                                                                                                                                          +
+                  |     "suburb": "Innenstadtring",                                                                                                                                                                                                                                                                                                                             +
+                  |     "country": "Deutschland",                                                                                                                                                                                                                                                                                                                               +
+                  |     "postcode": "48149",                                                                                                                                                                                                                                                                                                                                    +
+                  |     "country_code": "de",                                                                                                                                                                                                                                                                                                                                   +
+                  |     "house_number": "60",                                                                                                                                                                                                                                                                                                                                   +
+                  |     "city_district": "Münster-Mitte",                                                                                                                                                                                                                                                                                                                       +
+                  |     "neighbourhood": "Neutor",                                                                                                                                                                                                                                                                                                                              +
+                  |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                                                                                                                                                                                                                               +
+                  | }
 
 /* q combined with structured params => should error */
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'foo', city => 'münster');
@@ -229,16 +229,16 @@ pg_sleep |
 
 /* nominatim reverse */
 SELECT 
-    osm_id > 0 AS valid_osm_id, 
-	osm_type IS NOT NULL AND osm_type <> '' AS valid_osm_type, 
-	result IS NOT NULL AND result <> '' AS valid_result,
+    osm_id, 
+	osm_type, 
+	display_name,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank, 
-	lon > 0 AS valid_lon, lat > 0 AS valid_lat, 
-	array_length(string_to_array(boundingbox,','),1) = 4 AS valid_bbox, 
+	lon, 
+	boundingbox, 
     icon, 
 	timestamp IS NOT NULL AS valid_timestamp, 
-	attribution IS NOT NULL AND attribution <> '' AS valid_attribution,  
+	attribution,  
 	querystring, 
     polygon AS geom,
     jsonb_pretty(entrances) AS entrances, 
@@ -256,65 +256,64 @@ FROM nominatim_reverse(
         accept_language => 'de_DE,de,q=0.9',
         zoom => 18,
         entrances => true);
--[ RECORD 1 ]-----+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-valid_osm_id      | t
-valid_osm_type    | t
-valid_result      | t
-valid_place_id    | t
-place_rank        | 30
-valid_lon         | t
-valid_lat         | t
-valid_bbox        | t
-icon              | 
-valid_timestamp   | t
-valid_attribution | t
-querystring       | lat=51.966087&lon=7.603811&format=xml&zoom=18
-geom              | POLYGON((7.6036345 51.9661565,7.6036364 51.9660181,7.6036377 51.9659628,7.6036377 51.9659605,7.6037867 51.9659612,7.603787 51.9659397,7.6038173 51.9659399,7.603842 51.96594,7.6038417 51.9659618,7.6039893 51.9659626,7.6039866 51.9661584,7.6039244 51.9661581,7.6038534 51.9661577,7.6036345 51.9661565))
-entrances         | [                                                                                                                                                                                                                                                                                                           +
-                  |     {                                                                                                                                                                                                                                                                                                       +
-                  |         "lat": "51.9659399",                                                                                                                                                                                                                                                                                +
-                  |         "lon": "7.6038173",                                                                                                                                                                                                                                                                                 +
-                  |         "type": "yes",                                                                                                                                                                                                                                                                                      +
-                  |         "osm_id": "1025561849"                                                                                                                                                                                                                                                                              +
-                  |     }                                                                                                                                                                                                                                                                                                       +
-                  | ]
-extratags         | {                                                                                                                                                                                                                                                                                                           +
-                  |     "building": "university",                                                                                                                                                                                                                                                                               +
-                  |     "roof:shape": "flat",                                                                                                                                                                                                                                                                                   +
-                  |     "wheelchair": "yes",                                                                                                                                                                                                                                                                                    +
-                  |     "roof:colour": "#A9A9A9",                                                                                                                                                                                                                                                                               +
-                  |     "old_short_name": "ZIV",                                                                                                                                                                                                                                                                                +
-                  |     "building:colour": "#D3D3D3",                                                                                                                                                                                                                                                                           +
-                  |     "building:levels": "2",                                                                                                                                                                                                                                                                                 +
-                  |     "contact:website": "https://www.uni-muenster.de/IT/"                                                                                                                                                                                                                                                    +
-                  | }
-namedetails       | {                                                                                                                                                                                                                                                                                                           +
-                  |     "name": "Center for Information Technology",                                                                                                                                                                                                                                                            +
-                  |     "name:de": "Center for Information Technology",                                                                                                                                                                                                                                                         +
-                  |     "old_name": "Zentrum für Informationsverarbeitung",                                                                                                                                                                                                                                                     +
-                  |     "short_name": "CIT"                                                                                                                                                                                                                                                                                     +
-                  | }
-addressparts      | {                                                                                                                                                                                                                                                                                                           +
-                  |     "city": "Münster",                                                                                                                                                                                                                                                                                      +
-                  |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                               +
-                  |     "state": "Nordrhein-Westfalen",                                                                                                                                                                                                                                                                         +
-                  |     "office": "Center for Information Technology",                                                                                                                                                                                                                                                          +
-                  |     "suburb": "Innenstadtring",                                                                                                                                                                                                                                                                             +
-                  |     "country": "Deutschland",                                                                                                                                                                                                                                                                               +
-                  |     "postcode": "48149",                                                                                                                                                                                                                                                                                    +
-                  |     "country_code": "de",                                                                                                                                                                                                                                                                                   +
-                  |     "house_number": "60",                                                                                                                                                                                                                                                                                   +
-                  |     "city_district": "Münster-Mitte",                                                                                                                                                                                                                                                                       +
-                  |     "neighbourhood": "Neutor",                                                                                                                                                                                                                                                                              +
-                  |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                                                                                                                                                                               +
-                  | }
+-[ RECORD 1 ]---+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+osm_id          | 88291927
+osm_type        | way
+display_name    | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, Nordrhein-Westfalen, 48149, Deutschland
+valid_place_id  | t
+place_rank      | 30
+lon             | 7.6038115
+boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
+icon            | 
+valid_timestamp | t
+attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
+querystring     | lat=51.966087&lon=7.603811&format=xml&zoom=18
+geom            | POLYGON((7.6036345 51.9661565,7.6036364 51.9660181,7.6036377 51.9659628,7.6036377 51.9659605,7.6037867 51.9659612,7.603787 51.9659397,7.6038173 51.9659399,7.603842 51.96594,7.6038417 51.9659618,7.6039893 51.9659626,7.6039866 51.9661584,7.6039244 51.9661581,7.6038534 51.9661577,7.6036345 51.9661565))
+entrances       | [                                                                                                                                                                                                                                                                                                           +
+                |     {                                                                                                                                                                                                                                                                                                       +
+                |         "lat": "51.9659399",                                                                                                                                                                                                                                                                                +
+                |         "lon": "7.6038173",                                                                                                                                                                                                                                                                                 +
+                |         "type": "yes",                                                                                                                                                                                                                                                                                      +
+                |         "osm_id": "1025561849"                                                                                                                                                                                                                                                                              +
+                |     }                                                                                                                                                                                                                                                                                                       +
+                | ]
+extratags       | {                                                                                                                                                                                                                                                                                                           +
+                |     "building": "university",                                                                                                                                                                                                                                                                               +
+                |     "roof:shape": "flat",                                                                                                                                                                                                                                                                                   +
+                |     "wheelchair": "yes",                                                                                                                                                                                                                                                                                    +
+                |     "roof:colour": "#A9A9A9",                                                                                                                                                                                                                                                                               +
+                |     "old_short_name": "ZIV",                                                                                                                                                                                                                                                                                +
+                |     "building:colour": "#D3D3D3",                                                                                                                                                                                                                                                                           +
+                |     "building:levels": "2",                                                                                                                                                                                                                                                                                 +
+                |     "contact:website": "https://www.uni-muenster.de/IT/"                                                                                                                                                                                                                                                    +
+                | }
+namedetails     | {                                                                                                                                                                                                                                                                                                           +
+                |     "name": "Center for Information Technology",                                                                                                                                                                                                                                                            +
+                |     "name:de": "Center for Information Technology",                                                                                                                                                                                                                                                         +
+                |     "old_name": "Zentrum für Informationsverarbeitung",                                                                                                                                                                                                                                                     +
+                |     "short_name": "CIT"                                                                                                                                                                                                                                                                                     +
+                | }
+addressparts    | {                                                                                                                                                                                                                                                                                                           +
+                |     "city": "Münster",                                                                                                                                                                                                                                                                                      +
+                |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                               +
+                |     "state": "Nordrhein-Westfalen",                                                                                                                                                                                                                                                                         +
+                |     "office": "Center for Information Technology",                                                                                                                                                                                                                                                          +
+                |     "suburb": "Innenstadtring",                                                                                                                                                                                                                                                                             +
+                |     "country": "Deutschland",                                                                                                                                                                                                                                                                               +
+                |     "postcode": "48149",                                                                                                                                                                                                                                                                                    +
+                |     "country_code": "de",                                                                                                                                                                                                                                                                                   +
+                |     "house_number": "60",                                                                                                                                                                                                                                                                                   +
+                |     "city_district": "Münster-Mitte",                                                                                                                                                                                                                                                                       +
+                |     "neighbourhood": "Neutor",                                                                                                                                                                                                                                                                              +
+                |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                                                                                                                                                                               +
+                | }
 
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
 /* invalid coordinates */
-SELECT osm_id, result, boundingbox
+SELECT osm_id, display_name, boundingbox
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 4200.37,
@@ -362,7 +361,7 @@ SELECT pg_sleep(2);
 pg_sleep | 
 
 /* valid coordinates but no location */
-SELECT osm_id, result
+SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => -60);
 (0 rows)
@@ -371,7 +370,7 @@ SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
-SELECT osm_id, result
+SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => 0);
 (0 rows)
@@ -396,7 +395,7 @@ SELECT
     osm_id, osm_type, 
 	class,
     type,
-	display_name IS NOT NULL AND display_name <> '' valid_display_name,
+	display_name,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 
@@ -421,61 +420,61 @@ FROM nominatim_lookup(
       email => 'jim.jones@uni-muenster.de',
       polygon_threshold => 0.1,
       accept_language => 'de_DE,de,q=0.9');
--[ RECORD 1 ]------+-----------------------------------------------------------------------------------------------
-osm_id             | 88291927
-osm_type           | way
-class              | office
-type               | university
-valid_display_name | t
-valid_place_id     | t
-place_rank         | 30
-lon                | 7.6038115
-lat                | 51.9660873
-boundingbox        | 51.9659397,51.9661584,7.6036345,7.6039893
-importance         | 7.215915159833703e-05
-icon               | 
-valid_timestamp    | t
-attribution        | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
-querystring        | 
-geom               | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
-entrances          | [                                                                                             +
-                   |     {                                                                                         +
-                   |         "lat": "51.9659399",                                                                  +
-                   |         "lon": "7.6038173",                                                                   +
-                   |         "type": "yes",                                                                        +
-                   |         "osm_id": "1025561849"                                                                +
-                   |     }                                                                                         +
-                   | ]
-extratags          | {                                                                                             +
-                   |     "building": "university",                                                                 +
-                   |     "roof:shape": "flat",                                                                     +
-                   |     "wheelchair": "yes",                                                                      +
-                   |     "roof:colour": "#A9A9A9",                                                                 +
-                   |     "old_short_name": "ZIV",                                                                  +
-                   |     "building:colour": "#D3D3D3",                                                             +
-                   |     "building:levels": "2",                                                                   +
-                   |     "contact:website": "https://www.uni-muenster.de/IT/"                                      +
-                   | }
-namedetails        | {                                                                                             +
-                   |     "name": "Center for Information Technology",                                              +
-                   |     "name:de": "Center for Information Technology",                                           +
-                   |     "old_name": "Zentrum für Informationsverarbeitung",                                       +
-                   |     "short_name": "CIT"                                                                       +
-                   | }
-addressdetails     | {                                                                                             +
-                   |     "city": "Münster",                                                                        +
-                   |     "road": "Einsteinstraße",                                                                 +
-                   |     "state": "Nordrhein-Westfalen",                                                           +
-                   |     "office": "Center for Information Technology",                                            +
-                   |     "suburb": "Innenstadtring",                                                               +
-                   |     "country": "Deutschland",                                                                 +
-                   |     "postcode": "48149",                                                                      +
-                   |     "country_code": "de",                                                                     +
-                   |     "house_number": "60",                                                                     +
-                   |     "city_district": "Münster-Mitte",                                                         +
-                   |     "neighbourhood": "Neutor",                                                                +
-                   |     "ISO3166-2-lvl4": "DE-NW"                                                                 +
-                   | }
+-[ RECORD 1 ]---+-----------------------------------------------------------------------------------------------------------------------------------------------
+osm_id          | 88291927
+osm_type        | way
+class           | office
+type            | university
+display_name    | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, Nordrhein-Westfalen, 48149, Deutschland
+valid_place_id  | t
+place_rank      | 30
+lon             | 7.6038115
+lat             | 51.9660873
+boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
+importance      | 7.215915159833703e-05
+icon            | 
+valid_timestamp | t
+attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
+querystring     | 
+geom            | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
+entrances       | [                                                                                                                                             +
+                |     {                                                                                                                                         +
+                |         "lat": "51.9659399",                                                                                                                  +
+                |         "lon": "7.6038173",                                                                                                                   +
+                |         "type": "yes",                                                                                                                        +
+                |         "osm_id": "1025561849"                                                                                                                +
+                |     }                                                                                                                                         +
+                | ]
+extratags       | {                                                                                                                                             +
+                |     "building": "university",                                                                                                                 +
+                |     "roof:shape": "flat",                                                                                                                     +
+                |     "wheelchair": "yes",                                                                                                                      +
+                |     "roof:colour": "#A9A9A9",                                                                                                                 +
+                |     "old_short_name": "ZIV",                                                                                                                  +
+                |     "building:colour": "#D3D3D3",                                                                                                             +
+                |     "building:levels": "2",                                                                                                                   +
+                |     "contact:website": "https://www.uni-muenster.de/IT/"                                                                                      +
+                | }
+namedetails     | {                                                                                                                                             +
+                |     "name": "Center for Information Technology",                                                                                              +
+                |     "name:de": "Center for Information Technology",                                                                                           +
+                |     "old_name": "Zentrum für Informationsverarbeitung",                                                                                       +
+                |     "short_name": "CIT"                                                                                                                       +
+                | }
+addressdetails  | {                                                                                                                                             +
+                |     "city": "Münster",                                                                                                                        +
+                |     "road": "Einsteinstraße",                                                                                                                 +
+                |     "state": "Nordrhein-Westfalen",                                                                                                           +
+                |     "office": "Center for Information Technology",                                                                                            +
+                |     "suburb": "Innenstadtring",                                                                                                               +
+                |     "country": "Deutschland",                                                                                                                 +
+                |     "postcode": "48149",                                                                                                                      +
+                |     "country_code": "de",                                                                                                                     +
+                |     "house_number": "60",                                                                                                                     +
+                |     "city_district": "Münster-Mitte",                                                                                                         +
+                |     "neighbourhood": "Neutor",                                                                                                                +
+                |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                 +
+                | }
 
 /* must error, since osm_ids is required */
 SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => '');

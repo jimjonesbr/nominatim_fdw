@@ -11,7 +11,7 @@ SELECT
     osm_id, osm_type, 
 	class, 
     type,
-	display_name IS NOT NULL AND display_name <> '' valid_display_name,
+	display_name,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 
@@ -21,8 +21,8 @@ SELECT
 	attribution,
     querystring, 
 	polygon AS geom,
-	exclude_place_ids IS NOT NULL AS valid_exclude_place_ids, 
-	more_url IS NOT NULL AND more_url <> '' AS valid_more_url,
+	exclude_place_ids, 
+	more_url,
     jsonb_pretty(entrances) AS entrances,
     jsonb_pretty(extratags) AS extratags, 
 	jsonb_pretty(namedetails) AS namedetails,
@@ -59,7 +59,7 @@ SELECT
     osm_id, osm_type, 
 	class,
     type,
-	display_name IS NOT NULL AND display_name <> '' valid_display_name,
+	display_name,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 
@@ -69,8 +69,8 @@ SELECT
 	attribution,
     querystring, 
 	polygon AS geom,
-	exclude_place_ids IS NOT NULL AS valid_exclude_place_ids, 
-	more_url IS NOT NULL AND more_url <> '' AS valid_more_url,
+	exclude_place_ids, 
+	more_url,
     jsonb_pretty(entrances) AS entrances, 
     jsonb_pretty(extratags) AS extratags, 
 	jsonb_pretty(namedetails) AS namedetails,
@@ -120,16 +120,16 @@ SELECT pg_sleep(2);
 /* nominatim reverse */
 
 SELECT 
-    osm_id > 0 AS valid_osm_id, 
-	osm_type IS NOT NULL AND osm_type <> '' AS valid_osm_type, 
-	result IS NOT NULL AND result <> '' AS valid_result,
+    osm_id, 
+	osm_type, 
+	display_name,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank, 
-	lon > 0 AS valid_lon, lat > 0 AS valid_lat, 
-	array_length(string_to_array(boundingbox,','),1) = 4 AS valid_bbox, 
+	lon, 
+	boundingbox, 
     icon, 
 	timestamp IS NOT NULL AS valid_timestamp, 
-	attribution IS NOT NULL AND attribution <> '' AS valid_attribution,  
+	attribution,  
 	querystring, 
     polygon AS geom,
     jsonb_pretty(entrances) AS entrances, 
@@ -151,7 +151,7 @@ FROM nominatim_reverse(
 SELECT pg_sleep(2);
 
 /* invalid coordinates */
-SELECT osm_id, result, boundingbox
+SELECT osm_id, display_name, boundingbox
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 4200.37,
@@ -187,13 +187,13 @@ FROM nominatim_reverse(
 SELECT pg_sleep(2);
 
 /* valid coordinates but no location */
-SELECT osm_id, result
+SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => -60);
 
 SELECT pg_sleep(2);
 
-SELECT osm_id, result
+SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => 0);
 
@@ -212,7 +212,7 @@ SELECT
     osm_id, osm_type, 
 	class,
     type,
-	display_name IS NOT NULL AND display_name <> '' valid_display_name,
+	display_name,
 	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
 	place_rank,
     lon, lat, boundingbox, 

@@ -6,6 +6,9 @@ ALTER TYPE NominatimRecord ADD ATTRIBUTE type text;
 ALTER TYPE NominatimRecord ADD ATTRIBUTE entrances jsonb;
 ALTER TYPE NominatimReverseGeocode ADD ATTRIBUTE entrances jsonb;
 
+/* rename attribute to make it consistant with NominatimRecord */
+ALTER TYPE NominatimReverseGeocode RENAME ATTRIBUTE result TO display_name;
+
 /* removed unsed parameters and added entrances */
 DROP FUNCTION nominatim_lookup;
 CREATE FUNCTION nominatim_lookup(

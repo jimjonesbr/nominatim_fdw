@@ -168,7 +168,6 @@ typedef struct NominatimRecord
     char *namedetails;
     char *addressparts;
     char *entrances;
-    char *result;
 } NominatimRecord;
 
 struct MemoryStruct
@@ -796,8 +795,6 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
         return place->addressdetails;
     else if (strcmp(NameStr(att->attname), "namedetails") == 0)
         return place->namedetails;
-    else if (strcmp(NameStr(att->attname), "result") == 0)
-        return place->result;
     else if (strcmp(NameStr(att->attname), "addressparts") == 0)
         return place->addressparts;
     else if (strcmp(NameStr(att->attname), "entrances") == 0)
@@ -1149,7 +1146,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             if (!place->polygon)
                 place->polygon = xml_get_prop(reversegeocode, "geosvg");
 
-            place->result = xml_node_content(reversegeocode);
+            place->display_name = xml_node_content(reversegeocode);
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"addressparts") == 0)
         {

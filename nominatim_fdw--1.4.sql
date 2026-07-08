@@ -40,7 +40,7 @@ CREATE TYPE NominatimRecord AS (
 CREATE TYPE NominatimReverseGeocode AS ( 
   osm_id bigint,  
   osm_type text, 
-  result text,
+  display_name text,
   ref text,
   place_id bigint,
   place_rank int,

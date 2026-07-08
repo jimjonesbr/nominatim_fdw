@@ -6,8 +6,6 @@ Release date: **YYYY-MM-DD**
 
 * Add error message for invalid coordinate pairs: this adds a check on the reverse call to reject invalid coordinate pairs before sending the request to the server, therefore avoiding a HTTP request that is doomed to fail.
 
-* Add `entrances` column to lookup, search, and reverse calls.
-
 ## Bug fixes
 
 * Fixed memory leaks in XML parsing: `xmlGetProp()` and `xmlNodeGetContent()` return libxml2-heap-allocated strings that were never freed with `xmlFree()`. Introduced `xml_get_prop()` and `xml_node_content()` helper functions that copy the result into palloc'd memory and immediately free the libxml2 string, making ownership clear at a glance.
@@ -17,6 +15,9 @@ Release date: **YYYY-MM-DD**
 * Add missing `type` attribute: the custom data type `NominatimRecord` was missing the attribute `type`. Thid has been now fixed.
 * Fix `DEFAULT` value for `addressdetails`: it now defaults to `true`, as defined in the API spec.
 
+## Breaking Changes
+* Add `entrances` column to lookup, search, and reverse calls.
+* Rename reverse's column `result` to `display_name`: the previous name was mimicing the xml node retrieved from the API, which was inconsistent with the lookup and search functions.
 
 # 1.3
 
