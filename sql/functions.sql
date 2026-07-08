@@ -45,7 +45,7 @@ FROM nominatim_search(
       limit_result => 1,
       bounded => false,
       accept_language => 'de_DE,de,q=0.9',
-      entrances => 1);
+      entrances => true);
 
 SELECT pg_sleep(2);
 
@@ -104,6 +104,7 @@ SELECT
 	polygon AS geom,
 	exclude_place_ids IS NOT NULL AS valid_exclude_place_ids, 
 	more_url IS NOT NULL AND more_url <> '' AS valid_more_url,
+    jsonb_pretty(entrances) AS entrances, 
     jsonb_pretty(extratags) AS extratags, 
 	jsonb_pretty(namedetails) AS namedetails,
     jsonb_pretty(addressdetails) AS addressdetails
@@ -113,7 +114,8 @@ FROM nominatim_search(
       polygon => 'polygon_text',
       extratags => true,
       addressdetails => true,
-      namedetails => true,      
+      namedetails => true,     
+      entrances => false, 
       street => 'einsteinstraße 60',
       city => 'münster',
       state => 'nordrhein westfalen',
@@ -181,7 +183,7 @@ FROM nominatim_reverse(
         namedetails => true,
         accept_language => 'de_DE,de,q=0.9',
         zoom => 18,
-        entrances => 1);
+        entrances => true);
 
 SELECT pg_sleep(2);
 
@@ -267,7 +269,7 @@ FROM nominatim_lookup(
       extratags => true,
       addressdetails => true,
       namedetails => true,
-      entrances => 1,
+      entrances => true,
       polygon => 'polygon_text',
       email => 'jim.jones@uni-muenster.de',
       polygon_threshold => 0.1,

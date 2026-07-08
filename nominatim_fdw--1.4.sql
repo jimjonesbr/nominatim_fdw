@@ -84,7 +84,7 @@ CREATE FUNCTION nominatim_search(
     email text DEFAULT '',
     dedupe boolean DEFAULT true,
     limit_result int DEFAULT 0,
-    entrances int DEFAULT 0)
+    entrances boolean DEFAULT false)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_search'
 LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 
@@ -95,7 +95,7 @@ CREATE FUNCTION nominatim_lookup(
     addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
     polygon text DEFAULT '',
-    entrances int DEFAULT 0,    
+    entrances boolean DEFAULT false,    
     accept_language text DEFAULT '',    
     polygon_threshold double precision DEFAULT 0.0,
     email text DEFAULT '')
@@ -113,7 +113,7 @@ CREATE FUNCTION nominatim_reverse(
     namedetails boolean DEFAULT false,
     polygon text DEFAULT '',
     accept_language text DEFAULT '',
-    entrances int DEFAULT 0)
+    entrances boolean DEFAULT false)
 RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_reverse'
 LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 

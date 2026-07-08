@@ -98,7 +98,6 @@ typedef struct NominatimFDWState
 {
     int zoom;                  /* Level of detail required for the address. */
     int limit;                 /* Limit the maximum number of returned results. */
-    int entrances;             /* tagged entrances in the result */
     char *request_type;        /* one of: search, reverse or lookup*/
     char *url;                 /* URL of the Nominatim endpoint */
     char *osm_ids;             /* a comma-separated list of OSM ids each prefixed with its type: N, W or R */
@@ -129,6 +128,7 @@ typedef struct NominatimFDWState
     bool extratags;            /* Include any additional information in the result that is available in the database? */
     bool namedetails;          /* Include a full list of names for the result? */
     bool addressdetails;       /* Include a breakdown of the address into elements? */
+    bool entrances;            /* tagged entrances in the result? */
     long request_max_redirect; /* Limit of how many times the URL redirection (jump) may occur. */
     long connect_timeout;      /* Request timeout in seconds */
     long max_retries;          /* Number of re-try attemtps for failed requests */
@@ -350,7 +350,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
     bool namedetails = PG_GETARG_BOOL(7);
     text *polygon_text = PG_GETARG_TEXT_P(8);
     text *language_text = PG_GETARG_TEXT_P(9);
-    int entrances = PG_GETARG_INT32(10);
+    bool entrances = PG_GETARG_BOOL(10);
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
@@ -641,7 +641,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
     bool addressdetails = PG_GETARG_BOOL(3);
     bool namedetails = PG_GETARG_BOOL(4);
     text *polygon_text = PG_GETARG_TEXT_P(5);
-    int entrances = PG_GETARG_INT32(6);
+    bool entrances = PG_GETARG_BOOL(6);
     text *language_text = PG_GETARG_TEXT_P(7);
     float8 polygon_threshold = PG_GETARG_FLOAT8(8);
     text *email_text = PG_GETARG_TEXT_P(9);
@@ -1493,7 +1493,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
 
     if (state->entrances)
-        appendStringInfo(&url_buffer, "entrances=%d&", state->entrances);
+        appendStringInfo(&url_buffer, "entrances=1&");
 
     if (state->extratags)
         appendStringInfo(&url_buffer, "extratags=1&");
