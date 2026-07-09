@@ -438,7 +438,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
             (NominatimRecord *)list_nth((List *)funcctx->user_fctx,
                                         (int)funcctx->call_cntr);
 
-        memset(nulls, 0, natts * sizeof(nulls));
+        memset(nulls, 0, natts * sizeof(bool));
 
         for (int i = 0; i < natts; i++)
         {
@@ -497,7 +497,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
     text *email_text = PG_GETARG_TEXT_P(21);
     bool dedupe = PG_GETARG_BOOL(22);
     int limit = PG_GETARG_INT32(23);
-    int entrtances = PG_GETARG_INT32(24);
+    bool entrances = PG_GETARG_BOOL(24);
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
@@ -536,7 +536,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
         state->limit = limit;
-        state->entrances = entrtances;
+        state->entrances = entrances;
         state->request_type = NOMINATIM_REQUEST_SEARCH;
 
         if (((state->amenity && strlen(state->amenity) > 0) ||
@@ -1486,7 +1486,8 @@ static int ExecuteRequest(NominatimFDWState *state)
         appendStringInfo(&url_buffer, "lat=%f&", state->lat);
     }
 
-    if (state->zoom)
+    if (strcmp(state->request_type, NOMINATIM_REQUEST_REVERSE) == 0 &&
+        state->zoom >= 0)
         appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
 
     if (state->entrances)
@@ -1522,10 +1523,12 @@ static int ExecuteRequest(NominatimFDWState *state)
     if (state->viewbox && strlen(state->viewbox) > 0)
         AppendUrlParam(&url_buffer, curl, "viewbox", state->viewbox);
 
-    if (state->bounded)
-        appendStringInfo(&url_buffer, "bounded=1&");
-    else
-        appendStringInfo(&url_buffer, "bounded=0&");
+    if (strcmp(state->request_type, NOMINATIM_REQUEST_SEARCH) == 0)
+    {
+        appendStringInfo(&url_buffer, "bounded=%d&", state->bounded ? 1 : 0);
+        if (!state->dedupe)
+            appendStringInfo(&url_buffer, "dedupe=0&");
+    }
 
     if (state->polygon_threshold && state->polygon_threshold != 0.0)
         appendStringInfo(&url_buffer, "polygon_threshold=%f&", state->polygon_threshold);

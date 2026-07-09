@@ -14,6 +14,7 @@ Release date: **YYYY-MM-DD**
 * Fixed build failure when specifying a custom `PG_CONFIG` pointing to a PostgreSQL installation built without `--with-libxml`. The Makefile now uses `PG_CPPFLAGS` (instead of `CFLAGS`) and explicitly includes `xml2-config --cflags`, so libxml2 include paths are always passed to the compiler regardless of which `pg_config` is used.
 * Add missing `type` attribute: the custom data type `NominatimRecord` was missing the attribute `type`. Thid has been now fixed.
 * Fix `DEFAULT` value for `addressdetails`: it now defaults to `true`, as defined in the API spec.
+* Set `DEFAULT` value of reverse's `zoom` to `-1` (disabled): the previous value was 0, which is a valid zoom level.
 
 ## Breaking Changes
 * Add `entrances` column to lookup, search, and reverse calls.

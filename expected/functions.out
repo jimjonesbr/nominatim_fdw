@@ -38,10 +38,9 @@ FROM nominatim_search(
       polygon => 'polygon_text',
       email => 'jim.jones@uni-muenster.de',
       countrycodes => 'DE,BR,US',
-      featuretype => 'poi',
       dedupe => true,
       exclude_place_ids => '42,73',
-      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
+      viewbox => '7.6036345,51.9659397,7.6039893,51.9661584',
       polygon_threshold => 0.1,
       layer => 'address,poi',
       limit_result => 1,
@@ -66,7 +65,7 @@ attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org
 querystring       | einsteinstraße 60, münster, germany
 geom              | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
 exclude_place_ids | W88291927,42,73
-more_url          | https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe+60%2C+m%C3%BCnster%2C+germany&polygon_text=1&addressdetails=1&entrances=1&namedetails=1&extratags=1&polygon_threshold=0.1&limit=2&countrycodes=de%2Cbr%2Cus&exclude_place_ids=W88291927%2C42%2C73&viewbox=7.603635%2C7.603989%2C51.96594%2C51.96616&format=xml
+more_url          | https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe+60%2C+m%C3%BCnster%2C+germany&polygon_text=1&addressdetails=1&entrances=1&namedetails=1&extratags=1&polygon_threshold=0.1&limit=2&countrycodes=de%2Cbr%2Cus&exclude_place_ids=W88291927%2C42%2C73&viewbox=7.603635%2C51.96594%2C7.603989%2C51.96616&format=xml
 entrances         | [                                                                                                                                                                                                                                                                                                                              +
                   |     {                                                                                                                                                                                                                                                                                                                          +
                   |         "lat": "51.9659399",                                                                                                                                                                                                                                                                                                   +

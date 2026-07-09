@@ -60,7 +60,7 @@ CREATE FUNCTION nominatim_reverse(
     server_name text, 
     lon double precision DEFAULT 0,
     lat double precision DEFAULT 0,
-    zoom int DEFAULT 0,
+    zoom int DEFAULT -1,
     layer text DEFAULT '',
     extratags boolean DEFAULT false,
     addressdetails boolean DEFAULT true,
