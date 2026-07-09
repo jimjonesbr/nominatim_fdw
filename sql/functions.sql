@@ -149,6 +149,84 @@ FROM nominatim_reverse(
 
 SELECT pg_sleep(2);
 
+SELECT 
+    osm_id, 
+	osm_type, 
+	display_name,
+	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
+	place_rank, 
+	lon, 
+	boundingbox, 
+    icon, 
+	timestamp IS NOT NULL AS valid_timestamp, 
+	attribution,  
+	querystring, 
+    polygon AS geom,
+    jsonb_pretty(entrances) AS entrances, 
+	jsonb_pretty(extratags) AS extratags, 
+    jsonb_pretty(namedetails) AS namedetails, 
+	jsonb_pretty(addressparts) AS addressparts
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_kml',
+        zoom => 18);
+
+SELECT pg_sleep(2);
+
+SELECT 
+    osm_id, 
+	osm_type, 
+	display_name,
+	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
+	place_rank, 
+	lon, 
+	boundingbox, 
+    icon, 
+	timestamp IS NOT NULL AS valid_timestamp, 
+	attribution,  
+	querystring, 
+    polygon AS geom,
+    jsonb_pretty(entrances) AS entrances, 
+	jsonb_pretty(extratags) AS extratags, 
+    jsonb_pretty(namedetails) AS namedetails, 
+	jsonb_pretty(addressparts) AS addressparts
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_svg',
+        zoom => 18);
+
+SELECT pg_sleep(2);
+
+SELECT 
+    osm_id, 
+	osm_type, 
+	display_name,
+	place_id IS NOT NULL AND place_id > 0 AS valid_place_id, 
+	place_rank, 
+	lon, 
+	boundingbox, 
+    icon, 
+	timestamp IS NOT NULL AS valid_timestamp, 
+	attribution,  
+	querystring, 
+    polygon AS geom,
+    jsonb_pretty(entrances) AS entrances, 
+	jsonb_pretty(extratags) AS extratags, 
+    jsonb_pretty(namedetails) AS namedetails, 
+	jsonb_pretty(addressparts) AS addressparts
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_geojson',
+        zoom => 18);
+
+SELECT pg_sleep(2);
+
 /* invalid coordinates */
 SELECT osm_id, display_name, boundingbox
 FROM nominatim_reverse(

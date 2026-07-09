@@ -1173,6 +1173,18 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
                 escape_json(&extratags, value ? value : "");
             }
         }
+        else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"geokml") == 0)
+        {
+            int bytes;
+            xmlBufferPtr buffer = xmlBufferCreate();
+            bytes = xmlNodeDump(buffer, state->xmldoc, reversegeocode->children, 0, 0);
+
+            if (bytes == -1)
+                elog(ERROR, "unable to dump XML node: '%s'", state->url);
+
+            place->polygon = pstrdup((char *)buffer->content);
+            xmlBufferFree(buffer);
+        }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"entrances") == 0)
         {
             bool first_entrance = true;

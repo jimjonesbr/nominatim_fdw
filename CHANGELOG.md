@@ -15,6 +15,7 @@ Release date: **YYYY-MM-DD**
 * Add missing `type` attribute: the custom data type `NominatimRecord` was missing the attribute `type`. Thid has been now fixed.
 * Fix `DEFAULT` value for `addressdetails`: it now defaults to `true`, as defined in the API spec.
 * Set `DEFAULT` value of reverse's `zoom` to `-1` (disabled): the previous value was 0, which is a valid zoom level.
+* Fix parsing of `KML` geometries iun reverse calls: the parser was ignoring this format and returning `NULL` for `polygon_kml` requests. This is now fixed.
 
 ## Breaking Changes
 * Add `entrances` column to lookup, search, and reverse calls.
