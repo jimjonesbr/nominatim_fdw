@@ -1494,8 +1494,8 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     if (strcmp(state->request_type, NOMINATIM_REQUEST_REVERSE) == 0)
     {
-        appendStringInfo(&url_buffer, "lon=%f&", state->lon);
-        appendStringInfo(&url_buffer, "lat=%f&", state->lat);
+        appendStringInfo(&url_buffer, "lon=%.8f&", state->lon);
+        appendStringInfo(&url_buffer, "lat=%.8f&", state->lat);
     }
 
     if (strcmp(state->request_type, NOMINATIM_REQUEST_REVERSE) == 0 &&
