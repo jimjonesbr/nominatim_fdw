@@ -67,6 +67,8 @@ CREATE FUNCTION nominatim_reverse(
     namedetails boolean DEFAULT false,
     polygon text DEFAULT '',
     accept_language text DEFAULT '',
-    entrances boolean DEFAULT false)
+    entrances boolean DEFAULT false,
+    polygon_threshold double precision DEFAULT 0.0,
+    email text DEFAULT '')
 RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_reverse'
 LANGUAGE C VOLATILE STRICT PARALLEL SAFE;

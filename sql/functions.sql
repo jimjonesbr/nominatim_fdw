@@ -144,6 +144,8 @@ FROM nominatim_reverse(
         addressdetails => true,
         namedetails => true,
         accept_language => 'de_DE,de,q=0.9',
+        email => 'jim.jones@uni-muenster.de',
+        polygon_threshold => 0.1,
         zoom => 18,
         entrances => true);
 

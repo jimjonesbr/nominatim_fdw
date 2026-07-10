@@ -157,7 +157,6 @@ typedef struct NominatimRecord
     char *boundingbox;
     char *place_rank;
     char *address_rank;
-    char *display_rank;
     char *display_name;
     char *class;
     char *type;
@@ -350,6 +349,8 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
     text *polygon_text = PG_GETARG_TEXT_P(8);
     text *language_text = PG_GETARG_TEXT_P(9);
     bool entrances = PG_GETARG_BOOL(10);
+    float8 polygon_threshold = PG_GETARG_FLOAT8(11);
+    text *email_text = PG_GETARG_TEXT_P(12);
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
@@ -369,13 +370,14 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         state->lat = lat;
         state->zoom = zoom;
         state->layer = strcmp(text_to_cstring(layer), "") == 0 ? NULL : text_to_cstring(layer);
-        state->request_type = NOMINATIM_REQUEST_REVERSE;
-
         state->polygon_type = text_to_cstring(polygon_text);
         state->extratags = extratags;
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
         state->entrances = entrances;
+        state->polygon_threshold = polygon_threshold;
+        state->email = text_to_cstring(email_text);
+        state->request_type = NOMINATIM_REQUEST_REVERSE;
 
         if (state->layer && !IsLayerValid(state->layer))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
