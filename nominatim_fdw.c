@@ -42,7 +42,6 @@
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_user_mapping.h"
 #include "catalog/pg_type.h"
-#include "access/reloptions.h"
 #include "catalog/pg_namespace.h"
 #include "utils/date.h"
 #include <utils/elog.h>
@@ -72,19 +71,6 @@
 #define NOMINATIM_DEFAULT_LANGUAGE "en-US,en;q=0.9"
 
 PG_MODULE_MAGIC;
-
-void _PG_init(void);
-void _PG_fini(void);
-
-void _PG_init(void)
-{
-    curl_global_init(CURL_GLOBAL_ALL);
-}
-
-void _PG_fini(void)
-{
-    curl_global_cleanup();
-}
 
 typedef struct NominatimFDWOption
 {
@@ -1544,7 +1530,7 @@ static int ExecuteRequest(NominatimFDWState *state)
             appendStringInfo(&url_buffer, "dedupe=0&");
     }
 
-    if (state->polygon_threshold && state->polygon_threshold != 0.0)
+    if (state->polygon_threshold != 0.0)
         appendStringInfo(&url_buffer, "polygon_threshold=%f&", state->polygon_threshold);
 
     if (state->email && strlen(state->email) > 0)
