@@ -173,7 +173,6 @@ static struct NominatimFDWOption valid_options[] =
         /* User Mapping */
         {NOMINATIM_USERMAPPING_OPTION_PROXYUSER, UserMappingRelationId, false, false},
         {NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD, UserMappingRelationId, false, false},
-
         /* EOList option */
         {NULL, InvalidOid, false, false}};
 
@@ -438,7 +437,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
             else
                 nulls[i] = true;
 
-            elog(DEBUG2, "%s: %s = '%s'",__func__, att->attname.data, value);
+            elog(DEBUG2, "%s: %s = '%s'", __func__, att->attname.data, value);
         }
 
         elog(DEBUG2, "%s: creating heap tuple", __func__);
@@ -699,7 +698,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         HeapTuple tuple;
         Datum result;
         NominatimRecord *place = (NominatimRecord *)list_nth((List *)funcctx->user_fctx,
-                                        (int)funcctx->call_cntr);
+                                                             (int)funcctx->call_cntr);
 
         memset(nulls, 0, natts * sizeof(bool));
 
@@ -746,7 +745,7 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
     else if (strcmp(NameStr(att->attname), "class") == 0)
         return place->class;
     else if (strcmp(NameStr(att->attname), "type") == 0)
-        return place->type;        
+        return place->type;
     else if (strcmp(NameStr(att->attname), "display_name") == 0)
         return place->display_name;
     else if (strcmp(NameStr(att->attname), "place_id") == 0)
@@ -834,80 +833,79 @@ static Datum CreateDatum(int pgtype, int pgtypmod, char *value)
 
 static void LoadNominatimUserMapping(NominatimFDWState *state)
 {
+    Datum datum;
+    HeapTuple tp;
+    bool isnull;
+    UserMapping *um;
+    List *options = NIL;
+    ListCell *cell;
+    bool usermatch = true;
 
-	Datum datum;
-	HeapTuple tp;
-	bool isnull;
-	UserMapping *um;
-	List *options = NIL;
-	ListCell *cell;
-	bool usermatch = true;
+    elog(DEBUG1, "%s called", __func__);
 
-	elog(DEBUG1, "%s called", __func__);
+    tp = SearchSysCache2(USERMAPPINGUSERSERVER,
+                         ObjectIdGetDatum(GetUserId()),
+                         ObjectIdGetDatum(state->server->serverid));
 
-	tp = SearchSysCache2(USERMAPPINGUSERSERVER,
-						 ObjectIdGetDatum(GetUserId()),
-						 ObjectIdGetDatum(state->server->serverid));
+    if (!HeapTupleIsValid(tp))
+    {
+        elog(DEBUG2, "%s: not found for the specific user -- try PUBLIC", __func__);
+        tp = SearchSysCache2(USERMAPPINGUSERSERVER,
+                             ObjectIdGetDatum(InvalidOid),
+                             ObjectIdGetDatum(state->server->serverid));
+    }
 
-	if (!HeapTupleIsValid(tp))
-	{
-		elog(DEBUG2, "%s: not found for the specific user -- try PUBLIC", __func__);
-		tp = SearchSysCache2(USERMAPPINGUSERSERVER,
-							 ObjectIdGetDatum(InvalidOid),
-							 ObjectIdGetDatum(state->server->serverid));
-	}
+    if (!HeapTupleIsValid(tp))
+    {
+        elog(DEBUG2, "%s: user mapping not found for user \"%s\", server \"%s\"",
+             __func__, MappingUserName(GetUserId()), state->server->servername);
 
-	if (!HeapTupleIsValid(tp))
-	{
-		elog(DEBUG2, "%s: user mapping not found for user \"%s\", server \"%s\"",
-			 __func__, MappingUserName(GetUserId()), state->server->servername);
+        usermatch = false;
+    }
 
-		usermatch = false;
-	}
+    if (usermatch)
+    {
+        elog(DEBUG2, "%s: setting UserMapping", __func__);
+        um = (UserMapping *)palloc(sizeof(UserMapping));
+        um->umid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
+        um->userid = GetUserId();
+        um->serverid = state->server->serverid;
 
-	if (usermatch)
-	{
-		elog(DEBUG2, "%s: setting UserMapping", __func__);
-		um = (UserMapping *)palloc(sizeof(UserMapping));
-		um->umid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
-		um->userid = GetUserId();
-		um->serverid = state->server->serverid;
+        elog(DEBUG2, "%s: extract the umoptions", __func__);
+        datum = SysCacheGetAttr(USERMAPPINGUSERSERVER,
+                                tp,
+                                Anum_pg_user_mapping_umoptions,
+                                &isnull);
+        if (isnull)
+            um->options = NIL;
+        else
+            um->options = untransformRelOptions(datum);
 
-		elog(DEBUG2, "%s: extract the umoptions", __func__);
-		datum = SysCacheGetAttr(USERMAPPINGUSERSERVER,
-								tp,
-								Anum_pg_user_mapping_umoptions,
-								&isnull);
-		if (isnull)
-			um->options = NIL;
-		else
-			um->options = untransformRelOptions(datum);
+        if (um->options != NIL)
+        {
+            options = list_concat(options, um->options);
 
-		if (um->options != NIL)
-		{
-			options = list_concat(options, um->options);
+            foreach (cell, options)
+            {
+                DefElem *def = (DefElem *)lfirst(cell);
 
-			foreach (cell, options)
-			{
-				DefElem *def = (DefElem *)lfirst(cell);
+                if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PROXYUSER) == 0)
+                {
+                    state->proxy_user = pstrdup(defGetString(def));
+                    elog(DEBUG2, "%s: proxy user '%s'", __func__, def->defname);
+                }
+                else if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD) == 0)
+                {
+                    state->proxy_user_password = pstrdup(defGetString(def));
+                    elog(DEBUG2, "%s: proxy password '*******'", __func__);
+                }
+            }
+        }
 
-				if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PROXYUSER) == 0)
-				{
-					state->proxy_user = pstrdup(defGetString(def));
-					elog(DEBUG2, "%s: proxy user '%s'", __func__, def->defname);
-				}
-				else if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD) == 0)
-				{
-					state->proxy_user_password = pstrdup(defGetString(def));
-					elog(DEBUG2, "%s: proxy password '*******'", __func__);
-				}
-			}
-		}
+        ReleaseSysCache(tp);
+    }
 
-		ReleaseSysCache(tp);
-	}
-
-	elog(DEBUG1, "%s exit", __func__);
+    elog(DEBUG1, "%s exit", __func__);
 }
 /*
  * InitSession
@@ -1014,7 +1012,7 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 
     Assert(contents);
 
-    elog(DEBUG1,"%s: header = \"%s\"", __func__, contents);
+    elog(DEBUG1, "%s: header = \"%s\"", __func__, contents);
 
     ptr = repalloc(mem->memory, mem->size + realsize + 1);
 
@@ -1042,8 +1040,8 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 static char *
 xml_get_prop(xmlNodePtr node, const char *name)
 {
-    xmlChar *val = xmlGetProp(node, (xmlChar *) name);
-    char    *result = val ? pstrdup((char *) val) : NULL;
+    xmlChar *val = xmlGetProp(node, (xmlChar *)name);
+    char *result = val ? pstrdup((char *)val) : NULL;
 
     xmlFree(val);
     return result;
@@ -1053,7 +1051,7 @@ static char *
 xml_node_content(xmlNodePtr node)
 {
     xmlChar *val = xmlNodeGetContent(node);
-    char    *result = val ? pstrdup((char *) val) : NULL;
+    char *result = val ? pstrdup((char *)val) : NULL;
 
     xmlFree(val);
     return result;
@@ -1289,25 +1287,24 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             appendStringInfo(&addressdetails, "{");
             appendStringInfo(&namedetails, "{");
             appendStringInfoChar(&entrances, '[');
-            
 
-            place->ref               = xml_get_prop(searchresults, "ref");
-            place->address_rank      = xml_get_prop(searchresults, "address_rank");
-            place->attribution       = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "attribution");
-            place->boundingbox       = xml_get_prop(searchresults, "boundingbox");
-            place->class             = xml_get_prop(searchresults, "class");
-            place->type              = xml_get_prop(searchresults, "type");
-            place->display_name      = xml_get_prop(searchresults, "display_name");
+            place->ref = xml_get_prop(searchresults, "ref");
+            place->address_rank = xml_get_prop(searchresults, "address_rank");
+            place->attribution = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "attribution");
+            place->boundingbox = xml_get_prop(searchresults, "boundingbox");
+            place->class = xml_get_prop(searchresults, "class");
+            place->type = xml_get_prop(searchresults, "type");
+            place->display_name = xml_get_prop(searchresults, "display_name");
             place->exclude_place_ids = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "exclude_place_ids");
-            place->icon              = xml_get_prop(searchresults, "icon");
-            place->importance        = xml_get_prop(searchresults, "importance");
-            place->lat               = xml_get_prop(searchresults, "lat");
-            place->lon               = xml_get_prop(searchresults, "lon");
-            place->more_url          = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "more_url");
-            place->osm_id            = xml_get_prop(searchresults, "osm_id");
-            place->osm_type          = xml_get_prop(searchresults, "osm_type");
-            place->place_id          = xml_get_prop(searchresults, "place_id");
-            place->place_rank        = xml_get_prop(searchresults, "place_rank");
+            place->icon = xml_get_prop(searchresults, "icon");
+            place->importance = xml_get_prop(searchresults, "importance");
+            place->lat = xml_get_prop(searchresults, "lat");
+            place->lon = xml_get_prop(searchresults, "lon");
+            place->more_url = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "more_url");
+            place->osm_id = xml_get_prop(searchresults, "osm_id");
+            place->osm_type = xml_get_prop(searchresults, "osm_type");
+            place->place_id = xml_get_prop(searchresults, "place_id");
+            place->place_rank = xml_get_prop(searchresults, "place_rank");
 
             place->polygon = xml_get_prop(searchresults, "geotext");
             if (!place->polygon)
@@ -1316,7 +1313,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                 place->polygon = xml_get_prop(searchresults, "geosvg");
 
             place->querystring = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "querystring");
-            place->timestamp   = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "timestamp");
+            place->timestamp = xml_get_prop(xmlDocGetRootElement(state->xmldoc), "timestamp");
 
             for (places = searchresults->children; places != NULL; places = places->next)
             {
@@ -1324,11 +1321,11 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                 {
                     for (tag = places->children; tag != NULL; tag = tag->next)
                     {
-                        char *key   = xml_get_prop(tag, "key");
+                        char *key = xml_get_prop(tag, "key");
                         char *value = xml_get_prop(tag, "value");
                         if (xtags.len > 1)
                             appendStringInfoChar(&xtags, ',');
-                        escape_json(&xtags, key   ? key   : "");
+                        escape_json(&xtags, key ? key : "");
                         appendStringInfoChar(&xtags, ':');
                         escape_json(&xtags, value ? value : "");
                     }
@@ -1337,11 +1334,11 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                 {
                     for (tag = places->children; tag != NULL; tag = tag->next)
                     {
-                        char *desc    = xml_get_prop(tag, "desc");
+                        char *desc = xml_get_prop(tag, "desc");
                         char *content = xml_node_content(tag);
                         if (namedetails.len > 1)
                             appendStringInfoChar(&namedetails, ',');
-                        escape_json(&namedetails, desc    ? desc    : "");
+                        escape_json(&namedetails, desc ? desc : "");
                         appendStringInfoChar(&namedetails, ':');
                         escape_json(&namedetails, content ? content : "");
                     }
@@ -1394,7 +1391,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                     char *content = xml_node_content(places);
                     if (addressdetails.len > 1)
                         appendStringInfoChar(&addressdetails, ',');
-                    escape_json(&addressdetails, (char *) places->name);
+                    escape_json(&addressdetails, (char *)places->name);
                     appendStringInfoChar(&addressdetails, ':');
                     escape_json(&addressdetails, content ? content : "");
                 }
@@ -1415,7 +1412,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
     }
 
     xmlFreeDoc(state->xmldoc);
-    state->xmldoc = NULL;    
+    state->xmldoc = NULL;
 }
 
 static void AppendUrlParam(StringInfo buf, CURL *curl, const char *param, const char *value)
