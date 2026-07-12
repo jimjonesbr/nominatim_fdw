@@ -223,7 +223,9 @@ DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=x&form
 WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (1)
 WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (2)
 WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (3)
-ERROR:  unable to connect to the Nominatim endpoint: 'https://nominatim.openstreetmap.org'
+ERROR:  nominatim request failed with HTTP status 500
+DETAIL:  URL: "https://nominatim.openstreetmap.org/search?q=x&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0&"
+HINT:  Check your request parameters and try again.
 /* nonexistent server */
 SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat => 0);
 ERROR:  FOREIGN SERVER does not exist: 'does_not_exist'

@@ -1634,7 +1634,7 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         for (long i = 1; res != CURLE_OK && i <= state->max_retries; i++)
         {
-            long response_code;
+            long response_code = 0;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
             elog(WARNING, "  %s: request to '%s' failed with return code %ld (%ld)",
                  __func__, state->url, response_code, i);
@@ -1645,11 +1645,16 @@ static int ExecuteRequest(NominatimFDWState *state)
             chunk_header.size = 0;
             chunk_header.memory[0] = '\0';
 
+            /* just being polite to the public server */
+            pg_usleep(1000000L);
             res = curl_easy_perform(curl);
         }
 
         if (res != CURLE_OK)
         {
+            long response_code = 0;
+            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
             xmlFreeDoc(state->xmldoc);
             pfree(chunk.memory);
             pfree(chunk_header.memory);
@@ -1657,9 +1662,11 @@ static int ExecuteRequest(NominatimFDWState *state)
             curl_easy_cleanup(curl);
 
             ereport(ERROR,
-                    (errcode(ERRCODE_FDW_UNABLE_TO_ESTABLISH_CONNECTION),
-                     errmsg("unable to connect to the Nominatim endpoint: '%s'", state->url)));
-        }
+                    (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
+                     errmsg("nominatim request failed with HTTP status %ld", response_code),
+                     errhint("Check your request parameters and try again."),
+                     errdetail("URL: \"%s\"", url_buffer.data)));
+          }
         else
         {
             long response_code;
@@ -1770,7 +1777,7 @@ static bool IsLayerValid(char *layer)
 }
 
 /*
- * IsPolygonTypeSupported
+ * IsFeatureTypeValid
  * ----------
  *
  * Checks if a polygon type is supported by the nominatim endpoint
