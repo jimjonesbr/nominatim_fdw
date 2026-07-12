@@ -220,9 +220,9 @@ SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', layer => 'address
 WARNING:  unrecognised layer 'address,bogus'
 HINT:  Known values are: address, poi, railway, natural, manmade
 DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=x&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0&"
-WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (1)
-WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (2)
-WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (3)
+WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (1/3)
+WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (2/3)
+WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (3/3)
 ERROR:  nominatim request failed with HTTP status 500
 DETAIL:  URL: "https://nominatim.openstreetmap.org/search?q=x&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0&"
 HINT:  Check your request parameters and try again.

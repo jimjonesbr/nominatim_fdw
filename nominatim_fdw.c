@@ -1636,8 +1636,8 @@ static int ExecuteRequest(NominatimFDWState *state)
         {
             long response_code = 0;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-            elog(WARNING, "  %s: request to '%s' failed with return code %ld (%ld)",
-                 __func__, state->url, response_code, i);
+            elog(WARNING, "%s: request to '%s' failed (%ld/%ld)",
+                 __func__, state->url, i, state->max_retries);
 
             /* discard whatever the failed attempt left behind before retrying */
             chunk.size = 0;
