@@ -201,6 +201,7 @@ static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
 static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
+static bool IsFeatureTypeValid(char *layer);
 
 Datum nominatim_fdw_handler(PG_FUNCTION_ARGS)
 {
@@ -365,9 +366,16 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         state->request_type = NOMINATIM_REQUEST_REVERSE;
 
         if (state->layer && !IsLayerValid(state->layer))
-            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-                            errmsg("invalid layer '%s'", state->layer),
-                            errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
+            ereport(WARNING,
+                    (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                     errmsg("unrecognised layer '%s'", state->layer),
+                     errhint("Known values are: address, poi, railway, natural, manmade")));
+
+        if (state->feature_type && !IsFeatureTypeValid(state->feature_type))
+            ereport(WARNING,
+                    (errmsg("unrecognized featureType '%s'", state->feature_type),
+                     errhint("Known values are: country, state, city, settlement.")));
+
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -386,7 +394,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
                      errmsg("longitude out of range: %f", lon),
                      errhint("longitude must be between -180 and 180")));
 
-        elog(DEBUG1, "\n\n\t=== %s ===\n\tlon: '%f'\n\tlat: '%f'\n\tzoom: '%d'\n\tpolygon_type: '%s'\n\tlayer: '%s'\n", __func__,
+        elog(DEBUG2, "\n\n\t=== %s ===\n\tlon: '%f'\n\tlat: '%f'\n\tzoom: '%d'\n\tpolygon_type: '%s'\n\tlayer: '%s'\n", __func__,
              state->lon,
              state->lat,
              state->zoom,
@@ -400,7 +408,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         if (state->records)
             funcctx->max_calls = state->records->length;
 
-        elog(DEBUG1, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
+        elog(DEBUG2, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
 
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -544,16 +552,22 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
                             errhint("a '%s' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)", __func__)));
 
         if (state->layer && !IsLayerValid(state->layer))
-            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-                            errmsg("invalid layer '%s'", state->layer),
-                            errhint("this parameter expects one of the following layers: address, poi, railway, natural, manmade")));
+            ereport(WARNING,
+                    (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                     errmsg("unrecognised layer '%s'", state->layer),
+                     errhint("Known values are: address, poi, railway, natural, manmade")));
+
+        if (state->feature_type && !IsFeatureTypeValid(state->feature_type))
+            ereport(WARNING,
+                    (errmsg("unrecognized featureType '%s'", state->feature_type),
+                     errhint("Known values are: country, state, city, settlement.")));
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
                             errmsg("invalid polygon type '%s'", state->polygon_type),
                             errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
-        elog(DEBUG1, "\n\n\t=== %s ===\n\tq:'%s'\n\tpolygon_type: '%s'\n", __func__,
+        elog(DEBUG2, "\n\n\t=== %s ===\n\tq:'%s'\n\tpolygon_type: '%s'\n", __func__,
              state->query,
              state->polygon_type);
 
@@ -564,7 +578,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         if (state->records)
             funcctx->max_calls = state->records->length;
 
-        elog(DEBUG1, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
+        elog(DEBUG2, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
 
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -665,7 +679,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
                             errmsg("invalid polygon type '%s'", state->polygon_type),
                             errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
-        elog(DEBUG1, "\n\n\t=== %s ===\n\tosm_ids:'%s'\n\tpolygon_type: '%s'\n", __func__,
+        elog(DEBUG2, "\n\n\t=== %s ===\n\tosm_ids:'%s'\n\tpolygon_type: '%s'\n", __func__,
              state->osm_ids,
              state->polygon_type);
 
@@ -676,7 +690,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         if (state->records)
             funcctx->max_calls = state->records->length;
 
-        elog(DEBUG1, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
+        elog(DEBUG2, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
 
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -841,7 +855,7 @@ static void LoadNominatimUserMapping(NominatimFDWState *state)
     ListCell *cell;
     bool usermatch = true;
 
-    elog(DEBUG1, "%s called", __func__);
+    elog(DEBUG2, "%s called", __func__);
 
     tp = SearchSysCache2(USERMAPPINGUSERSERVER,
                          ObjectIdGetDatum(GetUserId()),
@@ -905,7 +919,7 @@ static void LoadNominatimUserMapping(NominatimFDWState *state)
         ReleaseSysCache(tp);
     }
 
-    elog(DEBUG1, "%s exit", __func__);
+    elog(DEBUG2, "%s exit", __func__);
 }
 /*
  * InitSession
@@ -938,13 +952,13 @@ static NominatimFDWState *InitSession(const char *srvname)
     state->server = server;
     LoadNominatimUserMapping(state);
 
-    elog(DEBUG1, "%s called: '%s'", __func__, srvname);
+    elog(DEBUG2, "%s called: '%s'", __func__, srvname);
 
     foreach (cell, server->options)
     {
         DefElem *def = lfirst_node(DefElem, cell);
 
-        elog(DEBUG1, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
+        elog(DEBUG2, "  %s parsing node '%s': %s", __func__, def->defname, defGetString(def));
 
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_URL) == 0)
             state->url = defGetString(def);
@@ -1012,7 +1026,7 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 
     Assert(contents);
 
-    elog(DEBUG1, "%s: header = \"%s\"", __func__, contents);
+    elog(DEBUG2, "%s: header = \"%s\"", __func__, contents);
 
     ptr = repalloc(mem->memory, mem->size + realsize + 1);
 
@@ -1080,7 +1094,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     StringInfoData entrances;
     bool found = false;
 
-    elog(DEBUG1, "%s called", __func__);
+    elog(DEBUG2, "%s called", __func__);
 
     if (ExecuteRequest(state) != REQUEST_SUCCESS)
         elog(ERROR, "%s -> request failed: '%s'", __func__, state->url);
@@ -1254,7 +1268,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
 
     state->records = NIL;
 
-    elog(DEBUG1, "%s called", __func__);
+    elog(DEBUG2, "%s called", __func__);
 
     if (ExecuteRequest(state) != REQUEST_SUCCESS)
         elog(ERROR, "%s -> request failed: '%s'", __func__, state->url);
@@ -1439,7 +1453,7 @@ static int ExecuteRequest(NominatimFDWState *state)
     chunk_header.memory = palloc(1);
     chunk_header.size = 0; /* no data at this point */
 
-    elog(DEBUG1, "%s called", __func__);
+    elog(DEBUG2, "%s called", __func__);
 
     curl = curl_easy_init();
 
@@ -1533,9 +1547,6 @@ static int ExecuteRequest(NominatimFDWState *state)
     if (state->email && strlen(state->email) > 0)
         AppendUrlParam(&url_buffer, curl, "email", state->email);
 
-    if (!state->dedupe)
-        appendStringInfo(&url_buffer, "dedupe=0&");
-
     if (state->limit > 0)
         appendStringInfo(&url_buffer, "limit=%d&", state->limit);
 
@@ -1543,7 +1554,7 @@ static int ExecuteRequest(NominatimFDWState *state)
     {
         errbuf[0] = 0;
 
-        elog(DEBUG1, "  %s: setting URL: %s", __func__, url_buffer.data);
+        elog(DEBUG1, "%s: GET \"%s\"", __func__, url_buffer.data);
 
         curl_easy_setopt(curl, CURLOPT_URL, url_buffer.data);
 
@@ -1556,41 +1567,41 @@ static int ExecuteRequest(NominatimFDWState *state)
         curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connect_timeout);
-        elog(DEBUG1, "  %s: timeout > %ld", __func__, state->connect_timeout);
-        elog(DEBUG1, "  %s: max retry > %ld", __func__, state->max_retries);
+        elog(DEBUG2, "  %s: timeout > %ld", __func__, state->connect_timeout);
+        elog(DEBUG2, "  %s: max retry > %ld", __func__, state->max_retries);
 
         if (state->proxy)
         {
-            elog(DEBUG1, "  %s: proxy URL > '%s'", __func__, state->proxy);
+            elog(DEBUG2, "  %s: proxy URL > '%s'", __func__, state->proxy);
 
             curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
 
             if (strcmp(state->proxy_type, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0)
             {
-                elog(DEBUG1, "  %s: proxy protocol > 'HTTP'", __func__);
+                elog(DEBUG2, "  %s: proxy protocol > 'HTTP'", __func__);
                 curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
             }
             if (state->proxy_user)
             {
-                elog(DEBUG1, "  %s: entering proxy user ('%s').", __func__, state->proxy_user);
+                elog(DEBUG2, "  %s: entering proxy user ('%s').", __func__, state->proxy_user);
                 curl_easy_setopt(curl, CURLOPT_PROXYUSERNAME, state->proxy_user);
             }
 
             if (state->proxy_user_password)
             {
-                elog(DEBUG1, "  %s: entering proxy user's password.", __func__);
+                elog(DEBUG2, "  %s: entering proxy user's password.", __func__);
                 curl_easy_setopt(curl, CURLOPT_PROXYPASSWORD, state->proxy_user_password);
             }
         }
 
         if (state->request_redirect)
         {
-            elog(DEBUG1, "  %s: setting request redirect: %d (%s)", __func__, state->request_redirect, state->request_redirect ? "true" : "false");
+            elog(DEBUG2, "  %s: setting request redirect: %d (%s)", __func__, state->request_redirect, state->request_redirect ? "true" : "false");
             curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
             if (state->request_max_redirect)
             {
-                elog(DEBUG1, "  %s: setting maxredirs: %ld", __func__, state->request_max_redirect);
+                elog(DEBUG2, "  %s: setting maxredirs: %ld", __func__, state->request_max_redirect);
                 curl_easy_setopt(curl, CURLOPT_MAXREDIRS, state->request_max_redirect);
             }
         }
@@ -1607,14 +1618,14 @@ static int ExecuteRequest(NominatimFDWState *state)
         initStringInfo(&user_agent);
         appendStringInfo(&user_agent, "PostgreSQL/%s nominatim_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
 
-        elog(DEBUG1, "  %s: \"Agent: %s\"", __func__, user_agent.data);
+        elog(DEBUG2, "  %s: \"Agent: %s\"", __func__, user_agent.data);
 
         curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
 
         initStringInfo(&accept_header);
         appendStringInfo(&accept_header, "Accept-Language: %s", state->accept_language);
         headers = curl_slist_append(headers, accept_header.data);
-        elog(DEBUG1, "  adding header: %s", accept_header.data);
+        elog(DEBUG2, "  adding header: %s", accept_header.data);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
         elog(DEBUG2, "  %s: performing cURL request ... ", __func__);
@@ -1656,8 +1667,7 @@ static int ExecuteRequest(NominatimFDWState *state)
             state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL,
                                           XML_PARSE_NOBLANKS | XML_PARSE_NONET);
 
-            elog(DEBUG2, "  %s: http response code = %ld", __func__, response_code);
-            elog(DEBUG2, "  %s: http response size = %ld", __func__, chunk.size);
+            elog(DEBUG1, "%s: HTTP %ld, %ld bytes", __func__, response_code, chunk.size);
             elog(DEBUG2, "  %s: http response header = \n%s", __func__, chunk_header.memory);
         }
     }
@@ -1690,17 +1700,17 @@ static int CheckURL(char *url)
     CURLUcode code;
     CURLU *handler = curl_url();
 
-    elog(DEBUG1, "%s called > '%s'", __func__, url);
+    elog(DEBUG2, "%s called > '%s'", __func__, url);
 
     code = curl_url_set(handler, CURLUPART_URL, url, 0);
 
     curl_url_cleanup(handler);
 
-    elog(DEBUG1, "  %s handler return code: %u", __func__, code);
+    elog(DEBUG2, "  %s handler return code: %u", __func__, code);
 
     if (code != 0)
     {
-        elog(DEBUG1, "%s: invalid URL (%u) > '%s'", __func__, code, url);
+        elog(DEBUG2, "%s: invalid URL (%u) > '%s'", __func__, code, url);
         return code;
     }
 
@@ -1757,4 +1767,24 @@ static bool IsLayerValid(char *layer)
         token = strtok(NULL, ",");
     }
     return true;
+}
+
+/*
+ * IsPolygonTypeSupported
+ * ----------
+ *
+ * Checks if a polygon type is supported by the nominatim endpoint
+ *
+ * returns boolean (true: valid, false: invalid)
+ */
+static bool IsFeatureTypeValid(char *featuretype)
+{
+    if (!featuretype)
+        return false;
+
+    return (strcmp(featuretype, "") == 0 ||
+            strcmp(featuretype, "country") == 0 ||
+            strcmp(featuretype, "state") == 0 ||
+            strcmp(featuretype, "city") == 0 ||
+            strcmp(featuretype, "settlement") == 0);
 }

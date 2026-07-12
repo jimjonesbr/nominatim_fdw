@@ -2,6 +2,8 @@ CREATE SERVER osm
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'https://nominatim.openstreetmap.org');
 
+SET client_min_messages TO debug1;
+
 SELECT nominatim_fdw_version() IS NOT NULL, 
        nominatim_fdw_version() <> '';
 
@@ -88,7 +90,7 @@ FROM nominatim_search(
       featuretype => 'office',
       dedupe => true,
       exclude_place_ids => '42, 73',
-      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
+      viewbox => '7.6036345,51.9659397,7.6039893,51.9661584',
       polygon_threshold => 0.1,
       layer => 'address',
       limit_result => 1,

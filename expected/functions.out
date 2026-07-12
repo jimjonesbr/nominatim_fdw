@@ -1,6 +1,7 @@
 CREATE SERVER osm 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'https://nominatim.openstreetmap.org');
+SET client_min_messages TO debug1;
 SELECT nominatim_fdw_version() IS NOT NULL, 
        nominatim_fdw_version() <> '';
  ?column? | ?column? 
@@ -47,6 +48,8 @@ FROM nominatim_search(
       bounded => false,
       accept_language => 'de_DE,de,q=0.9',
       entrances => true);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address%2Cpoi&exclude_place_ids=42%2C73&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&limit=1&"
+DEBUG:  ExecuteRequest: HTTP 200, 2394 bytes
 -[ RECORD 1 ]-----+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 osm_id            | 88291927
 osm_type          | way
@@ -114,6 +117,8 @@ SELECT *
 FROM nominatim_search(
       server_name => 'osm',
       q => 'foo 42, bar');
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=foo%2042%2C%20bar&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&"
+DEBUG:  ExecuteRequest: HTTP 200, 355 bytes
 (0 rows)
 
 SELECT 
@@ -150,11 +155,15 @@ FROM nominatim_search(
       featuretype => 'office',
       dedupe => true,
       exclude_place_ids => '42, 73',
-      viewbox => '51.9659397,51.9661584,7.6036345,7.6039893',
+      viewbox => '7.6036345,51.9659397,7.6039893,51.9661584',
       polygon_threshold => 0.1,
       layer => 'address',
       limit_result => 1,
       accept_language => 'de_DE,de,q=0.9');
+WARNING:  unrecognized featureType 'office'
+HINT:  Known values are: country, state, city, settlement.
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe%2060&city=m%C3%BCnster&state=nordrhein%20westfalen&country=germany&postalcode=48149&format=xml&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address&featureType=office&exclude_place_ids=42%2C%2073&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&limit=1&"
+DEBUG:  ExecuteRequest: HTTP 200, 1748 bytes
 -[ RECORD 1 ]-----+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 osm_id            | 88291927
 osm_type          | way
@@ -173,7 +182,7 @@ attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org
 querystring       | cit, einsteinstraße 60, münster, nordrhein westfalen, 48149, germany
 geom              | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
 exclude_place_ids | W88291927,42,73
-more_url          | https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe+60&city=m%C3%BCnster&state=nordrhein+westfalen&postalcode=48149&country=germany&polygon_text=1&addressdetails=1&polygon_threshold=0.1&limit=2&countrycodes=de%2Cbr%2Cus&exclude_place_ids=W88291927%2C42%2C73&viewbox=7.603635%2C7.603989%2C51.96594%2C51.96616&format=xml
+more_url          | https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe+60&city=m%C3%BCnster&state=nordrhein+westfalen&postalcode=48149&country=germany&polygon_text=1&addressdetails=1&polygon_threshold=0.1&limit=2&countrycodes=de%2Cbr%2Cus&exclude_place_ids=W88291927%2C42%2C73&viewbox=7.603635%2C51.96594%2C7.603989%2C51.96616&format=xml
 entrances         | [                                                                                                                                                                                                                                                                                                                                                           +
                   | ]
 extratags         | {                                                                                                                                                                                                                                                                                                                                                           +
@@ -208,8 +217,13 @@ ERROR:  invalid polygon type 'polygon_foo'
 HINT:  this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text
 /* invalid layer */
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', layer => 'address,bogus');
-ERROR:  invalid layer 'address,bogus'
-HINT:  this parameter expects one of the following layers: address, poi, railway, natural, manmade
+WARNING:  unrecognised layer 'address,bogus'
+HINT:  Known values are: address, poi, railway, natural, manmade
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=x&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0&"
+WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (1)
+WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (2)
+WARNING:    ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed with return code 500 (3)
+ERROR:  unable to connect to the Nominatim endpoint: 'https://nominatim.openstreetmap.org'
 /* nonexistent server */
 SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat => 0);
 ERROR:  FOREIGN SERVER does not exist: 'does_not_exist'
@@ -219,6 +233,8 @@ pg_sleep |
 
 SELECT count(*) <= 3 AS respects_limit
 FROM nominatim_search(server_name => 'osm', q => 'münster', limit_result => 3);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=m%C3%BCnster&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&limit=3&"
+DEBUG:  ExecuteRequest: HTTP 200, 2261 bytes
 -[ RECORD 1 ]--+--
 respects_limit | t
 
@@ -257,6 +273,8 @@ FROM nominatim_reverse(
         polygon_threshold => 0.1,
         zoom => 18,
         entrances => true);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&zoom=18&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&"
+DEBUG:  ExecuteRequest: HTTP 200, 1908 bytes
 -[ RECORD 1 ]---+-----------------------------------------------------------------------------------------------------------------------------------------------
 osm_id          | 88291927
 osm_type        | way
@@ -336,6 +354,8 @@ FROM nominatim_reverse(
         lat => 51.9660873,        
         polygon => 'polygon_kml',
         zoom => 18);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&zoom=18&addressdetails=1&polygon_kml=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 1497 bytes
 -[ RECORD 1 ]---+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 osm_id          | 88291927
 osm_type        | way
@@ -397,6 +417,8 @@ FROM nominatim_reverse(
         lat => 51.9660873,        
         polygon => 'polygon_svg',
         zoom => 18);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&zoom=18&addressdetails=1&polygon_svg=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 1382 bytes
 -[ RECORD 1 ]---+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 osm_id          | 88291927
 osm_type        | way
@@ -458,6 +480,8 @@ FROM nominatim_reverse(
         lat => 51.9660873,        
         polygon => 'polygon_geojson',
         zoom => 18);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&zoom=18&addressdetails=1&polygon_geojson=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 1480 bytes
 -[ RECORD 1 ]---+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 osm_id          | 88291927
 osm_type        | way
@@ -527,6 +551,8 @@ FROM nominatim_reverse(
     server_name => 'osm',
     lon => 180,
     lat => 90);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=180.00000000&lat=90.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 287 bytes
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -538,6 +564,8 @@ FROM nominatim_reverse(
         server_name => 'osm',
         lon => -180,
         lat => -90);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=-180.00000000&lat=-90.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 289 bytes
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -548,6 +576,8 @@ pg_sleep |
 SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => -60);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=0.00000000&lat=-60.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 286 bytes
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -557,6 +587,8 @@ pg_sleep |
 SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => 0);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=0.00000000&lat=0.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 284 bytes
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -567,6 +599,8 @@ SELECT count(*)
 FROM nominatim_lookup(
         server_name => 'osm',
         osm_ids => 'W88291927,R62591');
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927%2CR62591&format=xml&addressdetails=1&"
+DEBUG:  ExecuteRequest: HTTP 200, 1571 bytes
 -[ RECORD 1 ]
 count | 2
 
@@ -604,6 +638,8 @@ FROM nominatim_lookup(
       email => 'jim.jones@uni-muenster.de',
       polygon_threshold => 0.1,
       accept_language => 'de_DE,de,q=0.9');
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927&format=xml&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&"
+DEBUG:  ExecuteRequest: HTTP 200, 1900 bytes
 -[ RECORD 1 ]---+-----------------------------------------------------------------------------------------------------------------------------------------------
 osm_id          | 88291927
 osm_type        | way

@@ -98,8 +98,9 @@ ERROR:  bad request => nothing to search for.
 HINT:  a 'nominatim_fdw_search' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)
 /* bad request: invalid layer */
 SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', layer => 'bar');
-ERROR:  invalid layer 'bar'
-HINT:  this parameter expects one of the following layers: address, poi, railway, natural, manmade
+WARNING:  unrecognised layer 'bar'
+HINT:  Known values are: address, poi, railway, natural, manmade
+ERROR:  ParseNominatimSearchData -> request failed: 'http://server.im'
 /* FOREIGN TABLE not supported */
 CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
 SERVER srv OPTIONS (foo 'bar');

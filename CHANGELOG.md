@@ -5,6 +5,7 @@ Release date: **YYYY-MM-DD**
 ## Enhancements
 
 * Add error message for invalid coordinate pairs: this adds a check on the reverse call to reject invalid coordinate pairs before sending the request to the server, therefore avoiding a HTTP request that is doomed to fail.
+* Add `email` and `polygon_threshold` parameters to reverse function.
 
 ## Bug fixes
 
