@@ -304,14 +304,24 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
 
 Datum nominatim_fdw_version(PG_FUNCTION_ARGS)
 {
-    StringInfoData buffer;
-    initStringInfo(&buffer);
+	StringInfoData buffer;
+	curl_version_info_data *ver = curl_version_info(CURLVERSION_NOW);
 
-    appendStringInfo(&buffer, "nominatim_fdw = %s,", FDW_VERSION);
-    appendStringInfo(&buffer, " libxml/%s", LIBXML_DOTTED_VERSION);
-    appendStringInfo(&buffer, " %s", curl_version());
+	initStringInfo(&buffer);
 
-    PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
+	appendStringInfo(&buffer, "nominatim_fdw %s (PostgreSQL %s",
+					 FDW_VERSION,
+					 PG_VERSION);
+
+#ifdef NOMINATIM_FDW_CC
+	appendStringInfo(&buffer, ", compiled by %s", NOMINATIM_FDW_CC);
+#endif
+
+	appendStringInfo(&buffer, ", libxml %s, libcurl %s)",
+					 LIBXML_DOTTED_VERSION,
+					 ver->version);
+
+	PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }
 
 /*

@@ -18,7 +18,10 @@ CURL_CONFIG = curl-config
 XML2_CONFIG = xml2-config
 PG_CONFIG = pg_config
 
-PG_CPPFLAGS += $(shell $(CURL_CONFIG) --cflags) $(shell $(XML2_CONFIG) --cflags)
+PG_CPPFLAGS += $(shell $(CURL_CONFIG) --cflags) \
+			   $(shell $(XML2_CONFIG) --cflags) \
+			   -DNOMINATIM_FDW_CC="\"$(CC)\"" \
+			   -DNOMINATIM_FDW_BUILD_DATE="\"$(shell date -u +'%Y-%m-%d %H:%M:%S UTC')\""
 LIBS += $(shell $(CURL_CONFIG) --libs)
 
 SHLIB_LINK := $(LIBS)
