@@ -881,7 +881,11 @@ static void LoadNominatimUserMapping(NominatimFDWState *state)
     {
         elog(DEBUG2, "%s: setting UserMapping", __func__);
         um = (UserMapping *)palloc(sizeof(UserMapping));
-        um->umid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
+#if PG_VERSION_NUM >= 120000
+		um->umid = ((Form_pg_user_mapping)GETSTRUCT(tp))->oid;
+#elif PG_VERSION_NUM >= 90600
+		um->umid = HeapTupleGetOid(tp);
+#endif
         um->userid = GetUserId();
         um->serverid = state->server->serverid;
 

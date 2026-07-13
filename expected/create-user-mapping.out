@@ -23,9 +23,9 @@ ALTER USER MAPPING FOR CURRENT_USER SERVER osm
 (1 row)
 
 /* unknown user mapping option */
+DROP USER MAPPING FOR CURRENT_USER SERVER osm;
 CREATE USER MAPPING FOR CURRENT_USER SERVER osm
   OPTIONS (bogus 'x');
-ERROR:  user mapping for "postgres" already exists for server "osm"
-DROP USER MAPPING FOR CURRENT_USER SERVER osm;
+ERROR:  invalid nominatim_fdw option 'bogus'
 /* clean up */
 DROP SERVER osm;
