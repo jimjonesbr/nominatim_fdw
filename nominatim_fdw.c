@@ -179,6 +179,7 @@ static struct NominatimFDWOption valid_options[] =
 extern Datum nominatim_fdw_handler(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_validator(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_version(PG_FUNCTION_ARGS);
+extern Datum nominatim_fdw_settings(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_search(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS);
 extern Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS);
@@ -186,6 +187,7 @@ extern Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS);
 PG_FUNCTION_INFO_V1(nominatim_fdw_handler);
 PG_FUNCTION_INFO_V1(nominatim_fdw_validator);
 PG_FUNCTION_INFO_V1(nominatim_fdw_version);
+PG_FUNCTION_INFO_V1(nominatim_fdw_settings);
 PG_FUNCTION_INFO_V1(nominatim_fdw_search);
 PG_FUNCTION_INFO_V1(nominatim_fdw_reverse);
 PG_FUNCTION_INFO_V1(nominatim_fdw_lookup);
@@ -320,6 +322,38 @@ Datum nominatim_fdw_version(PG_FUNCTION_ARGS)
 	appendStringInfo(&buffer, ", libxml %s, libcurl %s)",
 					 LIBXML_DOTTED_VERSION,
 					 ver->version);
+
+	PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
+}
+
+Datum nominatim_fdw_settings(PG_FUNCTION_ARGS)
+{
+	StringInfoData buffer;
+	curl_version_info_data *ver = curl_version_info(CURLVERSION_NOW);
+
+	initStringInfo(&buffer);
+
+	appendStringInfo(&buffer, "nominatim_fdw %s,", FDW_VERSION);
+	appendStringInfo(&buffer, "PostgreSQL %s,", PG_VERSION);
+	appendStringInfo(&buffer, "libxml %s,", LIBXML_DOTTED_VERSION);
+	appendStringInfo(&buffer, "libcurl %s,", ver->version);
+
+	if (ver->ssl_version)
+		appendStringInfo(&buffer, "ssl %s,", ver->ssl_version);
+	if (ver->libz_version)
+		appendStringInfo(&buffer, "zlib %s,", ver->libz_version);
+	if (ver->libssh_version)
+		appendStringInfo(&buffer, "libSSH %s,", ver->libssh_version);
+	if (ver->nghttp2_version)
+		appendStringInfo(&buffer, "nghttp2 %s,", ver->nghttp2_version);
+
+#ifdef NOMINATIM_FDW_CC
+	appendStringInfo(&buffer, "compiled by %s,", NOMINATIM_FDW_CC);
+#endif
+
+#ifdef NOMINATIM_FDW_BUILD_DATE
+	appendStringInfo(&buffer, "built on %s", NOMINATIM_FDW_BUILD_DATE);
+#endif
 
 	PG_RETURN_TEXT_P(cstring_to_text(buffer.data));
 }

@@ -20,6 +20,7 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
     - [Nominatim_Reverse](#nominatim_reverse)
     - [Nominatim_Lookup](#nominatim_lookup)
     - [Version](#nominatim_fdw_version)
+    - [Settings](#nominatim_fdw_settings)
 - [Examples](#examples)
 - [Deploy with Docker](#deploy-with-docker)
  
@@ -27,9 +28,9 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
 
 * [libxml2](http://www.xmlsoft.org/): version 2.5.0 or higher.
 * [libcurl](https://curl.se/libcurl/): version 7.74.0 or higher.
-* [PostgreSQL](https://www.postgresql.org): version 12 or higher.
+* [PostgreSQL](https://www.postgresql.org): version 10 or higher.
 
-## [Build and Install](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#build_and_install)
+## [Build and Install](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#build-and-install)
 
 To compile the source code you need to ensure the [pg_config](https://www.postgresql.org/docs/current/app-pgconfig.html) executable is properly set when you run `make` - this executable is typically in your PostgreSQL installation's bin directory. After that, just run `make` in the root directory:
 
@@ -81,7 +82,7 @@ ALTER EXTENSION nominatim_fdw UPDATE TO '1.4';
 
 To use the `nominatim_fdw` you must first create a `SERVER` to connect to a Nominatim endpoint. After that, you can retrieve the data using the nominatim_fdw functions.
 
-### [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server)
+### [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create-server)
 
 The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server, which in this case means a Nominatim server. The user who defines the server becomes its owner. A `SERVER` requires an `url`, so that `nominatim_fdw` knows where to send the requests.
 
@@ -103,9 +104,9 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 | `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default `300` seconds).
 | `max_connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3` times).
 | `max_connect_redirect`         | optional            | Limit of how many times URL redirection may follow (default `1`). Set to `-1` to allow unlimited redirects.
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`).
 
-
-### [ALTER SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#alter-foreign-table-and-alter-server)
+### [ALTER SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#alter-server)
 
 All options and parameters set to a `SERVER` can be changed, dropped, and new ones can be added using [`ALTER SERVER`](https://www.postgresql.org/docs/current/sql-alterserver.html) statements.
 
@@ -142,7 +143,7 @@ The following example creates a user mapping with proxy credentials for the curr
 
 ```sql
 CREATE USER MAPPING FOR pguser
-SERVER osm_proxy
+SERVER osm
 OPTIONS (proxy_user 'myuser', proxy_password 'mysecret');
 ```
 
@@ -150,7 +151,7 @@ Credentials can be updated with `ALTER USER MAPPING`:
 
 ```sql
 ALTER USER MAPPING FOR pguser
-SERVER osm_proxy OPTIONS (SET proxy_password 'newpassword');
+SERVER osm OPTIONS (SET proxy_password 'newpassword');
 ```
 ### [Functions](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#functions)
 
@@ -181,7 +182,7 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `state` | optional | state (default *unset*) |
 | `country` | optional | country (default *unset*) |
 | `postalcode` | optional | postal code (default *unset*) |
-| `limit` | optional | limits the maximum number of returned results (default `10`) |
+| `limit_result` | optional | limits the maximum number of returned results (default `0`) |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
 | `namedetails` | optional | includes a full list of names for the result. (default `false`) |
@@ -341,7 +342,7 @@ The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows 
 
 **Synopsis**
 
-*SETOF Record* nominatim_lookup(*parameters*)
+*SETOF NominatimRecord* nominatim_lookup(*parameters*)
 
 **Parameters**
 
@@ -395,10 +396,40 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 
 ```sql
 SELECT nominatim_fdw_version();
-                                                                                                  nominatim_fdw_version                                                                                                  
--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- nominatim_fdw = 1.4-dev, libxml/2.9.14 libcurl/8.14.1 GnuTLS/3.8.9 zlib/1.3.1 brotli/1.1.0 zstd/1.5.7 libidn2/2.3.8 libpsl/0.21.2 libssh2/1.11.1 nghttp2/1.64.0 ngtcp2/1.11.0 nghttp3/1.8.0 librtmp/2.3 OpenLDAP/2.6.10
+                                              nominatim_fdw_version                                               
+------------------------------------------------------------------------------------------------------------------
+ nominatim_fdw 1.4-dev (PostgreSQL 18.3 (Debian 18.3-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
 (1 row)
+```
+#### [nominatim_fdw_settings](#nominatim-fdw-settings)
+
+```sql
+VIEW rdf_fdw_settings(component text, version text);
+```
+
+**Description**
+
+A system view that provides detailed version information for `nominatim_fdw` and all its dependencies, including core libraries (PostgreSQL, libxml, libcurl) and optional components (SSL, zlib, libSSH, nghttp2), along with compiler and build information. Returns individual component names and their corresponding versions for convenient programmatic access.
+
+-------
+
+**Usage**
+
+```sql
+SELECT * FROM nominatim_fdw_settings;
+   component   |            version            
+---------------+-------------------------------
+ nominatim_fdw | 1.4-dev
+ PostgreSQL    | 18.3 (Debian 18.3-1.pgdg13+1)
+ libxml        | 2.9.14
+ libcurl       | 8.14.1
+ ssl           | GnuTLS/3.8.9
+ zlib          | 1.3.1
+ libSSH        | libssh2/1.11.1
+ nghttp2       | 1.64.0
+ compiler      | gcc
+ built         | 2026-07-03 10:04:53 UTC
+(10 rows)
 ```
 
 ## [Deploy with Docker](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#deploy-with-docker)
