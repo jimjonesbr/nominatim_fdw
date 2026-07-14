@@ -55,7 +55,7 @@ CREATE TYPE NominatimReverseGeocode AS (
   polygon text,
   extratags jsonb,
   namedetails jsonb,
-  addressparts jsonb,
+  addressdetails jsonb,
   entrances jsonb
 );
 

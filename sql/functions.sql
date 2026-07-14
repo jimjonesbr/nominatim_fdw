@@ -136,7 +136,7 @@ SELECT
     jsonb_pretty(entrances) AS entrances, 
 	jsonb_pretty(extratags) AS extratags, 
     jsonb_pretty(namedetails) AS namedetails, 
-	jsonb_pretty(addressparts) AS addressparts
+	jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
@@ -169,7 +169,7 @@ SELECT
     jsonb_pretty(entrances) AS entrances, 
 	jsonb_pretty(extratags) AS extratags, 
     jsonb_pretty(namedetails) AS namedetails, 
-	jsonb_pretty(addressparts) AS addressparts
+	jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
@@ -195,7 +195,7 @@ SELECT
     jsonb_pretty(entrances) AS entrances, 
 	jsonb_pretty(extratags) AS extratags, 
     jsonb_pretty(namedetails) AS namedetails, 
-	jsonb_pretty(addressparts) AS addressparts
+	jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
@@ -221,7 +221,7 @@ SELECT
     jsonb_pretty(entrances) AS entrances, 
 	jsonb_pretty(extratags) AS extratags, 
     jsonb_pretty(namedetails) AS namedetails, 
-	jsonb_pretty(addressparts) AS addressparts
+	jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,

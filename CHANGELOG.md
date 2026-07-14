@@ -23,7 +23,8 @@ Release date: **YYYY-MM-DD**
 ## Behaviour changes
 * Add `entrances` column to lookup, search, and reverse calls.
 * Rename reverse's column `result` to `display_name`: the previous name was mimicing the xml node retrieved from the API, which was inconsistent with the lookup and search functions.
-* For simplicity, `nominatim_fdw_version()` now omits ssl, zblib, libSSH, and ngt http2 versions. 
+* For simplicity, `nominatim_fdw_version()` now omits ssl, zblib, libSSH, and ngt http2 versions.
+* Rename `addressparts` column from reverse function to `addressdetails`, so that it aligns with search and lookup.
 
 # 1.3
 

@@ -51,24 +51,23 @@
 #define FDW_VERSION "1.4-dev"
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
+#define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300
+#define NOMINATIM_DEFAULT_MAXRETRY 3
+#define NOMINATIM_DEFAULT_MAXREDIRECT 1
+#define NOMINATIM_DEFAULT_LANGUAGE "en-US,en;q=0.9"
 
 #define NOMINATIM_REQUEST_SEARCH "search"
 #define NOMINATIM_REQUEST_REVERSE "reverse"
 #define NOMINATIM_REQUEST_LOOKUP "lookup"
-
 #define NOMINATIM_SERVER_OPTION_URL "url"
 #define NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT "connect_timeout"
 #define NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY "max_connect_retry"
 #define NOMINATIM_SERVER_OPTION_MAXREDIRECT "max_connect_redirect"
 #define NOMINATIM_SERVER_OPTION_HTTP_PROXY "http_proxy"
+#define NOMINATIM_SERVER_OPTION_LANGUAGE "accept_language"
 #define NOMINATIM_USERMAPPING_OPTION_PROXYUSER "proxy_user"
 #define NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD "proxy_password"
-#define NOMINATIM_SERVER_OPTION_LANGUAGE "accept_language"
 
-#define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300
-#define NOMINATIM_DEFAULT_MAXRETRY 3
-#define NOMINATIM_DEFAULT_MAXREDIRECT 1
-#define NOMINATIM_DEFAULT_LANGUAGE "en-US,en;q=0.9"
 
 PG_MODULE_MAGIC;
 
@@ -151,7 +150,6 @@ typedef struct NominatimRecord
     char *extratags;
     char *addressdetails;
     char *namedetails;
-    char *addressparts;
     char *entrances;
 } NominatimRecord;
 
@@ -840,8 +838,6 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
         return place->addressdetails;
     else if (strcmp(NameStr(att->attname), "namedetails") == 0)
         return place->namedetails;
-    else if (strcmp(NameStr(att->attname), "addressparts") == 0)
-        return place->addressparts;
     else if (strcmp(NameStr(att->attname), "entrances") == 0)
         return place->entrances;
     else
@@ -1136,7 +1132,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     xmlNodePtr reversegeocode;
     xmlNodePtr tag;
     xmlNodePtr root;
-    StringInfoData addressparts;
+    StringInfoData addressdetails;
     StringInfoData extratags;
     StringInfoData namedetails;
     StringInfoData entrances;
@@ -1156,11 +1152,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
 
     place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
 
-    initStringInfo(&addressparts);
+    initStringInfo(&addressdetails);
     initStringInfo(&extratags);
     initStringInfo(&namedetails);
     initStringInfo(&entrances);
-    appendStringInfoChar(&addressparts, '{');
+    appendStringInfoChar(&addressdetails, '{');
     appendStringInfoChar(&extratags, '{');
     appendStringInfoChar(&namedetails, '{');
     appendStringInfoChar(&entrances, '[');
@@ -1201,11 +1197,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
             {
                 char *content = xml_node_content(tag);
-                if (addressparts.len > 1)
-                    appendStringInfoChar(&addressparts, ',');
-                escape_json(&addressparts, (char *)tag->name);
-                appendStringInfoChar(&addressparts, ':');
-                escape_json(&addressparts, content ? content : "");
+                if (addressdetails.len > 1)
+                    appendStringInfoChar(&addressdetails, ',');
+                escape_json(&addressdetails, (char *)tag->name);
+                appendStringInfoChar(&addressdetails, ':');
+                escape_json(&addressdetails, content ? content : "");
             }
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"extratags") == 0)
@@ -1279,12 +1275,12 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
         }
     }
 
-    appendStringInfoChar(&addressparts, '}');
+    appendStringInfoChar(&addressdetails, '}');
     appendStringInfoChar(&extratags, '}');
     appendStringInfoChar(&namedetails, '}');
     appendStringInfoChar(&entrances, ']');
 
-    place->addressparts = addressparts.data;
+    place->addressdetails = addressdetails.data;
     place->extratags = extratags.data;
     place->namedetails = namedetails.data;
     place->entrances = entrances.data;

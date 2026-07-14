@@ -8,6 +8,7 @@ ALTER TYPE NominatimReverseGeocode ADD ATTRIBUTE entrances jsonb;
 
 /* rename attribute to make it consistant with NominatimRecord */
 ALTER TYPE NominatimReverseGeocode RENAME ATTRIBUTE result TO display_name;
+ALTER TYPE NominatimReverseGeocode RENAME ATTRIBUTE addressparts TO addressdetails;
 
 /* removed unsed parameters and added entrances */
 DROP FUNCTION nominatim_lookup;
