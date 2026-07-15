@@ -261,7 +261,7 @@ SELECT
     jsonb_pretty(entrances) AS entrances, 
 	jsonb_pretty(extratags) AS extratags, 
     jsonb_pretty(namedetails) AS namedetails, 
-	jsonb_pretty(addressparts) AS addressparts
+	jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
@@ -314,7 +314,7 @@ namedetails     | {                                                             
                 |     "old_name": "Zentrum für Informationsverarbeitung",                                                                                       +
                 |     "short_name": "CIT"                                                                                                                       +
                 | }
-addressparts    | {                                                                                                                                             +
+addressdetails  | {                                                                                                                                             +
                 |     "city": "Münster",                                                                                                                        +
                 |     "road": "Einsteinstraße",                                                                                                                 +
                 |     "state": "Nordrhein-Westfalen",                                                                                                           +
@@ -349,7 +349,7 @@ SELECT
     jsonb_pretty(entrances) AS entrances, 
 	jsonb_pretty(extratags) AS extratags, 
     jsonb_pretty(namedetails) AS namedetails, 
-	jsonb_pretty(addressparts) AS addressparts
+	jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
@@ -377,7 +377,7 @@ extratags       | {                                                             
                 | }
 namedetails     | {                                                                                                                                                                                                                                                                                                                                                                                                          +
                 | }
-addressparts    | {                                                                                                                                                                                                                                                                                                                                                                                                          +
+addressdetails  | {                                                                                                                                                                                                                                                                                                                                                                                                          +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                                                                                                                                     +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                                                                                              +
                 |     "state": "North Rhine-Westphalia",                                                                                                                                                                                                                                                                                                                                                                     +
@@ -412,7 +412,7 @@ SELECT
     jsonb_pretty(entrances) AS entrances, 
 	jsonb_pretty(extratags) AS extratags, 
     jsonb_pretty(namedetails) AS namedetails, 
-	jsonb_pretty(addressparts) AS addressparts
+	jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
@@ -440,7 +440,7 @@ extratags       | {                                                             
                 | }
 namedetails     | {                                                                                                                                                                                                                                                                                              +
                 | }
-addressparts    | {                                                                                                                                                                                                                                                                                              +
+addressdetails  | {                                                                                                                                                                                                                                                                                              +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                         +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                  +
                 |     "state": "North Rhine-Westphalia",                                                                                                                                                                                                                                                         +
@@ -475,7 +475,7 @@ SELECT
     jsonb_pretty(entrances) AS entrances, 
 	jsonb_pretty(extratags) AS extratags, 
     jsonb_pretty(namedetails) AS namedetails, 
-	jsonb_pretty(addressparts) AS addressparts
+	jsonb_pretty(addressdetails) AS addressdetails
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
@@ -503,7 +503,7 @@ extratags       | {                                                             
                 | }
 namedetails     | {                                                                                                                                                                                                                                                                                                                                                                 +
                 | }
-addressparts    | {                                                                                                                                                                                                                                                                                                                                                                 +
+addressdetails  | {                                                                                                                                                                                                                                                                                                                                                                 +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                                                                                            +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                                                     +
                 |     "state": "North Rhine-Westphalia",                                                                                                                                                                                                                                                                                                                            +
