@@ -21,7 +21,6 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
     - [Nominatim_Lookup](#nominatim_lookup)
     - [Version](#nominatim_fdw_version)
     - [Settings](#nominatim_fdw_settings)
-- [Examples](#examples)
 - [Deploy with Docker](#deploy-with-docker)
  
 ## [Requirements](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#requirements)
@@ -159,15 +158,7 @@ This section describes the `nominatim_fdw` functions, which are mapped to the No
 
 #### [Nominatim_Search](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_search)
 
-**Description**
-
 The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports [structured](https://nominatim.org/release-docs/develop/api/Search/#structured-query) and [free-form](https://nominatim.org/release-docs/develop/api/Search/#free-form-query) search queries, which are distinguished by either splitting the address components into different parameters, such as `street`, `county`, `state`, or providing a single string in the parameter `q`.
-
-**Availability**: 1.0.0
-
-**Synopsis**
-
-*SETOF Record* nominatim_search(*parameters*)
 
 **Parameters**
 
@@ -182,10 +173,10 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `state` | optional | state (default *unset*) |
 | `country` | optional | country (default *unset*) |
 | `postalcode` | optional | postal code (default *unset*) |
-| `limit_result` | optional | limits the maximum number of returned results (default `0`) |
-| `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
+| `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `namedetails` | optional | includes a full list of names for the result. (default `false`) |
+| `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `countrycodes` | optional | comma-separated list of [country codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) (default *unset*) |
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
@@ -193,10 +184,11 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `exclude_place_ids` | optional | comma-separated list of place ids (default *unset*) |
 | `viewbox` | optional | bounding box as in `<x1>,<y1>,<x2>,<y2>` (default *unset*) |
 | `bounded` | optional | When `bounded` is set to `true` and the `viewbox` is small enough, then an amenity-only search is allowed. Give the special keyword for the amenity in square brackets, e.g. [pub] and a selection of objects of this type is returned. There is no guarantee that the result returns all objects in the area. (default `false`) |
-| `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | valid email address (default *unset*) |
 | `dedupe` | optional | discards duplicated entries (default `true`) |
+| `limit_result` | optional | limits the maximum number of returned results (default `0`) |
+| `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
 
 As in the Nominatim API, the free-form query string parameter `q` cannot be combined with the parameters `amenity`, `street`, `city`, `county`, `state`, `country` and `postalcode`, as they are used in structured calls.
 
@@ -221,10 +213,18 @@ SELECT osm_id, ref, lon, lat, boundingbox
 FROM nominatim_search(server_name => 'osm', 
                       q => 'Neubrückenstraße 63, münster, germany');
 
-  osm_id   |       ref       |    lon    |    lat     |                boundingbox                
------------+-----------------+-----------+------------+-------------------------------------------
- 121736959 | Theater Münster | 7.6293918 | 51.9648162 | 51.9644060,51.9652417,7.6286897,7.6304381
-(1 row)
+-[ RECORD 1 ]------------------------------------------
+osm_id      | 121736959
+ref         | Theater Münster
+lon         | 7.6293918
+lat         | 51.9648163
+boundingbox | 51.9644060,51.9652417,7.6286897,7.6304381
+-[ RECORD 2 ]------------------------------------------
+osm_id      | 2785257564
+ref         | 
+lon         | 7.6290121
+lat         | 51.9651014
+boundingbox | 51.9650514,51.9651514,7.6289621,7.6290621
 ```
 
 Structured search
@@ -235,60 +235,64 @@ FROM nominatim_search(server_name => 'osm',
                       street => 'neubrückenstraße 63', 
                       city => 'münster');
 
-  osm_id   |       ref       |    lon    |    lat     |                boundingbox                
------------+-----------------+-----------+------------+-------------------------------------------
- 121736959 | Theater Münster | 7.6293918 | 51.9648162 | 51.9644060,51.9652417,7.6286897,7.6304381
-(1 row)
+-[ RECORD 1 ]------------------------------------------
+osm_id      | 121736959
+ref         | Theater Münster
+lon         | 7.6293918
+lat         | 51.9648163
+boundingbox | 51.9644060,51.9652417,7.6286897,7.6304381
+-[ RECORD 2 ]------------------------------------------
+osm_id      | 2785257564
+ref         | 
+lon         | 7.6290121
+lat         | 51.9651014
+boundingbox | 51.9650514,51.9651514,7.6289621,7.6290621
 ```
- Structured search with `extratags`
+
+All columnns:
 
 ```sql
-SELECT osm_id, ref, lon, lat, jsonb_pretty(extratags) AS extratags 
+SELECT * 
 FROM nominatim_search(server_name => 'osm', 
                       street => 'neubrückenstraße 63', 
                       city => 'münster',
-                      extratags => true);
-  osm_id   |       ref       |    lon    |    lat     |                                               extratags                                                
------------+-----------------+-----------+------------+--------------------------------------------------------------------------------------------------------
- 121736959 | Theater Münster | 7.6293918 | 51.9648162 | {                                                                                                     +
-           |                 |           |            |     "image": "https://upload.wikimedia.org/wikipedia/commons/6/64/Muenster_Stadttheater_%2881%29.JPG",+
-           |                 |           |            |     "layer": "-1",                                                                                    +
-           |                 |           |            |     "toilets": "customers",                                                                           +
-           |                 |           |            |     "building": "civic",                                                                              +
-           |                 |           |            |     "location": "surface",                                                                            +
-           |                 |           |            |     "wikidata": "Q2415904",                                                                           +
-           |                 |           |            |     "wikipedia": "de:Theater Münster",                                                                +
-           |                 |           |            |     "roof:shape": "flat",                                                                             +
-           |                 |           |            |     "start_date": "1956",                                                                             +
-           |                 |           |            |     "wheelchair": "yes",                                                                              +
-           |                 |           |            |     "contact:fax": "+49 251 5909202",                                                                 +
-           |                 |           |            |     "roof:colour": "#F5F5DC",                                                                         +
-           |                 |           |            |     "contact:email": "info-theater@stadt-muenster.de",                                                +
-           |                 |           |            |     "contact:phone": "+49 251 5909205",                                                               +
-           |                 |           |            |     "roof:material": "gravel",                                                                        +
-           |                 |           |            |     "building:colour": "silver",                                                                      +
-           |                 |           |            |     "building:levels": "2",                                                                           +
-           |                 |           |            |     "contact:website": "https://www.theater-muenster.com/start/index.html",                           +
-           |                 |           |            |     "building:material": "concrete",                                                                  +
-           |                 |           |            |     "construction_date": "1956",                                                                      +
-           |                 |           |            |     "wikimedia_commons": "Category:Theater Münster",                                                  +
-           |                 |           |            |     "toilets:wheelchair": "yes"                                                                       +
-           |                 |           |            | }
-(1 row)
+                      polygon => 'polygon_text',
+                      namedetails => true,
+                      extratags => true,
+                      addressdetails => true,
+                      entrances => true)
+FETCH FIRST ROW ONLY;
 
+-[ RECORD 1 ]-
+osm_id            | 121736959
+osm_type          | way
+ref               | Theater Münster
+class             | amenity
+display_name      | Theater Münster, 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, North Rhine-Westphalia, 48143, Germany
+place_id          | 114644984
+place_rank        | 30
+address_rank      | 30
+lon               | 7.6293918
+lat               | 51.9648163
+boundingbox       | 51.9644060,51.9652417,7.6286897,7.6304381
+importance        | 0.38154785896147225
+icon              | 
+timestamp         | 2026-07-03 12:01:23+00
+attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
+querystring       | neubrückenstraße 63, münster
+polygon           | POLYGON((7.6286897 51.9647704,7.6287379 51.9647543,7.6287912 51.9647366,7.6288354 51.9647218,7.6288349 51.9646709,7.628834 51.964573,7.6289499 51.9645661,7.6290874 51.9645579,7.6290872 51.9645503,7.6290867 51.9645228,7.6292274 51.9645082,7.6292273 51.9645007,7.6292271 51.964474,7.6293629 51.9644615,7.6293627 51.9644544,7.6293617 51.9644272,7.6295651 51.9644121,7.6296481 51.964406,7.6297295 51.9645083,7.6299845 51.9647498,7.6300692 51.96483,7.6302563 51.9647441,7.6302913 51.9647704,7.6303205 51.9647923,7.630342 51.9648082,7.6303599 51.9648243,7.6303929 51.9648538,7.6304345 51.9648911,7.6304381 51.964895,7.6301466 51.9649831,7.6298991 51.9650575,7.6298803 51.9650638,7.6298581 51.9650704,7.6297948 51.965089,7.6298643 51.9651741,7.6296525 51.9652362,7.6296337 51.9652417,7.6295205 51.9651873,7.6293479 51.9652404,7.629327 51.9652323,7.6293113 51.9652382,7.6292464 51.9652081,7.6291822 51.9652287,7.6291288 51.9652054,7.6291488 51.9651362,7.6291685 51.9651295,7.6291838 51.9650844,7.6291485 51.9650948,7.6291248 51.9650853,7.6291022 51.9650763,7.6290867 51.9650807,7.6290636 51.9650873,7.6290291 51.9650971,7.6289808 51.9651108,7.6286897 51.9647704))
+exclude_place_ids | W121736959,N2785257564,N5024387719,N1361849725
+more_url          | https://nominatim.openstreetmap.org/search?street=neubr%C3%BCckenstra%C3%9Fe+63&city=m%C3%BCnster&polygon_text=1&addressdetails=1&entrances=1&namedetails=1&extratags=1&limit=20&exclude_place_ids=W121736959%2CN2785257564%2CN5024387719%2CN1361849725&format=xml
+extratags         | {"image": "https://upload.wikimedia.org/wikipedia/commons/6/64/Muenster_Stadttheater_%2881%29.JPG", "layer": "-1", "toilets": "customers", "building": "civic", "location": "surface", "wikidata": "Q2415904", "wikipedia": "de:Theater Münster", "roof:shape": "flat", "start_date": "1956", "wheelchair": "yes", "contact:fax": "+49 251 5909202", "roof:colour": "#F5F5DC", "contact:email": "info-theater@stadt-muenster.de", "contact:phone": "+49 251 5909205", "roof:material": "gravel", "building:colour": "silver", "building:levels": "2", "contact:website": "https://www.theater-muenster.com/", "building:material": "concrete", "construction_date": "1956", "wikimedia_commons": "Category:Theater Münster", "toilets:wheelchair": "yes"}
+namedetails       | {"name": "Theater Münster", "name:de": "Theater Münster", "alt_name": "Stadttheater", "old_name": "Städtische Bühnen Münster"}
+addressdetails    | {"city": "Münster", "road": "Neubrückenstraße", "state": "North Rhine-Westphalia", "suburb": "Altstadt", "amenity": "Theater Münster", "country": "Germany", "postcode": "48143", "country_code": "de", "house_number": "63", "city_district": "Münster-Mitte", "neighbourhood": "Martini", "ISO3166-2-lvl4": "DE-NW"}
+entrances         | [{"lat": "51.9650638", "lon": "7.6298803", "type": "service", "osm_id": "2838736213"}, {"lat": "51.9649831", "lon": "7.6301466", "type": "service", "osm_id": "9912525894"}, {"lat": "51.9644121", "lon": "7.6295651", "type": "emergency", "osm_id": "9912525895"}, {"lat": "51.9644544", "lon": "7.6293627", "type": "emergency", "osm_id": "9912525896"}, {"lat": "51.9645007", "lon": "7.6292273", "type": "emergency", "osm_id": "9912525897"}, {"lat": "51.9645503", "lon": "7.6290872", "type": "emergency", "osm_id": "9912525898"}, {"lat": "51.9650853", "lon": "7.6291248", "type": "main", "osm_id": "9912525899"}, {"lat": "51.9646709", "lon": "7.6288349", "type": "main", "osm_id": "9912525900"}]
+type              | theatre
 ```
 
 #### [Nominatim_Reverse](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_reverse)
 
-**Description**
-
 [Reverse](https://nominatim.org/release-docs/develop/api/Reverse/) geocoding generates an address from a coordinate given as latitude and longitude. The reverse geocoding API does not exactly compute the address for the coordinate it receives. It works by finding the closest suitable OSM object and returning its address information. This may occasionally lead to unexpected results.
-
-**Availability**: 1.0.0
-
-**Synopsis**
-
-*SETOF Record* nominatim_reverse(*parameters*)
 
 **Parameters**
 
@@ -297,13 +301,16 @@ FROM nominatim_search(server_name => 'osm',
 | `server_name` | **required** | Foreign Data Wrapper server created using the `CREATE SERVER` statement. |
 | `lon` | optional | longitude of the location to generate an address for (default `0`) |
 | `lat` | optional | latitude of the location to generate an address for (default `0`) |
-| `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
-| `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
-| `namedetails` | optional | includes a full list of names for the result. (default `false`) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
-| `zoom` | optional | Level of detail required for the address. This is a number that corresponds roughly to the zoom level used in XYZ tile sources in frameworks like Leaflet.js, Openlayers etc. In terms of address details the zoom levels are as follows: `3` country, `5` state, `8` county, `10` city, `12` town / borough, `13` village / suburb, `14` neighbourhood, `15` any settlement, `16` major streets, `17` major and minor streets, `18` building (default `18`) |
+| `zoom` | optional | level of detail required for the address, `0`–`18`. Roughly corresponds to a map zoom level: `3` country, `5` state, `8` county, `10` city, `12` town/borough, `13` village/suburb, `14` neighbourhood, `15` any settlement, `16` major streets, `17` major and minor streets, `18` building. If unset, the server default (`18`, building level) is applied. (default *unset*)|
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
+| `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
+| `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
+| `namedetails` | optional | includes a full list of names for the result. (default `false`) |
 | `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
+| `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
+| `polygon_threshold` | optional | floating-point number (default `0.0`) |
+| `email` | optional | valid email address (default *unset*) |
 
 ----------------------
 **Usage**
@@ -319,30 +326,59 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 Address generation for the coordinates `7.6293` longitude and `51.9648` latitude:        
 
 ```sql
-SELECT osm_id, result, boundingbox
+SELECT osm_id, display_name, boundingbox
 FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6293,
         lat => 51.9648,        
         extratags => true);
 
-  osm_id   |                                                          result                                                          |                boundingbox                
------------+--------------------------------------------------------------------------------------------------------------------------+-------------------------------------------
- 121736959 | Theater Münster, 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, North Rhine-Westphalia, 48143, Germany | 51.9644060,51.9652417,7.6286897,7.6304381
-(1 row)
+-[ RECORD 1 ]-
+osm_id       | 2785257564
+display_name | 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, North Rhine-Westphalia, 48143, Germany
+boundingbox  | 51.9650514,51.9651514,7.6289621,7.6290621
+
+```
+
+All columns:
+
+```sql
+SELECT * 
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6293,
+        lat => 51.9648,
+        polygon => 'polygon_text',      
+        namedetails => true,
+        extratags => true,
+        addressdetails => true,
+        entrances => true);
+
+-[ RECORD 1 ]-
+osm_id         | 2785257564
+osm_type       | node
+display_name   | 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, North Rhine-Westphalia, 48143, Germany
+ref            | 
+place_id       | 113899235
+place_rank     | 30
+address_rank   | 30
+lon            | 7.6290121
+lat            | 51.9651014
+boundingbox    | 51.9650514,51.9651514,7.6289621,7.6290621
+icon           | 
+timestamp      | 2026-07-03 11:58:23+00
+attribution    | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
+querystring    | lat=51.9648&lon=7.6293&format=xml
+polygon        | POINT(7.6290121 51.9651014)
+extratags      | {"operator": "Deutsche Post", "collection_times": "Mo-Fr 15:30, Sa 11:30", "operator:wikidata": "Q157645"}
+namedetails    | {}
+addressdetails | {"city": "Münster", "road": "Neubrückenstraße", "state": "North Rhine-Westphalia", "suburb": "Altstadt", "country": "Germany", "postcode": "48143", "country_code": "de", "house_number": "63", "city_district": "Münster-Mitte", "neighbourhood": "Martini", "ISO3166-2-lvl4": "DE-NW"}
+entrances      | []
 ```
 
 #### [Nominatim_Lookup](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_lookup)
 
-**Description**
-
 The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows to query the address and other details of one or multiple OSM objects like node, way or relation.
-
-**Availability**: 1.0.0
-
-**Synopsis**
-
-*SETOF NominatimRecord* nominatim_lookup(*parameters*)
 
 **Parameters**
 
@@ -350,11 +386,12 @@ The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows 
 |---|---|---
 | `server_name` | **required** | Foreign Data Wrapper server created using the [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server) statement. |
 | `osm_ids` | **required** | comma-separated list of OSM ids, each prefixed with its type: `N` (node), `W` (way) or `R` (relation), e.g. `N123,W456,R789` |
-| `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
+| `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `namedetails` | optional | includes a full list of names for the result. (default `false`) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` |
 | `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
+| `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
+| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | valid email address (default *unset*) |
 
@@ -374,23 +411,54 @@ FROM nominatim_lookup(
       server_name => 'osm',
       osm_ids => 'W121736959');
 
-  osm_id   |                                                       display_name                                                       
------------+--------------------------------------------------------------------------------------------------------------------------
- 121736959 | Theater Münster, 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, North Rhine-Westphalia, 48143, Germany
-(1 row)
+-[ RECORD 1 ]-
+osm_id       | 121736959
+display_name | Theater Münster, 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, Nordrhein-Westfalen, 48143, Deutschland
+```
+
+All columns:
+
+```sql
+SELECT *  
+FROM nominatim_lookup(
+      server_name => 'osm',
+      osm_ids => 'W121736959',
+      polygon => 'polygon_text',
+      namedetails => true,
+      extratags => true,
+      addressdetails => true,
+      entrances => true);
+
+-[ RECORD 1 ]-
+osm_id            | 121736959
+osm_type          | way
+ref               | Theater Münster
+class             | amenity
+display_name      | Theater Münster, 63, Neubrückenstraße, Martini, Altstadt, Münster-Mitte, Münster, Nordrhein-Westfalen, 48143, Deutschland
+place_id          | 113107324
+place_rank        | 30
+address_rank      | 30
+lon               | 7.6293918
+lat               | 51.9648163
+boundingbox       | 51.9644060,51.9652417,7.6286897,7.6304381
+importance        | 0.38154785896147225
+icon              | 
+timestamp         | 2026-07-03 11:59:39+00
+attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
+querystring       | 
+polygon           | POLYGON((7.6286897 51.9647704,7.6287379 51.9647543,7.6287912 51.9647366,7.6288354 51.9647218,7.6288349 51.9646709,7.628834 51.964573,7.6289499 51.9645661,7.6290874 51.9645579,7.6290872 51.9645503,7.6290867 51.9645228,7.6292274 51.9645082,7.6292273 51.9645007,7.6292271 51.964474,7.6293629 51.9644615,7.6293627 51.9644544,7.6293617 51.9644272,7.6295651 51.9644121,7.6296481 51.964406,7.6297295 51.9645083,7.6299845 51.9647498,7.6300692 51.96483,7.6302563 51.9647441,7.6302913 51.9647704,7.6303205 51.9647923,7.630342 51.9648082,7.6303599 51.9648243,7.6303929 51.9648538,7.6304345 51.9648911,7.6304381 51.964895,7.6301466 51.9649831,7.6298991 51.9650575,7.6298803 51.9650638,7.6298581 51.9650704,7.6297948 51.965089,7.6298643 51.9651741,7.6296525 51.9652362,7.6296337 51.9652417,7.6295205 51.9651873,7.6293479 51.9652404,7.629327 51.9652323,7.6293113 51.9652382,7.6292464 51.9652081,7.6291822 51.9652287,7.6291288 51.9652054,7.6291488 51.9651362,7.6291685 51.9651295,7.6291838 51.9650844,7.6291485 51.9650948,7.6291248 51.9650853,7.6291022 51.9650763,7.6290867 51.9650807,7.6290636 51.9650873,7.6290291 51.9650971,7.6289808 51.9651108,7.6286897 51.9647704))
+exclude_place_ids | 
+more_url          | 
+extratags         | {"image": "https://upload.wikimedia.org/wikipedia/commons/6/64/Muenster_Stadttheater_%2881%29.JPG", "layer": "-1", "toilets": "customers", "building": "civic", "location": "surface", "wikidata": "Q2415904", "wikipedia": "de:Theater Münster", "roof:shape": "flat", "start_date": "1956", "wheelchair": "yes", "contact:fax": "+49 251 5909202", "roof:colour": "#F5F5DC", "contact:email": "info-theater@stadt-muenster.de", "contact:phone": "+49 251 5909205", "roof:material": "gravel", "building:colour": "silver", "building:levels": "2", "contact:website": "https://www.theater-muenster.com/", "building:material": "concrete", "construction_date": "1956", "wikimedia_commons": "Category:Theater Münster", "toilets:wheelchair": "yes"}
+namedetails       | {"name": "Theater Münster", "name:de": "Theater Münster", "alt_name": "Stadttheater", "old_name": "Städtische Bühnen Münster"}
+addressdetails    | {"city": "Münster", "road": "Neubrückenstraße", "state": "Nordrhein-Westfalen", "suburb": "Altstadt", "amenity": "Theater Münster", "country": "Deutschland", "postcode": "48143", "country_code": "de", "house_number": "63", "city_district": "Münster-Mitte", "neighbourhood": "Martini", "ISO3166-2-lvl4": "DE-NW"}
+entrances         | [{"lat": "51.9650638", "lon": "7.6298803", "type": "service", "osm_id": "2838736213"}, {"lat": "51.9649831", "lon": "7.6301466", "type": "service", "osm_id": "9912525894"}, {"lat": "51.9644121", "lon": "7.6295651", "type": "emergency", "osm_id": "9912525895"}, {"lat": "51.9644544", "lon": "7.6293627", "type": "emergency", "osm_id": "9912525896"}, {"lat": "51.9645007", "lon": "7.6292273", "type": "emergency", "osm_id": "9912525897"}, {"lat": "51.9645503", "lon": "7.6290872", "type": "emergency", "osm_id": "9912525898"}, {"lat": "51.9650853", "lon": "7.6291248", "type": "main", "osm_id": "9912525899"}, {"lat": "51.9646709", "lon": "7.6288349", "type": "main", "osm_id": "9912525900"}]
+type              | theatre
 ```
 
 #### [nominatim_fdw_version](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#version)
 
-**Description**
-
 Shows the version of the installed `nominatim_fdw` and its main libraries.
-
-**Availability**: 1.0.0
-
-**Synopsis**
-
-*text* **nominatim_fdw_version**();
 
 **Usage**
 
@@ -401,13 +469,7 @@ SELECT nominatim_fdw_version();
  nominatim_fdw 1.4-dev (PostgreSQL 18.3 (Debian 18.3-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
 (1 row)
 ```
-#### [nominatim_fdw_settings](#nominatim-fdw-settings)
-
-```sql
-VIEW rdf_fdw_settings(component text, version text);
-```
-
-**Description**
+#### [nominatim_fdw_settings](#nominatim_fdw_settings)
 
 A system view that provides detailed version information for `nominatim_fdw` and all its dependencies, including core libraries (PostgreSQL, libxml, libcurl) and optional components (SSL, zlib, libSSH, nghttp2), along with compiler and build information. Returns individual component names and their corresponding versions for convenient programmatic access.
 
@@ -436,7 +498,7 @@ SELECT * FROM nominatim_fdw_settings;
 
 To deploy `nominatim_fdw` with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/nominatim_fdw/releases). For instance, a `nominatim_fdw` `Dockerfile` for PostgreSQL 18 should look like this (minimal example):
 
-```dockerfile
+```Dockerfile
 FROM postgres:18
 
 RUN apt-get update && \
