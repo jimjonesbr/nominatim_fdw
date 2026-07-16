@@ -1,4 +1,4 @@
-# 1.4
+# 2.0
 
 Release date: **YYYY-MM-DD**
 
@@ -20,7 +20,7 @@ Release date: **YYYY-MM-DD**
 * Set `DEFAULT` value of reverse's `zoom` to `-1` (disabled): the previous value was 0, which is a valid zoom level.
 * Fix parsing of `KML` geometries iun reverse calls: the parser was ignoring this format and returning `NULL` for `polygon_kml` requests. This is now fixed.
 
-## Behaviour changes
+## Breaking changes
 * Add `entrances` column to lookup, search, and reverse calls.
 * Rename reverse's column `result` to `display_name`: the previous name was mimicing the xml node retrieved from the API, which was inconsistent with the lookup and search functions.
 * For simplicity, `nominatim_fdw_version()` now omits ssl, zblib, libSSH, and ngt http2 versions.
