@@ -2,6 +2,9 @@
 
 CONTAINER_NAME=nominatim_pg18
 NETWORK_NAME=pgnet
+TEST_ENV_PATH=~/git/nominatim_fdw/scripts
+
+#bash $TEST_ENV_PATH/squid/deploy-proxy-env.sh
 
 # Build and install nominatim_fdw
 echo -e "\n== Building and Installing nominatim_fdw on PostgreSQL 18 ==\n"

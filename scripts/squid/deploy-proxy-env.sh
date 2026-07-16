@@ -21,7 +21,8 @@ EOF
 podman run -d --name squid-no-auth \
   --network $NETWORK_NAME \
   --ip 172.19.42.100 \
-  -v /tmp/squid-no-auth.conf:/etc/squid/squid.conf:ro \
+  --no-hosts \
+  -v /tmp/squid-no-auth.conf:/etc/squid/squid.conf:ro,z \
   ubuntu/squid:latest
 
 echo "Waiting for Squid (no auth) to start..."
@@ -61,8 +62,9 @@ EOF
 podman run -d --name squid-auth \
   --network $NETWORK_NAME \
   --ip 172.19.42.101 \
-  -v /tmp/squid-auth.conf:/etc/squid/squid.conf:ro \
-  -v /tmp/squid-passwords:/etc/squid/passwords:ro \
+  --no-hosts \
+  -v /tmp/squid-auth.conf:/etc/squid/squid.conf:ro,z \
+  -v /tmp/squid-passwords:/etc/squid/passwords:ro,z \
   ubuntu/squid:latest
 
 echo "Waiting for Squid (with auth) to start..."
