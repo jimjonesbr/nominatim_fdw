@@ -38,7 +38,7 @@ CREATE FUNCTION nominatim_search(
     country text DEFAULT '',
     postalcode text DEFAULT '',
     extratags boolean DEFAULT false,
-    addressdetails boolean DEFAULT true,
+    addressdetails boolean DEFAULT false,
     namedetails boolean DEFAULT false,
     polygon text DEFAULT '',
     accept_language text DEFAULT '',    

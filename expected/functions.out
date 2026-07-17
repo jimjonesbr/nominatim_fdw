@@ -117,7 +117,7 @@ SELECT *
 FROM nominatim_search(
       server_name => 'osm',
       q => 'foo 42, bar');
-DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=foo%2042%2C%20bar&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&"
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=foo%2042%2C%20bar&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&"
 DEBUG:  ExecuteRequest: HTTP 200, 355 bytes
 (0 rows)
 
@@ -162,8 +162,8 @@ FROM nominatim_search(
       accept_language => 'de_DE,de,q=0.9');
 WARNING:  unrecognized featureType 'office'
 HINT:  Known values are: country, state, city, settlement.
-DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe%2060&city=m%C3%BCnster&state=nordrhein%20westfalen&country=germany&postalcode=48149&format=xml&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address&featureType=office&exclude_place_ids=42%2C%2073&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&limit=1&"
-DEBUG:  ExecuteRequest: HTTP 200, 1748 bytes
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe%2060&city=m%C3%BCnster&state=nordrhein%20westfalen&country=germany&postalcode=48149&format=xml&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address&featureType=office&exclude_place_ids=42%2C%2073&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&limit=1&"
+DEBUG:  ExecuteRequest: HTTP 200, 1340 bytes
 -[ RECORD 1 ]-----+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 osm_id            | 88291927
 osm_type          | way
@@ -190,18 +190,6 @@ extratags         | {                                                           
 namedetails       | {                                                                                                                                                                                                                                                                                                                                                           +
                   | }
 addressdetails    | {                                                                                                                                                                                                                                                                                                                                                           +
-                  |     "city": "Münster",                                                                                                                                                                                                                                                                                                                                      +
-                  |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                                               +
-                  |     "state": "Nordrhein-Westfalen",                                                                                                                                                                                                                                                                                                                         +
-                  |     "office": "Center for Information Technology",                                                                                                                                                                                                                                                                                                          +
-                  |     "suburb": "Innenstadtring",                                                                                                                                                                                                                                                                                                                             +
-                  |     "country": "Deutschland",                                                                                                                                                                                                                                                                                                                               +
-                  |     "postcode": "48149",                                                                                                                                                                                                                                                                                                                                    +
-                  |     "country_code": "de",                                                                                                                                                                                                                                                                                                                                   +
-                  |     "house_number": "60",                                                                                                                                                                                                                                                                                                                                   +
-                  |     "city_district": "Münster-Mitte",                                                                                                                                                                                                                                                                                                                       +
-                  |     "neighbourhood": "Neutor",                                                                                                                                                                                                                                                                                                                              +
-                  |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                                                                                                                                                                                                                               +
                   | }
 
 /* q combined with structured params => should error */
@@ -216,16 +204,17 @@ SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', polygon => 'polyg
 ERROR:  invalid polygon type 'polygon_foo'
 HINT:  this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text
 /* invalid layer */
+RESET client_min_messages;
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', layer => 'address,bogus');
 WARNING:  unrecognised layer 'address,bogus'
 HINT:  Known values are: address, poi, railway, natural, manmade
-DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=x&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0&"
 WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (1/3)
 WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (2/3)
 WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (3/3)
-ERROR:  nominatim request failed with HTTP status 500
-DETAIL:  URL: "https://nominatim.openstreetmap.org/search?q=x&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0&"
+ERROR:  The requested URL returned error: 500
+DETAIL:  URL: "https://nominatim.openstreetmap.org/search?q=x&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0&"
 HINT:  Check your request parameters and try again.
+SET client_min_messages TO debug1;
 /* nonexistent server */
 SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat => 0);
 ERROR:  FOREIGN SERVER does not exist: 'does_not_exist'
@@ -235,8 +224,8 @@ pg_sleep |
 
 SELECT count(*) <= 3 AS respects_limit
 FROM nominatim_search(server_name => 'osm', q => 'münster', limit_result => 3);
-DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=m%C3%BCnster&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&limit=3&"
-DEBUG:  ExecuteRequest: HTTP 200, 2261 bytes
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=m%C3%BCnster&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&limit=3&"
+DEBUG:  ExecuteRequest: HTTP 200, 1515 bytes
 -[ RECORD 1 ]--+--
 respects_limit | t
 

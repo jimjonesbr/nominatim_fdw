@@ -106,7 +106,9 @@ SELECT * FROM nominatim_search(server_name => 'osm');
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', polygon => 'polygon_foo');
 
 /* invalid layer */
+RESET client_min_messages;
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', layer => 'address,bogus');
+SET client_min_messages TO debug1;
 
 /* nonexistent server */
 SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat => 0);

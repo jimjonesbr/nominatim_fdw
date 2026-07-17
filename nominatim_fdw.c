@@ -397,7 +397,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         state->lon = lon;
         state->lat = lat;
         state->zoom = zoom;
-        state->layer = strcmp(text_to_cstring(layer), "") == 0 ? NULL : text_to_cstring(layer);
+        state->layer = text_to_cstring(layer);
         state->polygon_type = text_to_cstring(polygon_text);
         state->extratags = extratags;
         state->addressdetails = addressdetails;
@@ -1680,8 +1680,14 @@ static int ExecuteRequest(NominatimFDWState *state)
         {
             long response_code = 0;
             curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+            /* Client errors (except 429) won't succeed on retry - fail fast */
+            if (response_code >= 400 && response_code < 500 && response_code != 429)
+                break;
+
             elog(WARNING, "%s: request to '%s' failed (%ld/%ld)",
                  __func__, state->url, i, state->max_retries);
+            elog(DEBUG1, "the nominatim returned HTTP code %ld", response_code);
 
             /* discard whatever the failed attempt left behind before retrying */
             chunk.size = 0;
@@ -1707,7 +1713,7 @@ static int ExecuteRequest(NominatimFDWState *state)
 
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-                     errmsg("nominatim request failed with HTTP status %ld", response_code),
+                     errmsg("%s", strlen(errbuf) > 0 ? errbuf : "nominatim HTTP request failed"),
                      errhint("Check your request parameters and try again."),
                      errdetail("URL: \"%s\"", url_buffer.data)));
           }
@@ -1824,7 +1830,7 @@ static bool IsLayerValid(char *layer)
  * IsFeatureTypeValid
  * ----------
  *
- * Checks if a polygon type is supported by the nominatim endpoint
+ * Checks if a feature type is supported by the nominatim endpoint
  *
  * returns boolean (true: valid, false: invalid)
  */
