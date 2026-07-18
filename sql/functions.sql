@@ -48,14 +48,15 @@ FROM nominatim_search(
       accept_language => 'de_DE,de,q=0.9',
       entrances => true);
 
-SELECT pg_sleep(2);
 
 /* unknown address */
+SELECT pg_sleep(2);
 SELECT *
 FROM nominatim_search(
       server_name => 'osm',
       q => 'foo 42, bar');
 
+SELECT pg_sleep(2);
 SELECT 
     osm_id, osm_type, 
 	class,
@@ -114,14 +115,11 @@ SET client_min_messages TO debug1;
 SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat => 0);
 
 SELECT pg_sleep(2);
-
 SELECT count(*) <= 3 AS respects_limit
 FROM nominatim_search(server_name => 'osm', q => 'münster', limit_result => 3);
 
-SELECT pg_sleep(2);
-
 /* nominatim reverse */
-
+SELECT pg_sleep(2);
 SELECT 
     osm_id, 
 	osm_type, 
@@ -154,7 +152,6 @@ FROM nominatim_reverse(
         entrances => true);
 
 SELECT pg_sleep(2);
-
 SELECT 
     osm_id, 
 	osm_type, 
@@ -181,6 +178,44 @@ FROM nominatim_reverse(
 
 SELECT pg_sleep(2);
 
+/* zoom = 8 (county) */
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_svg',
+        zoom => 8);
+
+/* zoom = -1 (disabled) */
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_svg',
+        zoom => -1);
+
+/* invalid zoom level */
+SELECT pg_sleep(2);
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_kml',
+        zoom => 19);
+SELECT pg_sleep(2);
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_kml',
+        zoom => -2);
+
+
+SELECT pg_sleep(2);
 SELECT 
     osm_id, 
 	osm_type, 
@@ -206,7 +241,6 @@ FROM nominatim_reverse(
         zoom => 18);
 
 SELECT pg_sleep(2);
-
 SELECT 
     osm_id, 
 	osm_type, 
@@ -231,9 +265,8 @@ FROM nominatim_reverse(
         polygon => 'polygon_geojson',
         zoom => 18);
 
-SELECT pg_sleep(2);
-
 /* invalid coordinates */
+SELECT pg_sleep(2);
 SELECT osm_id, display_name, boundingbox
 FROM nominatim_reverse(
         server_name => 'osm', 
@@ -241,18 +274,16 @@ FROM nominatim_reverse(
         lat => 9999.99,
         extratags => true);
 
-SELECT pg_sleep(2);
-
 /* longitude out of range */
+SELECT pg_sleep(2);
 SELECT *
 FROM nominatim_reverse(
         server_name => 'osm',
         lon => 200,
         lat => 50);
 
-SELECT pg_sleep(2);
-
 /* boundary values must be ACCEPTED (inclusive endpoints) */
+SELECT pg_sleep(2);
 SELECT osm_id IS NOT NULL
 FROM nominatim_reverse(
     server_name => 'osm',
@@ -260,37 +291,31 @@ FROM nominatim_reverse(
     lat => 90);
 
 SELECT pg_sleep(2);
-
 SELECT osm_id IS NOT NULL
 FROM nominatim_reverse(
         server_name => 'osm',
         lon => -180,
         lat => -90);
 
-SELECT pg_sleep(2);
-
 /* valid coordinates but no location */
+SELECT pg_sleep(2);
 SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => -60);
 
 SELECT pg_sleep(2);
-
 SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => 0);
 
 SELECT pg_sleep(2);
-
 SELECT count(*) 
 FROM nominatim_lookup(
         server_name => 'osm',
         osm_ids => 'W88291927,R62591');
 
-SELECT pg_sleep(2);
-
 /* nominatim lookup */
-
+SELECT pg_sleep(2);
 SELECT 
     osm_id, osm_type, 
 	class,

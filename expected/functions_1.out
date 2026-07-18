@@ -108,11 +108,11 @@ addressdetails    | {                                                           
                   |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                                                                                                                                                                                                  +
                   | }
 
+/* unknown address */
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
-/* unknown address */
 SELECT *
 FROM nominatim_search(
       server_name => 'osm',
@@ -120,6 +120,10 @@ FROM nominatim_search(
 DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=foo%2042%2C%20bar&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&"
 DEBUG:  ExecuteRequest: HTTP 200, 355 bytes
 (0 rows)
+
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
 
 SELECT 
     osm_id, osm_type, 
@@ -229,11 +233,11 @@ DEBUG:  ExecuteRequest: HTTP 200, 1515 bytes
 -[ RECORD 1 ]--+--
 respects_limit | t
 
+/* nominatim reverse */
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
-/* nominatim reverse */
 SELECT 
     osm_id, 
 	osm_type, 
@@ -385,6 +389,81 @@ SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
+/* zoom = 8 (county) */
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_svg',
+        zoom => 8);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&zoom=8&addressdetails=1&polygon_svg=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 53828 bytes
+-[ RECORD 1 ]+-----------------------------------------
+osm_id       | 62591
+osm_type     | relation
+display_name | Münster, North Rhine-Westphalia, Germany
+
+/* zoom = -1 (disabled) */
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_svg',
+        zoom => -1);
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&addressdetails=1&polygon_svg=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 1370 bytes
+-[ RECORD 1 ]+----------------------------------------------------------------------------------------------------------------------------------------------
+osm_id       | 88291927
+osm_type     | way
+display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
+
+/* invalid zoom level */
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_kml',
+        zoom => 19);
+WARNING:  zoom out of range: 19
+DETAIL:  zoom must be between 0 and 18 (-1 to disable it)
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&zoom=19&addressdetails=1&polygon_kml=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 1497 bytes
+-[ RECORD 1 ]+----------------------------------------------------------------------------------------------------------------------------------------------
+osm_id       | 88291927
+osm_type     | way
+display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
+
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,        
+        polygon => 'polygon_kml',
+        zoom => -2);
+WARNING:  zoom out of range: -2
+DETAIL:  zoom must be between 0 and 18 (-1 to disable it)
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&addressdetails=1&polygon_kml=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 1485 bytes
+-[ RECORD 1 ]+----------------------------------------------------------------------------------------------------------------------------------------------
+osm_id       | 88291927
+osm_type     | way
+display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
+
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
+
 SELECT 
     osm_id, 
 	osm_type, 
@@ -507,11 +586,11 @@ addressdetails  | {                                                             
                 |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                                                                                                                                                                                                                                     +
                 | }
 
+/* invalid coordinates */
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
-/* invalid coordinates */
 SELECT osm_id, display_name, boundingbox
 FROM nominatim_reverse(
         server_name => 'osm', 
@@ -519,24 +598,24 @@ FROM nominatim_reverse(
         lat => 9999.99,
         extratags => true);
 ERROR:  latitude out of range: 9999.990000
-HINT:  latitude must be between -90 and 90
+DETAIL:  latitude must be between -90 and 90
+/* longitude out of range */
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
-/* longitude out of range */
 SELECT *
 FROM nominatim_reverse(
         server_name => 'osm',
         lon => 200,
         lat => 50);
 ERROR:  longitude out of range: 200.000000
-HINT:  longitude must be between -180 and 180
+DETAIL:  longitude must be between -180 and 180
+/* boundary values must be ACCEPTED (inclusive endpoints) */
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
-/* boundary values must be ACCEPTED (inclusive endpoints) */
 SELECT osm_id IS NOT NULL
 FROM nominatim_reverse(
     server_name => 'osm',
@@ -559,11 +638,11 @@ DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=
 DEBUG:  ExecuteRequest: HTTP 200, 289 bytes
 (0 rows)
 
+/* valid coordinates but no location */
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
-/* valid coordinates but no location */
 SELECT osm_id, display_name
 FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => -60);
@@ -595,11 +674,11 @@ DEBUG:  ExecuteRequest: HTTP 200, 1571 bytes
 -[ RECORD 1 ]
 count | 2
 
+/* nominatim lookup */
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
-/* nominatim lookup */
 SELECT 
     osm_id, osm_type, 
 	class,

@@ -411,30 +411,35 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
             ereport(WARNING,
                     (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
                      errmsg("unrecognised layer '%s'", state->layer),
-                     errhint("Known values are: address, poi, railway, natural, manmade")));
+                     errdetail("Known values are: address, poi, railway, natural, manmade")));
 
         if (state->feature_type && !IsFeatureTypeValid(state->feature_type))
             ereport(WARNING,
                     (errmsg("unrecognized featureType '%s'", state->feature_type),
-                     errhint("Known values are: country, state, city, settlement.")));
-
+                     errdetail("Known values are: country, state, city, settlement.")));
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
                             errmsg("invalid polygon type '%s'", state->polygon_type),
-                            errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
+                            errdetail("This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
+
+        if (zoom < -1 || zoom > 18)
+            ereport(WARNING,
+                    (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+                     errmsg("zoom out of range: %d", zoom),
+                     errdetail("zoom must be between 0 and 18 (-1 to disable it)")));
 
         if (lat < -90.0 || lat > 90.0)
             ereport(ERROR,
                     (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
                      errmsg("latitude out of range: %f", lat),
-                     errhint("latitude must be between -90 and 90")));
+                     errdetail("latitude must be between -90 and 90")));
 
         if (lon < -180.0 || lon > 180.0)
             ereport(ERROR,
                     (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
                      errmsg("longitude out of range: %f", lon),
-                     errhint("longitude must be between -180 and 180")));
+                     errdetail("longitude must be between -180 and 180")));
 
         elog(DEBUG2, "\n\n\t=== %s ===\n\tlon: '%f'\n\tlat: '%f'\n\tzoom: '%d'\n\tpolygon_type: '%s'\n\tlayer: '%s'\n", __func__,
              state->lon,
