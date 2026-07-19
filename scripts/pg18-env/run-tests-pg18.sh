@@ -4,7 +4,7 @@ CONTAINER_NAME=nominatim_pg18
 NETWORK_NAME=pgnet
 TEST_ENV_PATH=~/git/nominatim_fdw/scripts
 
-#bash $TEST_ENV_PATH/squid/deploy-proxy-env.sh
+bash $TEST_ENV_PATH/squid/deploy-proxy-env.sh
 
 # Build and install nominatim_fdw
 echo -e "\n== Building and Installing nominatim_fdw on PostgreSQL 18 ==\n"
@@ -19,5 +19,5 @@ podman exec -itw /nominatim_fdw/ -u postgres $CONTAINER_NAME psql -d postgres \
 
 # SKIP_PROXY_TESTS=1 - skip proxy tests since we don't have a proxy set up in this environment
 
-podman exec -itw /nominatim_fdw/ $CONTAINER_NAME make PGUSER=postgres SKIP_PROXY_TESTS=1 installcheck 
+podman exec -itw /nominatim_fdw/ $CONTAINER_NAME make PGUSER=postgres installcheck 
 echo -e "\n== Tests completed ==\n"

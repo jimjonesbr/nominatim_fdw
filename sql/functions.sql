@@ -214,6 +214,21 @@ FROM nominatim_reverse(
         polygon => 'polygon_kml',
         zoom => -2);
 
+/* invalid polygon format */
+SELECT pg_sleep(2);
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,
+        polygon => 'pOlygON_TexT');
+SELECT pg_sleep(2);
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,
+        polygon => 'foo');
 
 SELECT pg_sleep(2);
 SELECT 
@@ -345,6 +360,20 @@ FROM nominatim_lookup(
       email => 'jim.jones@uni-muenster.de',
       polygon_threshold => 0.1,
       accept_language => 'de_DE,de,q=0.9');
+
+/* mix of valid and invalid osm_ids */
+SELECT pg_sleep(2);
+SELECT osm_id, osm_type, class, type, display_name
+FROM nominatim_lookup(
+      server_name => 'osm',
+      osm_ids => 'W88291927,X99999,F00');
+
+/* invalid osm_ids */
+SELECT pg_sleep(2);
+SELECT osm_id, osm_type, class, type, display_name
+FROM nominatim_lookup(
+      server_name => 'osm',
+      osm_ids => 'X99999,F00');
 
 /* must error, since osm_ids is required */
 SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => '');

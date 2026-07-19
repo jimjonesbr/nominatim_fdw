@@ -460,6 +460,45 @@ osm_id       | 88291927
 osm_type     | way
 display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
 
+/* invalid polygon format */
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,
+        polygon => 'pOlygON_TexT');
+WARNING:  invalid polygon type 'pOlygON_TexT'
+DETAIL:  This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&addressdetails=1&pOlygON_TexT=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 1073 bytes
+-[ RECORD 1 ]+----------------------------------------------------------------------------------------------------------------------------------------------
+osm_id       | 88291927
+osm_type     | way
+display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
+
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT osm_id, osm_type, display_name
+FROM nominatim_reverse(
+        server_name => 'osm', 
+        lon => 7.6038115,
+        lat => 51.9660873,
+        polygon => 'foo');
+WARNING:  invalid polygon type 'foo'
+DETAIL:  This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&addressdetails=1&foo=1&accept-language=en-US%2Cen%3Bq%3D0.9&"
+DEBUG:  ExecuteRequest: HTTP 200, 1073 bytes
+-[ RECORD 1 ]+----------------------------------------------------------------------------------------------------------------------------------------------
+osm_id       | 88291927
+osm_type     | way
+display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
+
 SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
@@ -765,6 +804,37 @@ addressdetails  | {                                                             
                 |     "neighbourhood": "Neutor",                                                                                                                +
                 |     "ISO3166-2-lvl4": "DE-NW"                                                                                                                 +
                 | }
+
+/* mix of valid and invalid osm_ids */
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT osm_id, osm_type, class, type, display_name
+FROM nominatim_lookup(
+      server_name => 'osm',
+      osm_ids => 'W88291927,X99999,F00');
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927%2CX99999%2CF00&format=xml&addressdetails=1&"
+DEBUG:  ExecuteRequest: HTTP 200, 1079 bytes
+-[ RECORD 1 ]+-----------------------------------------------------------------------------------------------------------------------------------------------
+osm_id       | 88291927
+osm_type     | way
+class        | office
+type         | university
+display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, Nordrhein-Westfalen, 48149, Deutschland
+
+/* invalid osm_ids */
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT osm_id, osm_type, class, type, display_name
+FROM nominatim_lookup(
+      server_name => 'osm',
+      osm_ids => 'X99999,F00');
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=X99999%2CF00&format=xml&addressdetails=1&"
+DEBUG:  ExecuteRequest: HTTP 200, 202 bytes
+(0 rows)
 
 /* must error, since osm_ids is required */
 SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => '');

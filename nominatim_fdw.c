@@ -419,9 +419,9 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
                      errdetail("Known values are: country, state, city, settlement.")));
 
         if (!IsPolygonTypeSupported(state->polygon_type))
-            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-                            errmsg("invalid polygon type '%s'", state->polygon_type),
-                            errdetail("This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
+            ereport(WARNING, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                              errmsg("invalid polygon type '%s'", state->polygon_type),
+                              errdetail("This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
         if (zoom < -1 || zoom > 18)
             ereport(WARNING,
