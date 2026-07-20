@@ -1597,11 +1597,15 @@ static int ExecuteRequest(NominatimFDWState *state)
         AppendUrlParam(&url_buffer, curl, "email", state->email);
 
     if (state->limit > 0)
-        appendStringInfo(&url_buffer, "limit=%d&", state->limit);
+        appendStringInfo(&url_buffer, "limit=%d", state->limit);
 
     if (curl)
     {
         errbuf[0] = 0;
+
+        /* remove trailing & from URL, if any. */
+        if (url_buffer.data[url_buffer.len-1] == '&')
+            url_buffer.data[url_buffer.len-1] = '\0';
 
         elog(DEBUG1, "%s: GET \"%s\"", __func__, url_buffer.data);
 
