@@ -8,7 +8,7 @@ LANGUAGE C STRICT;
 
 CREATE FUNCTION nominatim_fdw_version()
 RETURNS text AS 'MODULE_PATHNAME', 'nominatim_fdw_version'
-LANGUAGE C IMMUTABLE STRICT PARALLEL SAFE;
+LANGUAGE C STABLE PARALLEL SAFE;
 
 CREATE TYPE NominatimRecord AS ( 
   osm_id bigint,  
@@ -121,7 +121,7 @@ LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
 
 CREATE FUNCTION nominatim_fdw_settings()
 RETURNS text AS 'MODULE_PATHNAME', 'nominatim_fdw_settings'
-LANGUAGE C IMMUTABLE STRICT;
+LANGUAGE C STABLE STRICT;
 
 COMMENT ON FUNCTION nominatim_fdw_settings() IS 'Returns detailed dependency information including optional components';
 
@@ -135,7 +135,6 @@ CREATE VIEW nominatim_fdw_settings AS
         ('nominatim_fdw',    substring(v from 'nominatim_fdw\s+([^\s,]+)')),
         ('PostgreSQL', substring(v from 'PostgreSQL\s+([^,]+)')),
         ('libxml',     substring(v from 'libxml\s+([^,]+)')),
-        ('librdf',     substring(v from 'librdf\s+([^,]+)')),
         ('libcurl',    substring(v from 'libcurl\s+([^,]+)')),
         ('ssl',        substring(v from ',ssl\s+([^,]+)')),
         ('zlib',       substring(v from ',zlib\s+([^,]+)')),
