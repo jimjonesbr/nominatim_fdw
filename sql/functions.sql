@@ -100,11 +100,16 @@ FROM nominatim_search(
 /* q combined with structured params => should error */
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'foo', city => 'münster');
 
-/* nothing to search for => should error */
+/* nothing to search for - should error */
 SELECT * FROM nominatim_search(server_name => 'osm');
 
-/* invalid polygon type */
-SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', polygon => 'polygon_foo');
+/* invalid polygon type - raise warning */
+SELECT osm_id, osm_type, display_name
+FROM nominatim_search(
+        server_name => 'osm', 
+        q => 'einsteinstraße 60, münster, germany', 
+        polygon => 'polygon_foo',
+        limit_result => 1);
 
 /* invalid layer */
 RESET client_min_messages;

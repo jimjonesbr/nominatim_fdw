@@ -95,17 +95,17 @@ ERROR:  bad request => structured query parameters (amenity, street, city, count
 /* bad request: nothing to search for */
 SELECT * FROM nominatim_search(server_name => 'srv');
 ERROR:  bad request => nothing to search for.
-HINT:  a 'nominatim_fdw_search' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)
+HINT:  A 'nominatim_fdw_search' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)
 /* bad request: invalid layer */
 SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', layer => 'bar');
 WARNING:  unrecognised layer 'bar'
-HINT:  Known values are: address, poi, railway, natural, manmade
+DETAIL:  Known values are: address, poi, railway, natural, manmade
 ERROR:  ParseNominatimSearchData -> request failed: 'http://server.im'
 /* FOREIGN TABLE not supported */
 CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
 SERVER srv OPTIONS (foo 'bar');
 ERROR:  FOREIGN TABLE not supported
-HINT:  The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.
+DETAIL:  The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.
 /* invalid user mapping options */
 CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (foo 'bar');
 ERROR:  invalid nominatim_fdw option 'foo'

@@ -165,7 +165,7 @@ FROM nominatim_search(
       limit_result => 1,
       accept_language => 'de_DE,de,q=0.9');
 WARNING:  unrecognized featureType 'office'
-HINT:  Known values are: country, state, city, settlement.
+DETAIL:  Known values are: country, state, city, settlement.
 DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe%2060&city=m%C3%BCnster&state=nordrhein%20westfalen&country=germany&postalcode=48149&format=xml&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address&featureType=office&exclude_place_ids=42%2C%2073&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&limit=1"
 DEBUG:  ExecuteRequest: HTTP 200, 1340 bytes
 -[ RECORD 1 ]-----+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
@@ -199,19 +199,31 @@ addressdetails    | {                                                           
 /* q combined with structured params => should error */
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'foo', city => 'münster');
 ERROR:  bad request => structured query parameters (amenity, street, city, county, state, postalcode, country) cannot be used together with 'q' parameter
-/* nothing to search for => should error */
+/* nothing to search for - should error */
 SELECT * FROM nominatim_search(server_name => 'osm');
 ERROR:  bad request => nothing to search for.
-HINT:  a 'nominatim_fdw_search' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)
-/* invalid polygon type */
-SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', polygon => 'polygon_foo');
-ERROR:  invalid polygon type 'polygon_foo'
-HINT:  this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text
+HINT:  A 'nominatim_fdw_search' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)
+/* invalid polygon type - raise warning */
+SELECT osm_id, osm_type, display_name
+FROM nominatim_search(
+        server_name => 'osm', 
+        q => 'einsteinstraße 60, münster, germany', 
+        polygon => 'polygon_foo',
+        limit_result => 1);
+WARNING:  invalid polygon type 'polygon_foo'
+DETAIL:  This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&polygon_foo=1&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&limit=1"
+DEBUG:  ExecuteRequest: HTTP 200, 923 bytes
+-[ RECORD 1 ]+----------------------------------------------------------------------------------------------------------------------------------------------
+osm_id       | 88291927
+osm_type     | way
+display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
+
 /* invalid layer */
 RESET client_min_messages;
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', layer => 'address,bogus');
 WARNING:  unrecognised layer 'address,bogus'
-HINT:  Known values are: address, poi, railway, natural, manmade
+DETAIL:  Known values are: address, poi, railway, natural, manmade
 WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (1/3)
 WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (2/3)
 WARNING:  ExecuteRequest: request to 'https://nominatim.openstreetmap.org' failed (3/3)
@@ -708,8 +720,8 @@ SELECT count(*)
 FROM nominatim_lookup(
         server_name => 'osm',
         osm_ids => 'W88291927,R62591');
-DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927%2CR62591&format=xml&addressdetails=1"
-DEBUG:  ExecuteRequest: HTTP 200, 1571 bytes
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927%2CR62591&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
+DEBUG:  ExecuteRequest: HTTP 200, 1567 bytes
 -[ RECORD 1 ]
 count | 2
 
@@ -814,14 +826,14 @@ SELECT osm_id, osm_type, class, type, display_name
 FROM nominatim_lookup(
       server_name => 'osm',
       osm_ids => 'W88291927,X99999,F00');
-DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927%2CX99999%2CF00&format=xml&addressdetails=1"
-DEBUG:  ExecuteRequest: HTTP 200, 1079 bytes
--[ RECORD 1 ]+-----------------------------------------------------------------------------------------------------------------------------------------------
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927%2CX99999%2CF00&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
+DEBUG:  ExecuteRequest: HTTP 200, 1077 bytes
+-[ RECORD 1 ]+----------------------------------------------------------------------------------------------------------------------------------------------
 osm_id       | 88291927
 osm_type     | way
 class        | office
 type         | university
-display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, Nordrhein-Westfalen, 48149, Deutschland
+display_name | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
 
 /* invalid osm_ids */
 SELECT pg_sleep(2);
@@ -832,14 +844,14 @@ SELECT osm_id, osm_type, class, type, display_name
 FROM nominatim_lookup(
       server_name => 'osm',
       osm_ids => 'X99999,F00');
-DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=X99999%2CF00&format=xml&addressdetails=1"
+DEBUG:  ExecuteRequest: GET "https://nominatim.openstreetmap.org/lookup?osm_ids=X99999%2CF00&format=xml&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  ExecuteRequest: HTTP 200, 202 bytes
 (0 rows)
 
 /* must error, since osm_ids is required */
 SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => '');
 ERROR:  bad request => nothing to look up.
-HINT:  a nominatim lookup request requires the 'osm_ids' parameter (a comma-separated list of OSM ids)
+DETAIL:  a nominatim lookup request requires the 'osm_ids' parameter (a comma-separated list of OSM ids)
 /* returns 0 rows (STRICT function) */
 SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => NULL);
 (0 rows)

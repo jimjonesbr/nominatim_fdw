@@ -220,7 +220,7 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
         ereport(ERROR,
                 (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
                  errmsg("FOREIGN TABLE not supported"),
-                 errhint("The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.")));
+                 errdetail("The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.")));
 
     /* Initialize found state to not found */
     for (opt = valid_options; opt->optname; opt++)
@@ -266,7 +266,7 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, timeout_str),
-                                 errhint("expected values are positive integers (timeout in seconds)")));
+                                 errdetail("Expected values are positive integers (timeout in seconds)")));
                 }
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0 || strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
@@ -279,7 +279,7 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, retry_str),
-                                 errhint("expected values are positive integers")));
+                                 errdetail("Expected values are positive integers")));
                 }
             }
         }
@@ -412,11 +412,6 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
                     (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
                      errmsg("unrecognised layer '%s'", state->layer),
                      errdetail("Known values are: address, poi, railway, natural, manmade")));
-
-        if (state->feature_type && !IsFeatureTypeValid(state->feature_type))
-            ereport(WARNING,
-                    (errmsg("unrecognized featureType '%s'", state->feature_type),
-                     errdetail("Known values are: country, state, city, settlement.")));
 
         if (!IsPolygonTypeSupported(state->polygon_type))
             ereport(WARNING, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
@@ -589,30 +584,34 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
              (state->country && strlen(state->country) > 0) ||
              (state->postalcode && strlen(state->postalcode) > 0)) &&
             state->query && strlen(state->query) > 0)
-            ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
-                            errmsg("bad request => structured query parameters (amenity, street, city, county, state, postalcode, country) cannot be used together with 'q' parameter")));
+            ereport(ERROR,
+                    (errcode(ERRCODE_FDW_ERROR),
+                     errmsg("bad request => structured query parameters (amenity, street, city, county, state, postalcode, country) cannot be used together with 'q' parameter")));
 
         if ((strlen(state->amenity) == 0 && strlen(state->street) == 0 && strlen(state->city) == 0 && strlen(state->county) == 0 && strlen(state->state) == 0 && strlen(state->country) == 0 && strlen(state->postalcode) == 0) &&
             strlen(state->query) == 0)
-            ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
-                            errmsg("bad request => nothing to search for."),
-                            errhint("a '%s' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)", __func__)));
+            ereport(ERROR,
+                    (errcode(ERRCODE_FDW_ERROR),
+                     errmsg("bad request => nothing to search for."),
+                     errhint("A '%s' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)", __func__)));
 
         if (state->layer && !IsLayerValid(state->layer))
             ereport(WARNING,
                     (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
                      errmsg("unrecognised layer '%s'", state->layer),
-                     errhint("Known values are: address, poi, railway, natural, manmade")));
+                     errdetail("Known values are: address, poi, railway, natural, manmade")));
 
         if (state->feature_type && !IsFeatureTypeValid(state->feature_type))
             ereport(WARNING,
-                    (errmsg("unrecognized featureType '%s'", state->feature_type),
-                     errhint("Known values are: country, state, city, settlement.")));
+                    (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                     errmsg("unrecognized featureType '%s'", state->feature_type),
+                     errdetail("Known values are: country, state, city, settlement.")));
 
         if (!IsPolygonTypeSupported(state->polygon_type))
-            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-                            errmsg("invalid polygon type '%s'", state->polygon_type),
-                            errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
+            ereport(WARNING,
+                    (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                     errmsg("invalid polygon type '%s'", state->polygon_type),
+                     errdetail("This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
         elog(DEBUG2, "\n\n\t=== %s ===\n\tq:'%s'\n\tpolygon_type: '%s'\n", __func__,
              state->query,
@@ -628,8 +627,9 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         elog(DEBUG2, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
 
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-                            errmsg("function returning record called in context that cannot accept type record")));
+            ereport(ERROR,
+                    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                     errmsg("function returning record called in context that cannot accept type record")));
         tupdesc = BlessTupleDesc(tupdesc);
 
         funcctx->attinmeta = TupleDescGetAttInMetadata(tupdesc);
@@ -707,24 +707,29 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         state->osm_ids = text_to_cstring(osm_ids_text);
 
         if (!state->osm_ids || strlen(state->osm_ids) == 0)
-            ereport(ERROR, (errcode(ERRCODE_FDW_ERROR),
-                            errmsg("bad request => nothing to look up."),
-                            errhint("a nominatim lookup request requires the 'osm_ids' parameter (a comma-separated list of OSM ids)")));
+            ereport(ERROR,
+                    (errcode(ERRCODE_FDW_ERROR),
+                     errmsg("bad request => nothing to look up."),
+                     errdetail("a nominatim lookup request requires the 'osm_ids' parameter (a comma-separated list of OSM ids)")));
 
         state->extratags = extratags;
         state->addressdetails = addressdetails;
         state->namedetails = namedetails;
         state->polygon_type = text_to_cstring(polygon_text);
         state->entrances = entrances;
-        state->accept_language = text_to_cstring(language_text);
+
+        if (language_text && strlen(text_to_cstring(language_text)) > 0)
+            state->accept_language = text_to_cstring(language_text);
+
         state->polygon_threshold = polygon_threshold;
         state->email = text_to_cstring(email_text);
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
 
         if (!IsPolygonTypeSupported(state->polygon_type))
-            ereport(ERROR, (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
-                            errmsg("invalid polygon type '%s'", state->polygon_type),
-                            errhint("this parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
+            ereport(WARNING,
+                    (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                     errmsg("invalid polygon type '%s'", state->polygon_type),
+                     errdetail("This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
         elog(DEBUG2, "\n\n\t=== %s ===\n\tosm_ids:'%s'\n\tpolygon_type: '%s'\n", __func__,
              state->osm_ids,
@@ -740,8 +745,10 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         elog(DEBUG2, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
 
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
-            ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-                            errmsg("function returning record called in context that cannot accept type record")));
+            ereport(ERROR,
+                    (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+                     errmsg("function returning record called in context that cannot accept type record")));
+
         tupdesc = BlessTupleDesc(tupdesc);
 
         funcctx->attinmeta = TupleDescGetAttInMetadata(tupdesc);
@@ -1023,7 +1030,7 @@ static NominatimFDWState *InitSession(const char *srvname)
             char *tailpt;
             char *timeout_str = defGetString(def);
 
-            state->connect_timeout = strtol(timeout_str, &tailpt, 0);
+            state->connect_timeout = strtol(timeout_str, &tailpt, 10);
         }
 
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
@@ -1563,7 +1570,11 @@ static int ExecuteRequest(NominatimFDWState *state)
         appendStringInfo(&url_buffer, "addressdetails=1&");
 
     if (state->polygon_type && strlen(state->polygon_type) > 0)
-        appendStringInfo(&url_buffer, "%s=1&", state->polygon_type);
+    {    
+        char *p = curl_easy_escape(curl, state->polygon_type, 0);
+        appendStringInfo(&url_buffer, "%s=1&", p);
+        curl_free(p);
+    }
 
     if (state->accept_language && strlen(state->accept_language) > 0)
         AppendUrlParam(&url_buffer, curl, "accept-language", state->accept_language);

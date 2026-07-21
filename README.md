@@ -102,7 +102,7 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 | `http_proxy` | optional            | Proxy for HTTP requests.
 | `connect_timeout`         | optional            | Connection timeout for HTTP requests in seconds (default `300` seconds).
 | `max_connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3` times).
-| `max_connect_redirect`         | optional            | Limit of how many times URL redirection may follow (default `1`). Set to `-1` to allow unlimited redirects.
+| `max_connect_redirect`         | optional            | Limit of how many times URL redirection may follow (default `1`).
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`).
 
 ### [ALTER SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#alter-server)
@@ -156,6 +156,11 @@ SERVER osm OPTIONS (SET proxy_password 'newpassword');
 
 This section describes the `nominatim_fdw` functions, which are mapped to the Nominatim standard search endpoints [search](https://nominatim.org/release-docs/develop/api/Search/), [reverse](https://nominatim.org/release-docs/develop/api/Reverse/) and [lookup](https://nominatim.org/release-docs/develop/api/Lookup/).
 
+> [!NOTE]  
+> All `nominatim_fdw` functions are declared `STRICT`. This means that if any argument is explicitly set to SQL `NULL`, the function short-circuits and returns no rows — the request is never sent to the server, and no error is raised.
+>
+> Unrecognised values for polygon, layer and featuretype produce a `WARNING` but do not abort the request — the value is forwarded to the Nominatim server as-is. This keeps the wrapper working if the Nominatim API introduces new values in the future.
+
 #### [Nominatim_Search](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_search)
 
 The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports [structured](https://nominatim.org/release-docs/develop/api/Search/#structured-query) and [free-form](https://nominatim.org/release-docs/develop/api/Search/#free-form-query) search queries, which are distinguished by either splitting the address components into different parameters, such as `street`, `county`, `state`, or providing a single string in the parameter `q`.
@@ -183,7 +188,7 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `featuretype` | optional | one of: `country`, `state`, `city`, `settlement` (default *unset*) |
 | `exclude_place_ids` | optional | comma-separated list of place ids (default *unset*) |
 | `viewbox` | optional | bounding box as in `<x1>,<y1>,<x2>,<y2>` (default *unset*) |
-| `bounded` | optional | When `bounded` is set to `true` and the `viewbox` is small enough, then an amenity-only search is allowed. Give the special keyword for the amenity in square brackets, e.g. [pub] and a selection of objects of this type is returned. There is no guarantee that the result returns all objects in the area. (default `false`) |
+| `bounded` | optional | When set to `true`, restrict the results to items within the `viewbox` (requires `viewbox` to be set). (default `false`)"|
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | valid email address (default *unset*) |
 | `dedupe` | optional | discards duplicated entries (default `true`) |

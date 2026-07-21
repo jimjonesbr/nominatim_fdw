@@ -11,11 +11,11 @@ ERROR:  empty value in option 'url'
 CREATE SERVER bad4 FOREIGN DATA WRAPPER nominatim_fdw 
   OPTIONS (url 'https://x.org', connect_timeout 'abc');
 ERROR:  invalid connect_timeout: 'abc'
-HINT:  expected values are positive integers (timeout in seconds)
+DETAIL:  Expected values are positive integers (timeout in seconds)
 CREATE SERVER bad5 FOREIGN DATA WRAPPER nominatim_fdw 
   OPTIONS (url 'https://x.org', connect_timeout '-5');
 ERROR:  invalid connect_timeout: '-5'
-HINT:  expected values are positive integers (timeout in seconds)
+DETAIL:  Expected values are positive integers (timeout in seconds)
 /* unknown option */
 CREATE SERVER bad6 FOREIGN DATA WRAPPER nominatim_fdw 
   OPTIONS (url 'https://x.org', bogus_option 'x');
@@ -26,7 +26,7 @@ FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'https://nominatim.openstreetmap.org');
 CREATE FOREIGN TABLE ft (x int) SERVER osm;
 ERROR:  FOREIGN TABLE not supported
-HINT:  The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.
+DETAIL:  The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.
 ALTER SERVER osm OPTIONS (ADD connect_timeout '60');
 \des+
                                                                     List of foreign servers
