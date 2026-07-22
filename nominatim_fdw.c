@@ -593,7 +593,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_ERROR),
                      errmsg("bad request => nothing to search for."),
-                     errhint("A '%s' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)", __func__)));
+                     errhint("A Nominatim Search request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)")));
 
         if (state->layer && !IsLayerValid(state->layer))
             ereport(WARNING,
@@ -1618,7 +1618,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         if (url_buffer.data[url_buffer.len-1] == '&')
             url_buffer.data[url_buffer.len-1] = '\0';
 
-        elog(DEBUG1, "%s: GET \"%s\"", __func__, url_buffer.data);
+        elog(DEBUG1, "GET \"%s\"", url_buffer.data);
 
         curl_easy_setopt(curl, CURLOPT_URL, url_buffer.data);
 
@@ -1682,7 +1682,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         initStringInfo(&user_agent);
         appendStringInfo(&user_agent, "PostgreSQL/%s nominatim_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
 
-        elog(DEBUG2, "  %s: \"Agent: %s\"", __func__, user_agent.data);
+        elog(DEBUG2, "%s: \"Agent: %s\"", __func__, user_agent.data);
 
         curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
 
@@ -1692,7 +1692,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         elog(DEBUG2, "  adding header: %s", accept_header.data);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
-        elog(DEBUG2, "  %s: performing cURL request ... ", __func__);
+        elog(DEBUG2, "%s: performing cURL request ... ", __func__);
 
         res = curl_easy_perform(curl);
 
@@ -1705,8 +1705,7 @@ static int ExecuteRequest(NominatimFDWState *state)
             if (response_code >= 400 && response_code < 500 && response_code != 429)
                 break;
 
-            elog(WARNING, "%s: request to '%s' failed (%ld/%ld)",
-                 __func__, state->url, i, state->max_retries);
+            elog(WARNING, "request to '%s' failed (%ld/%ld)", state->url, i, state->max_retries);
             elog(DEBUG1, "the nominatim returned HTTP code %ld", response_code);
 
             /* discard whatever the failed attempt left behind before retrying */
@@ -1744,7 +1743,7 @@ static int ExecuteRequest(NominatimFDWState *state)
             state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL,
                                           XML_PARSE_NOBLANKS | XML_PARSE_NONET);
 
-            elog(DEBUG1, "%s: HTTP %ld, %ld bytes", __func__, response_code, chunk.size);
+            elog(DEBUG1, "HTTP %ld, %ld bytes", response_code, chunk.size);
             elog(DEBUG2, "  %s: http response header = \n%s", __func__, chunk_header.memory);
         }
     }

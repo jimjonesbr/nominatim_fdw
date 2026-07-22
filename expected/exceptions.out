@@ -95,7 +95,7 @@ ERROR:  bad request => structured query parameters (amenity, street, city, count
 /* bad request: nothing to search for */
 SELECT * FROM nominatim_search(server_name => 'srv');
 ERROR:  bad request => nothing to search for.
-HINT:  A 'nominatim_fdw_search' request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)
+HINT:  A Nominatim Search request requires either a 'q' (free form parameter) or one of the structured query parameteres (amenity, street, city, county, state, postalcode, country)
 /* bad request: invalid layer */
 SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', layer => 'bar');
 WARNING:  unrecognised layer 'bar'
