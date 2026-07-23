@@ -1,6 +1,6 @@
 # 2.0
 
-Release date: **YYYY-MM-DD**
+Release date: **2026-07-07**
 
 ## Enhancements
 
