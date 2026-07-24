@@ -48,7 +48,7 @@
 #include <access/tupdesc.h>
 #include "miscadmin.h"
 
-#define FDW_VERSION "2.0"
+#define FDW_VERSION "2.1-dev"
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 #define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300

@@ -14,6 +14,8 @@ podman run -d \
   --network $NETWORK_NAME \
   --env POSTGRES_HOST_AUTH_METHOD=trust \
   --ip $IP_ADDRESS \
+  -p 1234:1234 \
+  --cap-add=SYS_PTRACE \
   --volume  $NOMINATIM_FDW_PATH:/nominatim_fdw:Z \
   $POSTGRES18_IMAGE -c logging_collector=on &&
 
