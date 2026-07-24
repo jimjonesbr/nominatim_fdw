@@ -1,6 +1,10 @@
 # 2.1
 Release date: **unreleased**
 
+## Enhancements
+
+* **Add HTTP basic authentication in [`USER MAPPING`](https://github.com/jimjonesbr/rdf_fdw?tab=readme-ov-file#create-user-mapping)**: This feature defines a mapping of a PostgreSQL user to an user in the target Nominatim server - `user` and `password`, so that the user can be authenticated.
+
 ## Bug fixes
 
 * **Fixed invalid libcurl lifecycle**: Initialize libcurl's global state once per backend via `_PG_init()` (`curl_global_init`). Previously the wrapper relied on the implicit initialization performed by `curl_easy_init()`, which libcurl documents as **not thread-safe** and unsafe when the address space is shared with other libcurl-using extensions (e.g. `rdf_fdw`). The init failure is now surfaced as a clean `ERROR` instead of a potential downstream crash.

@@ -229,7 +229,7 @@ WARNING:  request to 'https://nominatim.openstreetmap.org' failed (2/3)
 WARNING:  request to 'https://nominatim.openstreetmap.org' failed (3/3)
 ERROR:  The requested URL returned error: 500
 DETAIL:  URL: "https://nominatim.openstreetmap.org/search?q=x&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0"
-HINT:  Check your request parameters and try again.
+HINT:  Check your request parameters and credentials, if applicable, and try again.
 SET client_min_messages TO debug1;
 /* nonexistent server */
 SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat => 0);

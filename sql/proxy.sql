@@ -139,3 +139,5 @@ FROM nominatim_search(
       bounded => false,
       accept_language => 'de_DE,de,q=0.9',
       entrances => true);
+
+DROP SERVER osm_proxy CASCADE;

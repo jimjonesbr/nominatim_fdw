@@ -12,7 +12,7 @@ DATA = nominatim_fdw--2.1.sql \
 REGRESS = create-extension version upgrade create-user-mapping create-server exceptions functions 
 
 ifndef SKIP_PROXY_TESTS
-  REGRESS += proxy	
+  REGRESS += proxy http-auth
 endif
 
 CURL_CONFIG = curl-config

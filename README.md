@@ -135,6 +135,8 @@ Proxy credentials for authenticating with a proxy server are stored in a [`USER 
 
 | Option | Type | Description |
 |---|---|---|
+| `user` | optional | Remote username for HTTP Basic Authentication. |
+| `password` | optional | Remote user's password (used with `user`). |
 | `proxy_user` | optional | User name for proxy server authentication. |
 | `proxy_password` | optional | Password for proxy server authentication. |
 

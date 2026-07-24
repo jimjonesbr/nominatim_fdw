@@ -67,6 +67,8 @@
 #define NOMINATIM_SERVER_OPTION_LANGUAGE "accept_language"
 #define NOMINATIM_USERMAPPING_OPTION_PROXYUSER "proxy_user"
 #define NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD "proxy_password"
+#define NOMINATIM_USERMAPPING_OPTION_USER "user"
+#define NOMINATIM_USERMAPPING_OPTION_PASSWORD "password"
 
 
 PG_MODULE_MAGIC;
@@ -93,6 +95,8 @@ typedef struct NominatimFDWState
     char *state;               /* state */
     char *country;             /* country */
     char *postalcode;          /* postalcode */
+    char *user;                /* User name for HTTP basic authentication */
+    char *password;            /* Password for HTTP basic authentication */
     char *proxy;               /* Proxy for HTTP requests, if necessary. */
     char *proxy_type;          /* Proxy protocol (HTTPS, HTTP). */
     char *proxy_user;          /* User name for proxy authentication. */
@@ -171,6 +175,8 @@ static struct NominatimFDWOption valid_options[] =
         /* User Mapping */
         {NOMINATIM_USERMAPPING_OPTION_PROXYUSER, UserMappingRelationId, false, false},
         {NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD, UserMappingRelationId, false, false},
+        {NOMINATIM_USERMAPPING_OPTION_USER, UserMappingRelationId, false, false},
+        {NOMINATIM_USERMAPPING_OPTION_PASSWORD, UserMappingRelationId, false, false},
         /* EOList option */
         {NULL, InvalidOid, false, false}};
 
@@ -988,6 +994,16 @@ static void LoadNominatimUserMapping(NominatimFDWState *state)
                     state->proxy_user_password = pstrdup(defGetString(def));
                     elog(DEBUG2, "%s: proxy password '*******'", __func__);
                 }
+                else if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_USER) == 0)
+                {
+                    state->user = pstrdup(defGetString(def));
+                    elog(DEBUG2, "%s: user '%s'", __func__, def->defname);
+                }
+                else if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PASSWORD) == 0)
+                {
+                    state->password = pstrdup(defGetString(def));
+                    elog(DEBUG2, "%s: password '*******'", __func__);
+                }
             }
         }
 
@@ -1711,6 +1727,20 @@ static int ExecuteRequest(NominatimFDWState *state)
         elog(DEBUG2, "  adding header: %s", accept_header.data);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
 
+        if (state->user && state->password)
+		{
+            elog(DEBUG2, "  %s: setting user and password for HTTP basic authentication (%s:********)", __func__, state->user);
+			curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+			curl_easy_setopt(curl, CURLOPT_USERNAME, state->user);
+			curl_easy_setopt(curl, CURLOPT_PASSWORD, state->password);
+		}
+		else if (state->user && !state->password)
+		{
+            elog(DEBUG2, "  %s: setting user %s for HTTP basic authentication (no password)", __func__, state->user);
+			curl_easy_setopt(curl, CURLOPT_HTTPAUTH, CURLAUTH_BASIC);
+			curl_easy_setopt(curl, CURLOPT_USERNAME, state->user);
+		}
+
         elog(DEBUG2, "%s: performing cURL request ... ", __func__);
 
         res = curl_easy_perform(curl);
@@ -1752,7 +1782,7 @@ static int ExecuteRequest(NominatimFDWState *state)
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
                      errmsg("%s", strlen(errbuf) > 0 ? errbuf : "nominatim HTTP request failed"),
-                     errhint("Check your request parameters and try again."),
+                     errhint("Check your request parameters and credentials, if applicable, and try again."),
                      errdetail("URL: \"%s\"", url_buffer.data)));
           }
         else
