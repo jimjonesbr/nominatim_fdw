@@ -1,5 +1,11 @@
-# 2.0
+# 2.1
+Release date: **unreleased**
 
+## Bug fixes
+
+* **Fixed invalid libcurl lifecycle**: Initialize libcurl's global state once per backend via `_PG_init()` (`curl_global_init`). Previously the wrapper relied on the implicit initialization performed by `curl_easy_init()`, which libcurl documents as **not thread-safe** and unsafe when the address space is shared with other libcurl-using extensions (e.g. `rdf_fdw`). The init failure is now surfaced as a clean `ERROR` instead of a potential downstream crash.
+
+# 2.0
 Release date: **2026-07-07**
 
 ## Enhancements
@@ -27,7 +33,6 @@ Release date: **2026-07-07**
 * Rename `addressparts` column from reverse function to `addressdetails`, so that it aligns with search and lookup.
 
 # 1.3
-
 Release date: **2026-04-12**
 
 ## Breaking Changes
@@ -35,7 +40,6 @@ Release date: **2026-04-12**
 Proxy authentication credentials moved to `USER MAPPING`: For improved security, proxy authentication credentials (proxy_user and proxy_password) must now be specified in `USER MAPPING` instead of `SERVER` options. This change prevents proxy passwords from being visible to all users with `USAGE` privilege on the foreign server, as PostgreSQL automatically hides `USER MAPPING` passwords from non-owners.
 
 # 1.2.0
-
 Release date: **2026-04-05**
 
 ## Bug fixes
@@ -58,7 +62,6 @@ Release date: **2026-04-05**
 * Made attribute name lookup in `GetAttributeValue` consistently use `NameStr`.
 
 # 1.1.0
-
 Release date: **2024-11-01**
 
 ## Enhancements

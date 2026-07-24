@@ -202,6 +202,25 @@ static int CheckURL(char *url);
 static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
 static bool IsFeatureTypeValid(char *layer);
+void _PG_init(void);
+
+void _PG_init(void)
+{
+    /*
+     * Initialize libcurl's global state once per backend process.
+     * Intentionally no matching _PG_fini()/curl_global_cleanup(): this is a
+     * single-threaded, long-lived backend process that may share the address
+     * space with other libcurl-using extensions (e.g. rdf_fdw), and
+     * _PG_fini() is not guaranteed to run on backend exit anyway. Global
+     * state is reclaimed by the OS when the backend process terminates.
+     */
+    if (curl_global_init(CURL_GLOBAL_ALL) != CURLE_OK)
+        ereport(ERROR,
+                (errcode(ERRCODE_FDW_ERROR),
+                 errmsg("nominatim_fdw: could not initialise libcurl")));
+
+    xmlInitParser();
+}
 
 Datum nominatim_fdw_handler(PG_FUNCTION_ARGS)
 {
