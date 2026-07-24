@@ -3,7 +3,7 @@ Release date: **unreleased**
 
 ## Enhancements
 
-* **Add HTTP basic authentication in [`USER MAPPING`](https://github.com/jimjonesbr/rdf_fdw?tab=readme-ov-file#create-user-mapping)**: This feature defines a mapping of a PostgreSQL user to an user in the target Nominatim server - `user` and `password`, so that the user can be authenticated.
+* **Add HTTP basic authentication in `USER MAPPING`**: This feature defines a mapping of a PostgreSQL user to an user in the target Nominatim server - `user` and `password`, so that the user can be authenticated.
 
 ## Bug fixes
 
