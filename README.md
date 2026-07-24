@@ -53,7 +53,7 @@ CREATE EXTENSION nominatim_fdw;
 To install a specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION nominatim_fdw WITH VERSION '2.0';
+CREATE EXTENSION nominatim_fdw WITH VERSION '2.1';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -74,7 +74,7 @@ ALTER EXTENSION nominatim_fdw UPDATE;
 To update to a specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION nominatim_fdw UPDATE TO '2.0';
+ALTER EXTENSION nominatim_fdw UPDATE TO '2.1';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#usage)
@@ -473,7 +473,7 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 SELECT nominatim_fdw_version();
                                             nominatim_fdw_version                                             
 --------------------------------------------------------------------------------------------------------------
- nominatim_fdw 2.0 (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
+ nominatim_fdw 2.1 (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
 (1 row)
 ```
 #### [nominatim_fdw_settings](#nominatim_fdw_settings)
@@ -488,7 +488,7 @@ A system view that provides detailed version information for `nominatim_fdw` and
 SELECT * FROM nominatim_fdw_settings; 
    component   |            version            
 ---------------+-------------------------------
- nominatim_fdw | 2.0
+ nominatim_fdw | 2.1
  PostgreSQL    | 18.4 (Debian 18.4-1.pgdg13+1)
  libxml        | 2.9.14
  libcurl       | 8.14.1
@@ -497,7 +497,7 @@ SELECT * FROM nominatim_fdw_settings;
  libSSH        | libssh2/1.11.1
  nghttp2       | 1.64.0
  compiler      | gcc
- built         | 2026-07-07 13:29:54 UTC
+ built         | 2026-07-24 05:31:33 UTC
 (10 rows)
 ```
 

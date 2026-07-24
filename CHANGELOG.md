@@ -1,5 +1,5 @@
 # 2.1
-Release date: **unreleased**
+Release date: **2028-07-24**
 
 ## Enhancements
 
@@ -7,7 +7,7 @@ Release date: **unreleased**
 
 ## Bug fixes
 
-* **Fixed invalid libcurl lifecycle**: Initialize libcurl's global state once per backend via `_PG_init()` (`curl_global_init`). Previously the wrapper relied on the implicit initialization performed by `curl_easy_init()`, which libcurl documents as **not thread-safe** and unsafe when the address space is shared with other libcurl-using extensions (e.g. `rdf_fdw`). The init failure is now surfaced as a clean `ERROR` instead of a potential downstream crash.
+* **Fixed invalid libcurl lifecycle**: Initialize libcurl's global state once per backend via `_PG_init()` (`curl_global_init`). Previously the wrapper relied on the implicit initialization performed by `curl_easy_init()`, which libcurl documents as **not thread-safe** and unsafe when the address space is shared with other libcurl-using extensions (e.g. `rdf_fdw`).
 
 # 2.0
 Release date: **2026-07-07**
