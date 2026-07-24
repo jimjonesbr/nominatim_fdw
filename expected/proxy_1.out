@@ -254,4 +254,6 @@ WARNING:  request to 'https://nominatim.openstreetmap.org' failed (2/3)
 WARNING:  request to 'https://nominatim.openstreetmap.org' failed (3/3)
 ERROR:  nominatim HTTP request failed
 DETAIL:  URL: "https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address%2Cpoi&exclude_place_ids=42%2C73&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&limit=1"
-HINT:  Check your request parameters and try again.
+HINT:  Check your request parameters and credentials, if applicable, and try again.
+DROP SERVER osm_proxy CASCADE;
+NOTICE:  drop cascades to user mapping for postgres on server osm_proxy
