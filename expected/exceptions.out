@@ -67,7 +67,7 @@ CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          max_connect_retry '2',
-         connect_timeout '1');
+         connect_timeout '15');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
 ERROR:  ParseNominatimSearchData -> request failed: 'http://server.im'
 /* no retry! */
@@ -87,7 +87,7 @@ ERROR:  FOREIGN SERVER does not exist: 'srv'
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im', 
-         connect_timeout '1', 
+         connect_timeout '15', 
          max_connect_retry '0');
 /* bad request: 'q' and 'amenity' cannot be combined */
 SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', amenity => 'bar');
