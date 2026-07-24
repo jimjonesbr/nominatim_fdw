@@ -49,6 +49,14 @@
 #include "miscadmin.h"
 
 #define FDW_VERSION "2.1-dev"
+
+/*
+ * Maximum number of bytes from an HTTP error response body to include in
+ * error messages and server logs.  Prevents huge HTML error pages (e.g.
+ * from misconfigured proxies) from flooding PostgreSQL logs.
+ */
+#define RDF_FDW_MAX_ERROR_BODY 512
+
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 #define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300
@@ -1650,6 +1658,24 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
 	return 0;
 }
 
+/*
+ * CURLProgressCallback
+ * --------------------
+ * Progress callback function for cURL requests. This allows us to
+ * check for interruptions to immediatelly cancel the request.
+ *
+ * dltotal: Total bytes to download
+ * dlnow: Bytes downloaded so far
+ * ultotal: Total bytes to upload
+ * ulnow: Bytes uploaded so far
+ */
+static int CURLProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
+{
+	CHECK_FOR_INTERRUPTS();
+
+	return 0;
+}
+
 static int ExecuteRequest(NominatimFDWState *state)
 {
     CURL *curl;
@@ -1845,6 +1871,9 @@ static int ExecuteRequest(NominatimFDWState *state)
 		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 		curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CURLDebugCallback);
 		curl_easy_setopt(curl, CURLOPT_DEBUGDATA, NULL);
+
+		/* Set the progress callback function */
+		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CURLProgressCallback);
 
         initStringInfo(&user_agent);
         appendStringInfo(&user_agent, "PostgreSQL/%s nominatim_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
