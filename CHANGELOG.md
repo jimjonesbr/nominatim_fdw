@@ -1,6 +1,10 @@
 # 2.2
 Release date: **unreleased**
 
+## Bug Fixes
+
+* **Fixed queries not being cancellable during an HTTP request**: `CURLOPT_XFERINFOFUNCTION` was registered without clearing `CURLOPT_NOPROGRESS`, which defaults to `1` and disables libcurl's progress machinery entirely - the callback was therefore never invoked and the `CHECK_FOR_INTERRUPTS()` inside it never ran. A `nominatim_search`, `nominatim_lookup` or `nominatim_reverse` call could not be interrupted with `pg_cancel_backend()` or `Ctrl+C` and blocked the backend until the server replied or `connect_timeout` (default `300` seconds) expired. `CURLOPT_NOPROGRESS` is now explicitly set to `0`.
+* **Fixed leak of the libcurl handle on interrupted requests**: the progress callback raised the interrupt itself via `CHECK_FOR_INTERRUPTS()`, so `ereport(ERROR)` would `longjmp` out of libcurl's own call stack, skipping `curl_easy_cleanup()` and leaking the easy handle and its socket for the lifetime of the backend. The callback now returns a non-zero value instead, which aborts the transfer with `CURLE_ABORTED_BY_CALLBACK`, and the pending interrupt is processed after the handle has been released. The request/retry loop is additionally wrapped in `PG_TRY()`/`PG_CATCH()` so that the handle is also released when an error is raised from a write callback (e.g. on out-of-memory). Aborted transfers and interrupts arriving during the inter-retry sleep no longer consume the `max_connect_retry` attempts.
 
 # 2.1
 Release date: **2026-07-24**

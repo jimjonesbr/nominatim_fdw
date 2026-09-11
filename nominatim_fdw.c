@@ -1661,8 +1661,18 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
 /*
  * CURLProgressCallback
  * --------------------
- * Progress callback function for cURL requests. This allows us to
- * check for interruptions to immediatelly cancel the request.
+ * Progress callback function for cURL requests. libcurl calls it regularly
+ * (at least once per second) while a transfer is in progress, which gives us
+ * a chance to react to query cancellations and backend shutdown requests
+ * instead of blocking until the server responds.
+ *
+ * It must NOT raise an error: ereport(ERROR) would longjmp out of libcurl's
+ * call stack, leaving the easy handle - and the socket it owns - behind for
+ * the lifetime of the backend. Instead we return a non-zero value, which
+ * makes curl_easy_perform() abort the transfer and return
+ * CURLE_ABORTED_BY_CALLBACK. The pending interrupt is then processed by the
+ * CHECK_FOR_INTERRUPTS() in ExecuteRequest(), once the handle has been
+ * properly cleaned up.
  *
  * dltotal: Total bytes to download
  * dlnow: Bytes downloaded so far
@@ -1671,9 +1681,7 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
  */
 static int CURLProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
 {
-	CHECK_FOR_INTERRUPTS();
-
-	return 0;
+	return InterruptPending ? 1 : 0;
 }
 
 static int ExecuteRequest(NominatimFDWState *state)
@@ -1872,8 +1880,16 @@ static int ExecuteRequest(NominatimFDWState *state)
 		curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CURLDebugCallback);
 		curl_easy_setopt(curl, CURLOPT_DEBUGDATA, NULL);
 
-		/* Set the progress callback function */
+		/*
+		 * Set the progress callback function, so that in-flight requests can
+		 * be aborted when the query is cancelled.
+		 *
+		 * CURLOPT_NOPROGRESS defaults to 1, which disables libcurl's progress
+		 * machinery altogether - the callback registered above is then never
+		 * invoked. It must be explicitly switched off for the callback to run.
+		 */
 		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CURLProgressCallback);
+		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 
         initStringInfo(&user_agent);
         appendStringInfo(&user_agent, "PostgreSQL/%s nominatim_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
@@ -1904,30 +1920,61 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         elog(DEBUG2, "%s: performing cURL request ... ", __func__);
 
-        res = curl_easy_perform(curl);
-
-        for (long i = 1; res != CURLE_OK && i <= state->max_retries; i++)
+        /*
+         * Anything raising an error while libcurl is on the stack - a write
+         * callback running out of memory, for instance - would longjmp past
+         * curl_easy_cleanup() and leak the easy handle together with its
+         * socket for the lifetime of the backend. Release it here and let the
+         * error propagate.
+         */
+        PG_TRY();
         {
-            long response_code = 0;
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
-            /* Client errors (except 429) won't succeed on retry - fail fast */
-            if (response_code >= 400 && response_code < 500 && response_code != 429)
-                break;
-
-            elog(WARNING, "request to '%s' failed (%ld/%ld)", state->url, i, state->max_retries);
-            elog(DEBUG1, "the nominatim returned HTTP code %ld", response_code);
-
-            /* discard whatever the failed attempt left behind before retrying */
-            chunk.size = 0;
-            chunk.memory[0] = '\0';
-            chunk_header.size = 0;
-            chunk_header.memory[0] = '\0';
-
-            /* just being polite to the public server */
-            pg_usleep(1000000L);
             res = curl_easy_perform(curl);
+
+            for (long i = 1; res != CURLE_OK && i <= state->max_retries; i++)
+            {
+                long response_code = 0;
+
+                /*
+                 * CURLProgressCallback aborted the transfer, which means a
+                 * query cancellation or backend shutdown is pending. Retrying
+                 * would only delay it.
+                 */
+                if (res == CURLE_ABORTED_BY_CALLBACK)
+                    break;
+
+                curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+
+                /* Client errors (except 429) won't succeed on retry - fail fast */
+                if (response_code >= 400 && response_code < 500 && response_code != 429)
+                    break;
+
+                elog(WARNING, "request to '%s' failed (%ld/%ld)", state->url, i, state->max_retries);
+                elog(DEBUG1, "the nominatim returned HTTP code %ld", response_code);
+
+                /* discard whatever the failed attempt left behind before retrying */
+                chunk.size = 0;
+                chunk.memory[0] = '\0';
+                chunk_header.size = 0;
+                chunk_header.memory[0] = '\0';
+
+                /* just being polite to the public server */
+                pg_usleep(1000000L);
+
+                /* the sleep above does not process interrupts on its own */
+                if (InterruptPending)
+                    break;
+
+                res = curl_easy_perform(curl);
+            }
         }
+        PG_CATCH();
+        {
+            curl_slist_free_all(headers);
+            curl_easy_cleanup(curl);
+            PG_RE_THROW();
+        }
+        PG_END_TRY();
 
         if (res != CURLE_OK)
         {
@@ -1939,6 +1986,14 @@ static int ExecuteRequest(NominatimFDWState *state)
             pfree(chunk_header.memory);
             curl_slist_free_all(headers);
             curl_easy_cleanup(curl);
+
+            /*
+             * Now that the easy handle is gone it is safe to act on a pending
+             * interrupt: this reports the cancellation that made
+             * CURLProgressCallback abort the transfer, rather than a generic
+             * "request failed" error.
+             */
+            CHECK_FOR_INTERRUPTS();
 
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
