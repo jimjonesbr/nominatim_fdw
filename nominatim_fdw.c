@@ -60,6 +60,7 @@
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 #define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300
+#define NOMINATIM_DEFAULT_REQUEST_TIMEOUT 0
 #define NOMINATIM_DEFAULT_MAXRETRY 3
 #define NOMINATIM_DEFAULT_MAXREDIRECT 1
 #define NOMINATIM_DEFAULT_LANGUAGE "en-US,en;q=0.9"
@@ -69,6 +70,7 @@
 #define NOMINATIM_REQUEST_LOOKUP "lookup"
 #define NOMINATIM_SERVER_OPTION_URL "url"
 #define NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT "connect_timeout"
+#define NOMINATIM_SERVER_OPTION_REQUEST_TIMEOUT "request_timeout"
 #define NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY "max_connect_retry"
 #define NOMINATIM_SERVER_OPTION_MAXREDIRECT "max_connect_redirect"
 #define NOMINATIM_SERVER_OPTION_HTTP_PROXY "http_proxy"
@@ -127,7 +129,8 @@ typedef struct NominatimFDWState
     bool addressdetails;       /* Include a breakdown of the address into elements? */
     bool entrances;            /* tagged entrances in the result? */
     long request_max_redirect; /* Limit of how many times the URL redirection (jump) may occur. */
-    long connect_timeout;      /* Request timeout in seconds */
+    long connect_timeout;      /* Timeout for the connection phase, in seconds */
+    long request_timeout;      /* Timeout for the complete request, in seconds (0 = disabled) */
     long max_retries;          /* Number of re-try attemtps for failed requests */
     float8 lon;                /* Longitude (x) */
     float8 lat;                /* Latitude (y) */
@@ -177,6 +180,7 @@ static struct NominatimFDWOption valid_options[] =
         {NOMINATIM_SERVER_OPTION_URL, ForeignServerRelationId, true, false},
         {NOMINATIM_SERVER_OPTION_HTTP_PROXY, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT, ForeignServerRelationId, false, false},
+        {NOMINATIM_SERVER_OPTION_REQUEST_TIMEOUT, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_MAXREDIRECT, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_LANGUAGE, ForeignServerRelationId, false, false},
@@ -300,6 +304,19 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, timeout_str),
                                  errdetail("Expected values are positive integers (timeout in seconds)")));
+                }
+
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_REQUEST_TIMEOUT) == 0)
+                {
+                    char *endptr;
+                    char *timeout_str = defGetString(def);
+                    long timeout_val = strtol(timeout_str, &endptr, 10);
+
+                    if (timeout_str[0] == '\0' || *endptr != '\0' || timeout_val < 0)
+                        ereport(ERROR,
+                                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                                 errmsg("invalid %s: '%s'", def->defname, timeout_str),
+                                 errdetail("Expected values are non-negative integers (timeout in seconds, 0 = disabled)")));
                 }
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0 || strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
@@ -1042,6 +1059,7 @@ static NominatimFDWState *InitSession(const char *srvname)
     state->request_max_redirect = NOMINATIM_DEFAULT_MAXREDIRECT;
     state->accept_language = NOMINATIM_DEFAULT_LANGUAGE;
     state->connect_timeout = NOMINATIM_DEFAULT_CONNECTTIMEOUT;
+    state->request_timeout = NOMINATIM_DEFAULT_REQUEST_TIMEOUT;
 
     if (!server)
         ereport(ERROR,
@@ -1074,6 +1092,14 @@ static NominatimFDWState *InitSession(const char *srvname)
             char *timeout_str = defGetString(def);
 
             state->connect_timeout = strtol(timeout_str, &tailpt, 10);
+        }
+
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_REQUEST_TIMEOUT) == 0)
+        {
+            char *tailpt;
+            char *timeout_str = defGetString(def);
+
+            state->request_timeout = strtol(timeout_str, &tailpt, 10);
         }
 
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
@@ -1822,8 +1848,18 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         curl_easy_setopt(curl, CURLOPT_ERRORBUFFER, errbuf);
 
+        /*
+         * CURLOPT_CONNECTTIMEOUT only bounds the connection phase: a server
+         * that accepts the connection and then stalls would keep the backend
+         * busy indefinitely. CURLOPT_TIMEOUT bounds the request as a whole.
+         * It defaults to 0 (no limit), matching libcurl's own default, since
+         * a hard cap is a poor fit for slow polygon-heavy responses.
+         */
         curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, state->connect_timeout);
-        elog(DEBUG2, "  %s: timeout > %ld", __func__, state->connect_timeout);
+        curl_easy_setopt(curl, CURLOPT_TIMEOUT, state->request_timeout);
+        elog(DEBUG2, "  %s: connect timeout > %ld", __func__, state->connect_timeout);
+        elog(DEBUG2, "  %s: request timeout > %ld%s", __func__, state->request_timeout,
+             state->request_timeout == 0 ? " (disabled)" : "");
         elog(DEBUG2, "  %s: max retry > %ld", __func__, state->max_retries);
 
         if (state->proxy)

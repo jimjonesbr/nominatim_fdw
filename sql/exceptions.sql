@@ -9,12 +9,20 @@ CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'bar');
 
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://proxy.im');
 
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
+/*
+ * The statement above is the only one in this block that succeeds. Drop the
+ * server again, otherwise every CREATE SERVER below fails with 'server "foo"
+ * already exists' before the option validator is ever reached - which would
+ * silently turn all of the option checks that follow into no-ops.
+ */
+DROP SERVER foo;
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
          connect_timeout '');
 
@@ -23,33 +31,44 @@ FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
          connect_timeout '-1');
 
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         connect_timeout 'abc');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         request_timeout '');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         request_timeout '-1');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         request_timeout 'abc');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         request_timeout '42 ');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '');
 
-CREATE SERVER foo 
+CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '-1');
 
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         connect_timeout '42',
-         max_connect_retry '73',
-         max_connect_redirect '');
-
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         connect_timeout '42',
-         max_connect_retry '73',
-         max_connect_redirect '-1');
-
-CREATE SERVER foo 
+CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          connect_timeout '42',
@@ -63,7 +82,27 @@ OPTIONS (url 'http://server.im',
          max_connect_retry '73',
          max_connect_redirect '-1');
 
-/* invalid URL - retrying as set in 'max_connect_retry' */ 
+/* valid timeout values - '0' disables the request timeout */
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         connect_timeout '42',
+         request_timeout '0');
+SELECT srvoptions FROM pg_foreign_server WHERE srvname = 'foo';
+
+ALTER SERVER foo OPTIONS (SET request_timeout '30');
+SELECT srvoptions FROM pg_foreign_server WHERE srvname = 'foo';
+
+/* invalid values must be rejected by ALTER SERVER as well */
+ALTER SERVER foo OPTIONS (SET request_timeout '-1');
+ALTER SERVER foo OPTIONS (SET request_timeout '');
+
+ALTER SERVER foo OPTIONS (DROP request_timeout);
+SELECT srvoptions FROM pg_foreign_server WHERE srvname = 'foo';
+
+DROP SERVER foo;
+
+/* invalid URL - retrying as set in 'max_connect_retry' */
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',

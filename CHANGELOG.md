@@ -12,6 +12,7 @@ Release date: **2026-07-24**
 ## Enhancements
 
 * **Add HTTP basic authentication in `USER MAPPING`**: This feature defines a mapping of a PostgreSQL user to an user in the target Nominatim server - `user` and `password`, so that the user can be authenticated.
+* **Add `request_timeout` server option**: sets the maximum time in seconds allowed for a complete HTTP request (`CURLOPT_TIMEOUT`), defaulting to `0` (no limit). The pre-existing `connect_timeout` only bounds the connection phase, so a Nominatim server that accepted the connection and then stalled would occupy the backend indefinitely.
 
 ## Bug fixes
 

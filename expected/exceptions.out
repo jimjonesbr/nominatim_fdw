@@ -9,60 +9,118 @@ CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'bar');
 ERROR:  invalid url: 'bar'
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://proxy.im');
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
+/*
+ * The statement above is the only one in this block that succeeds. Drop the
+ * server again, otherwise every CREATE SERVER below fails with 'server "foo"
+ * already exists' before the option validator is ever reached - which would
+ * silently turn all of the option checks that follow into no-ops.
+ */
+DROP SERVER foo;
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
          connect_timeout '');
-ERROR:  server "foo" already exists
+ERROR:  empty value in option 'connect_timeout'
 CREATE SERVER foo 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          connect_timeout '-1');
-ERROR:  server "foo" already exists
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
+ERROR:  invalid connect_timeout: '-1'
+DETAIL:  Expected values are positive integers (timeout in seconds)
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         connect_timeout 'abc');
+ERROR:  invalid connect_timeout: 'abc'
+DETAIL:  Expected values are positive integers (timeout in seconds)
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         request_timeout '');
+ERROR:  empty value in option 'request_timeout'
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         request_timeout '-1');
+ERROR:  invalid request_timeout: '-1'
+DETAIL:  Expected values are non-negative integers (timeout in seconds, 0 = disabled)
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         request_timeout 'abc');
+ERROR:  invalid request_timeout: 'abc'
+DETAIL:  Expected values are non-negative integers (timeout in seconds, 0 = disabled)
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         request_timeout '42 ');
+ERROR:  invalid request_timeout: '42 '
+DETAIL:  Expected values are non-negative integers (timeout in seconds, 0 = disabled)
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '');
-ERROR:  server "foo" already exists
-CREATE SERVER foo 
+ERROR:  empty value in option 'max_connect_retry'
+CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '-1');
-ERROR:  server "foo" already exists
-CREATE SERVER foo 
+ERROR:  invalid max_connect_retry: '-1'
+DETAIL:  Expected values are positive integers
+CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '');
-ERROR:  server "foo" already exists
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         connect_timeout '42',
-         max_connect_retry '73',
-         max_connect_redirect '-1');
-ERROR:  server "foo" already exists
-CREATE SERVER foo 
-FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
-         connect_timeout '42',
-         max_connect_retry '73',
-         max_connect_redirect '');
-ERROR:  server "foo" already exists
+ERROR:  empty value in option 'max_connect_redirect'
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '73',
          max_connect_redirect '-1');
-ERROR:  server "foo" already exists
-/* invalid URL - retrying as set in 'max_connect_retry' */ 
+ERROR:  invalid max_connect_redirect: '-1'
+DETAIL:  Expected values are positive integers
+/* valid timeout values - '0' disables the request timeout */
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         connect_timeout '42',
+         request_timeout '0');
+SELECT srvoptions FROM pg_foreign_server WHERE srvname = 'foo';
+                         srvoptions                          
+-------------------------------------------------------------
+ {url=http://server.im,connect_timeout=42,request_timeout=0}
+(1 row)
+
+ALTER SERVER foo OPTIONS (SET request_timeout '30');
+SELECT srvoptions FROM pg_foreign_server WHERE srvname = 'foo';
+                          srvoptions                          
+--------------------------------------------------------------
+ {url=http://server.im,connect_timeout=42,request_timeout=30}
+(1 row)
+
+/* invalid values must be rejected by ALTER SERVER as well */
+ALTER SERVER foo OPTIONS (SET request_timeout '-1');
+ERROR:  invalid request_timeout: '-1'
+DETAIL:  Expected values are non-negative integers (timeout in seconds, 0 = disabled)
+ALTER SERVER foo OPTIONS (SET request_timeout '');
+ERROR:  empty value in option 'request_timeout'
+ALTER SERVER foo OPTIONS (DROP request_timeout);
+SELECT srvoptions FROM pg_foreign_server WHERE srvname = 'foo';
+                srvoptions                 
+-------------------------------------------
+ {url=http://server.im,connect_timeout=42}
+(1 row)
+
+DROP SERVER foo;
+/* invalid URL - retrying as set in 'max_connect_retry' */
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
