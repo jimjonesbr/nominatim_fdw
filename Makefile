@@ -24,7 +24,9 @@ PG_CPPFLAGS += $(shell $(CURL_CONFIG) --cflags) \
 			   $(shell $(XML2_CONFIG) --cflags) \
 			   -DNOMINATIM_FDW_CC="\"$(CC)\"" \
 			   -DNOMINATIM_FDW_BUILD_DATE="\"$(shell date -u +'%Y-%m-%d %H:%M:%S UTC')\""
-LIBS += $(shell $(CURL_CONFIG) --libs)
+
+LIBS += $(shell $(CURL_CONFIG) --libs) \
+        $(shell $(XML2_CONFIG) --libs)
 
 SHLIB_LINK := $(LIBS)
 

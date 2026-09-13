@@ -217,6 +217,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state);
 static void ParseNominatimReverseData(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
+static bool ParseNonNegativeLong(const char *value, long *result);
 static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
 static bool IsFeatureTypeValid(char *layer);
@@ -244,6 +245,45 @@ Datum nominatim_fdw_handler(PG_FUNCTION_ARGS)
 {
     FdwRoutine *fdwroutine = makeNode(FdwRoutine);
     PG_RETURN_POINTER(fdwroutine);
+}
+
+/*
+ * ParseNonNegativeLong
+ * ----------
+ *
+ * Parses a server option that is expected to hold a non-negative integer.
+ *
+ * Both nominatim_fdw_validator() and InitSession() have to interpret these
+ * options, and they must agree: a value accepted by the validator but read
+ * differently at request time silently changes the behaviour of the server.
+ * That used to be the case for values such as '0x10', which the validator
+ * read as 16 (strtol() base 0) while InitSession() read it as 0 (base 10).
+ * Keeping the parsing in one place is what guarantees they cannot diverge
+ * again, so both callers must go through this function.
+ *
+ * value: the option value as given by the user
+ * result: receives the parsed value, untouched when parsing fails
+ *
+ * returns true if the whole string is a valid non-negative integer
+ */
+static bool
+ParseNonNegativeLong(const char *value, long *result)
+{
+    char *endptr;
+    long val;
+
+    if (!value || value[0] == '\0')
+        return false;
+
+    errno = 0;
+    val = strtol(value, &endptr, 10);
+
+    /* reject trailing garbage, out-of-range values and negative numbers */
+    if (*endptr != '\0' || errno == ERANGE || val < 0)
+        return false;
+
+    *result = val;
+    return true;
 }
 
 Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
@@ -295,11 +335,10 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
                 {
-                    char *endptr;
                     char *timeout_str = defGetString(def);
-                    long timeout_val = strtol(timeout_str, &endptr, 0);
+                    long timeout_val;
 
-                    if (timeout_str[0] == '\0' || *endptr != '\0' || timeout_val < 0)
+                    if (!ParseNonNegativeLong(timeout_str, &timeout_val))
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, timeout_str),
@@ -308,11 +347,10 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_REQUEST_TIMEOUT) == 0)
                 {
-                    char *endptr;
                     char *timeout_str = defGetString(def);
-                    long timeout_val = strtol(timeout_str, &endptr, 10);
+                    long timeout_val;
 
-                    if (timeout_str[0] == '\0' || *endptr != '\0' || timeout_val < 0)
+                    if (!ParseNonNegativeLong(timeout_str, &timeout_val))
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, timeout_str),
@@ -321,11 +359,10 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0 || strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
                 {
-                    char *endptr;
                     char *retry_str = defGetString(def);
-                    long retry_val = strtol(retry_str, &endptr, 0);
+                    long retry_val;
 
-                    if (retry_str[0] == '\0' || *endptr != '\0' || retry_val < 0)
+                    if (!ParseNonNegativeLong(retry_str, &retry_val))
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, retry_str),
@@ -1086,36 +1123,47 @@ static NominatimFDWState *InitSession(const char *srvname)
             state->proxy_type = NOMINATIM_SERVER_OPTION_HTTP_PROXY;
         }
 
+        /*
+         * The numeric options below were already checked by the validator
+         * when the server was created or altered. Parsing them through the
+         * very same helper keeps both readings identical; the error is a
+         * safety net for options that predate a validator change and would
+         * otherwise be silently misread.
+         */
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
         {
-            char *tailpt;
-            char *timeout_str = defGetString(def);
-
-            state->connect_timeout = strtol(timeout_str, &tailpt, 10);
+            if (!ParseNonNegativeLong(defGetString(def), &state->connect_timeout))
+                ereport(ERROR,
+                        (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                         errmsg("invalid %s: '%s'", def->defname, defGetString(def)),
+                         errdetail("Expected values are non-negative integers (timeout in seconds)")));
         }
 
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_REQUEST_TIMEOUT) == 0)
         {
-            char *tailpt;
-            char *timeout_str = defGetString(def);
-
-            state->request_timeout = strtol(timeout_str, &tailpt, 10);
+            if (!ParseNonNegativeLong(defGetString(def), &state->request_timeout))
+                ereport(ERROR,
+                        (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                         errmsg("invalid %s: '%s'", def->defname, defGetString(def)),
+                         errdetail("Expected values are non-negative integers (timeout in seconds, 0 = disabled)")));
         }
 
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
         {
-            char *tailpt;
-            char *maxredirect_str = defGetString(def);
-
-            state->request_max_redirect = strtol(maxredirect_str, &tailpt, 10);
+            if (!ParseNonNegativeLong(defGetString(def), &state->request_max_redirect))
+                ereport(ERROR,
+                        (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                         errmsg("invalid %s: '%s'", def->defname, defGetString(def)),
+                         errdetail("Expected values are non-negative integers")));
         }
 
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0)
         {
-            char *tailpt;
-            char *val = defGetString(def);
-
-            state->max_retries = strtol(val, &tailpt, 10);
+            if (!ParseNonNegativeLong(defGetString(def), &state->max_retries))
+                ereport(ERROR,
+                        (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                         errmsg("invalid %s: '%s'", def->defname, defGetString(def)),
+                         errdetail("Expected values are non-negative integers")));
         }
 
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
