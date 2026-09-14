@@ -55,7 +55,14 @@
  * error messages and server logs.  Prevents huge HTML error pages (e.g.
  * from misconfigured proxies) from flooding PostgreSQL logs.
  */
-#define RDF_FDW_MAX_ERROR_BODY 512
+#define NOMINATIM_FDW_MAX_ERROR_BODY 512
+
+/*
+ * Upper bound, in seconds, for the delay a server may request through the
+ * "Retry-After" response header. Keeps a misbehaving or hostile endpoint
+ * from parking a backend for an arbitrary amount of time.
+ */
+#define NOMINATIM_MAX_RETRY_AFTER 30
 
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
@@ -218,6 +225,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
 static bool ParseNonNegativeLong(const char *value, long *result);
+static bool ReportNominatimError(xmlNodePtr root);
+static bool RequestFailed(CURLcode res, long response_code);
+static bool IsRetryable(CURLcode res, long response_code);
+static long ParseRetryAfter(const char *headers);
+static void InterruptibleSleep(long seconds);
 static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
 static bool IsFeatureTypeValid(char *layer);
@@ -243,8 +255,22 @@ void _PG_init(void)
 
 Datum nominatim_fdw_handler(PG_FUNCTION_ARGS)
 {
-    FdwRoutine *fdwroutine = makeNode(FdwRoutine);
-    PG_RETURN_POINTER(fdwroutine);
+    /*
+     * nominatim_fdw exposes its data through the nominatim_search(),
+     * nominatim_lookup() and nominatim_reverse() functions rather than
+     * through foreign tables, so none of the scan callbacks are implemented.
+     * Returning an FdwRoutine with all-NULL callbacks would make the planner
+     * jump through a NULL function pointer the moment a foreign table reached
+     * it; failing here yields a comprehensible message instead. The validator
+     * already rejects CREATE FOREIGN TABLE, so this is only reachable in
+     * unusual situations - IMPORT FOREIGN SCHEMA, for instance.
+     */
+    ereport(ERROR,
+            (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+             errmsg("FOREIGN TABLE not supported"),
+             errdetail("The nominatim_fdw does not support FOREIGN TABLE mapping. Use the query functions instead.")));
+
+    PG_RETURN_POINTER(NULL); /* unreachable, keeps the compiler happy */
 }
 
 /*
@@ -1245,6 +1271,179 @@ xml_node_content(xmlNodePtr node)
 }
 
 /*
+ * ReportNominatimError
+ * ----------
+ *
+ * Nominatim describes problems that it can still answer with HTTP 200 - an
+ * un-geocodable coordinate, for instance - in an <error> element instead of
+ * failing the request. Without surfacing it the caller just sees an empty
+ * result set and no reason for it.
+ *
+ * root: root element of the parsed response
+ *
+ * returns true when an <error> element was found and reported
+ */
+static bool
+ReportNominatimError(xmlNodePtr root)
+{
+    xmlNodePtr error = NULL;
+    xmlNodePtr node;
+    char *message = NULL;
+
+    if (xmlStrcmp(root->name, (xmlChar *)"error") == 0)
+        error = root;
+    else
+    {
+        for (node = root->children; node != NULL; node = node->next)
+        {
+            if (xmlStrcmp(node->name, (xmlChar *)"error") == 0)
+            {
+                error = node;
+                break;
+            }
+        }
+    }
+
+    if (!error)
+        return false;
+
+    /*
+     * The search endpoint wraps the text in <message>, while the reverse
+     * endpoint puts it directly into <error>.
+     */
+    for (node = error->children; node != NULL; node = node->next)
+    {
+        if (xmlStrcmp(node->name, (xmlChar *)"message") == 0)
+        {
+            message = xml_node_content(node);
+            break;
+        }
+    }
+
+    if (!message)
+        message = xml_node_content(error);
+
+    ereport(WARNING,
+            (errcode(ERRCODE_FDW_ERROR),
+             errmsg("nominatim server returned an error"),
+             errdetail("%s", (message && message[0] != '\0')
+                             ? message : "no description provided")));
+
+    return true;
+}
+
+/*
+ * RequestFailed
+ * ----------
+ *
+ * A request counts as failed when libcurl itself reported a problem or when
+ * the server answered with an HTTP status of 400 or above.
+ *
+ * returns boolean (true: failed, false: succeeded)
+ */
+static bool
+RequestFailed(CURLcode res, long response_code)
+{
+    return res != CURLE_OK || response_code >= 400;
+}
+
+/*
+ * IsRetryable
+ * ----------
+ *
+ * Decides whether a failed request is worth repeating. Transport failures
+ * and server-side errors usually are; client errors are not, as an identical
+ * request would be rejected again. HTTP 429 is the exception, being an
+ * explicit "come back later".
+ *
+ * returns boolean (true: retry, false: give up)
+ */
+static bool
+IsRetryable(CURLcode res, long response_code)
+{
+    /* the transfer was cancelled: retrying would only delay the interrupt */
+    if (res == CURLE_ABORTED_BY_CALLBACK)
+        return false;
+
+    if (res != CURLE_OK)
+        return true;
+
+    return response_code == 429 || response_code >= 500;
+}
+
+/*
+ * ParseRetryAfter
+ * ----------
+ *
+ * Reads the delay requested through the "Retry-After" response header. Only
+ * the delta-seconds form is honoured; the HTTP-date form is rare in practice
+ * and would require full date parsing.
+ *
+ * headers: raw response headers as collected by HeaderCallbackFunction
+ *
+ * returns the delay in seconds, or -1 when absent or not understood
+ */
+static long
+ParseRetryAfter(const char *headers)
+{
+    const char *line = headers;
+
+    if (!headers)
+        return -1;
+
+    while (*line != '\0')
+    {
+        const char *eol = line + strcspn(line, "\r\n");
+
+        if (strncasecmp(line, "Retry-After:", sizeof("Retry-After:") - 1) == 0)
+        {
+            const char *value = line + sizeof("Retry-After:") - 1;
+            char *endptr;
+            long seconds;
+
+            while (value < eol && (*value == ' ' || *value == '\t'))
+                value++;
+
+            errno = 0;
+            seconds = strtol(value, &endptr, 10);
+
+            if (endptr != value && errno != ERANGE && seconds >= 0)
+                return seconds;
+
+            return -1;
+        }
+
+        line = eol;
+        while (*line == '\r' || *line == '\n')
+            line++;
+    }
+
+    return -1;
+}
+
+/*
+ * InterruptibleSleep
+ * ----------
+ *
+ * Sleeps for the given number of seconds, in slices, so that a query
+ * cancellation arriving mid-sleep is noticed promptly. pg_usleep() on its
+ * own neither processes nor notices interrupts.
+ *
+ * seconds: how long to sleep
+ */
+static void
+InterruptibleSleep(long seconds)
+{
+    for (long slice = 0; slice < seconds * 10; slice++)
+    {
+        if (InterruptPending)
+            return;
+
+        pg_usleep(100000L); /* 100 ms */
+    }
+}
+
+/*
  * ParseNominatimReverseData
  * ----------
  *
@@ -1278,6 +1477,14 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
 
     if (!root)
         elog(ERROR, "unable to parse root element: '%s'", state->url);
+
+    /* an <error> here means there is nothing to parse */
+    if (ReportNominatimError(root))
+    {
+        xmlFreeDoc(state->xmldoc);
+        state->xmldoc = NULL;
+        return;
+    }
 
     place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
 
@@ -1452,6 +1659,14 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
 
     if (!root)
         elog(ERROR, "unable to parse XML document: '%s'", state->url);
+
+    /* an <error> here means there is nothing to parse */
+    if (ReportNominatimError(root))
+    {
+        xmlFreeDoc(state->xmldoc);
+        state->xmldoc = NULL;
+        return;
+    }
 
     for (searchresults = root->children; searchresults != NULL; searchresults = searchresults->next)
     {
@@ -1762,6 +1977,7 @@ static int ExecuteRequest(NominatimFDWState *state)
 {
     CURL *curl;
     CURLcode res;
+    long response_code = 0;
     StringInfoData url_buffer;
     StringInfoData accept_header;
     StringInfoData user_agent;
@@ -1950,7 +2166,12 @@ static int ExecuteRequest(NominatimFDWState *state)
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
-        curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
+        /*
+         * CURLOPT_FAILONERROR is deliberately NOT set: it makes libcurl
+         * discard the response body of a 4xx/5xx answer, which is exactly
+         * where Nominatim explains what was wrong with the request. HTTP
+         * status handling is done below instead.
+         */
         curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
         curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 1L);
 
@@ -2014,42 +2235,53 @@ static int ExecuteRequest(NominatimFDWState *state)
         PG_TRY();
         {
             res = curl_easy_perform(curl);
-
-            for (long i = 1; res != CURLE_OK && i <= state->max_retries; i++)
-            {
-                long response_code = 0;
-
-                /*
-                 * CURLProgressCallback aborted the transfer, which means a
-                 * query cancellation or backend shutdown is pending. Retrying
-                 * would only delay it.
-                 */
-                if (res == CURLE_ABORTED_BY_CALLBACK)
-                    break;
-
+            if (res == CURLE_OK)
                 curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
 
-                /* Client errors (except 429) won't succeed on retry - fail fast */
-                if (response_code >= 400 && response_code < 500 && response_code != 429)
+            for (long i = 1;
+                 RequestFailed(res, response_code) && i <= state->max_retries;
+                 i++)
+            {
+                long delay = 1; /* just being polite to the public server */
+
+                if (!IsRetryable(res, response_code))
                     break;
 
                 elog(WARNING, "request to '%s' failed (%ld/%ld)", state->url, i, state->max_retries);
-                elog(DEBUG1, "the nominatim returned HTTP code %ld", response_code);
+                elog(DEBUG1, "the server returned HTTP code %ld", response_code);
+
+                /*
+                 * A 429 answer usually carries a Retry-After header saying how
+                 * long to wait. Honouring it is the difference between backing
+                 * off and hammering a rate-limited server.
+                 */
+                if (response_code == 429)
+                {
+                    long retry_after = ParseRetryAfter(chunk_header.memory);
+
+                    if (retry_after >= 0)
+                    {
+                        delay = Min(retry_after, NOMINATIM_MAX_RETRY_AFTER);
+                        elog(DEBUG1, "server asked to retry after %ld seconds, waiting %ld",
+                             retry_after, delay);
+                    }
+                }
 
                 /* discard whatever the failed attempt left behind before retrying */
                 chunk.size = 0;
                 chunk.memory[0] = '\0';
                 chunk_header.size = 0;
                 chunk_header.memory[0] = '\0';
+                response_code = 0;
 
-                /* just being polite to the public server */
-                pg_usleep(1000000L);
+                InterruptibleSleep(delay);
 
-                /* the sleep above does not process interrupts on its own */
                 if (InterruptPending)
                     break;
 
                 res = curl_easy_perform(curl);
+                if (res == CURLE_OK)
+                    curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
             }
         }
         PG_CATCH();
@@ -2060,10 +2292,41 @@ static int ExecuteRequest(NominatimFDWState *state)
         }
         PG_END_TRY();
 
-        if (res != CURLE_OK)
+        if (RequestFailed(res, response_code))
         {
-            long response_code = 0;
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+            StringInfoData message;
+            StringInfoData detail;
+
+            initStringInfo(&message);
+            initStringInfo(&detail);
+
+            if (res != CURLE_OK)
+                appendStringInfoString(&message,
+                                       strlen(errbuf) > 0 ? errbuf : curl_easy_strerror(res));
+            else
+                appendStringInfo(&message,
+                                 "the server returned HTTP status %ld", response_code);
+
+            appendStringInfo(&detail, "URL: \"%s\"", url_buffer.data);
+
+            /*
+             * Report whatever the server sent along with the failure. This is
+             * where Nominatim says which parameter it objected to, and it is
+             * far more actionable than the status code on its own. Truncated,
+             * so that a large HTML error page - from a misconfigured proxy,
+             * say - cannot flood the logs.
+             */
+            if (res == CURLE_OK && chunk.size > 0)
+            {
+                int len = (int)Min(chunk.size, NOMINATIM_FDW_MAX_ERROR_BODY);
+
+                appendStringInfoString(&detail, "\nResponse body: ");
+                appendBinaryStringInfo(&detail, chunk.memory, len);
+
+                if (chunk.size > NOMINATIM_FDW_MAX_ERROR_BODY)
+                    appendStringInfo(&detail, " ... [%lu bytes truncated]",
+                                     (unsigned long)(chunk.size - NOMINATIM_FDW_MAX_ERROR_BODY));
+            }
 
             xmlFreeDoc(state->xmldoc);
             pfree(chunk.memory);
@@ -2081,14 +2344,12 @@ static int ExecuteRequest(NominatimFDWState *state)
 
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_UNABLE_TO_CREATE_EXECUTION),
-                     errmsg("%s", strlen(errbuf) > 0 ? errbuf : "nominatim HTTP request failed"),
+                     errmsg("%s", message.data),
                      errhint("Check your request parameters and credentials, if applicable, and try again."),
-                     errdetail("URL: \"%s\"", url_buffer.data)));
+                     errdetail("%s", detail.data)));
           }
         else
         {
-            long response_code;
-            curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
             state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL,
                                           XML_PARSE_NOBLANKS | XML_PARSE_NONET);
 
@@ -2174,23 +2435,36 @@ static bool IsLayerValid(char *layer)
 {
     char *copy;
     char *token;
+    char *saveptr = NULL;
+    bool valid = true;
 
     if (!layer)
         return false;
 
     copy = pstrdup(layer);
-    token = strtok(copy, ",");
-    while (token != NULL)
+
+    /*
+     * strtok() keeps its parsing state in a static buffer shared by the whole
+     * process, which makes it unsafe in backend code. strtok_r() keeps that
+     * state in saveptr instead.
+     */
+    for (token = strtok_r(copy, ",", &saveptr);
+         token != NULL;
+         token = strtok_r(NULL, ",", &saveptr))
     {
         if (strcmp(token, "address") != 0 &&
             strcmp(token, "poi") != 0 &&
             strcmp(token, "railway") != 0 &&
             strcmp(token, "natural") != 0 &&
             strcmp(token, "manmade") != 0)
-            return false;
-        token = strtok(NULL, ",");
+        {
+            valid = false;
+            break;
+        }
     }
-    return true;
+
+    pfree(copy);
+    return valid;
 }
 
 /*

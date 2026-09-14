@@ -224,8 +224,14 @@ RESET client_min_messages;
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', layer => 'address,bogus');
 WARNING:  unrecognised layer 'address,bogus'
 DETAIL:  Known values are: address, poi, railway, natural, manmade
-ERROR:  The requested URL returned error: 400
+ERROR:  the server returned HTTP status 400
 DETAIL:  URL: "https://nominatim.openstreetmap.org/search?q=x&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0"
+Response body: <?xml version="1.0" encoding="UTF-8" ?>
+                   <error>
+                     <code>400</code>
+                     <message>Parameter 'layer' must be a comma-separated list of: address, poi, railway, natural, manmade</message>
+                   </error>
+                
 HINT:  Check your request parameters and credentials, if applicable, and try again.
 SET client_min_messages TO debug1;
 /* nonexistent server */
@@ -671,6 +677,8 @@ FROM nominatim_reverse(
     lat => 90);
 DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=180.00000000&lat=90.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  HTTP 200, 287 bytes
+WARNING:  nominatim server returned an error
+DETAIL:  Unable to geocode
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -684,6 +692,8 @@ FROM nominatim_reverse(
         lat => -90);
 DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=-180.00000000&lat=-90.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  HTTP 200, 289 bytes
+WARNING:  nominatim server returned an error
+DETAIL:  Unable to geocode
 (0 rows)
 
 /* valid coordinates but no location */
@@ -696,6 +706,8 @@ FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => -60);
 DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=0.00000000&lat=-60.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  HTTP 200, 286 bytes
+WARNING:  nominatim server returned an error
+DETAIL:  Unable to geocode
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -707,6 +719,8 @@ FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => 0);
 DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=0.00000000&lat=0.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  HTTP 200, 284 bytes
+WARNING:  nominatim server returned an error
+DETAIL:  Unable to geocode
 (0 rows)
 
 SELECT pg_sleep(2);
