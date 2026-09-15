@@ -29,13 +29,13 @@ FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
          connect_timeout '-1');
 ERROR:  invalid connect_timeout: '-1'
-DETAIL:  Expected values are positive integers (timeout in seconds)
+DETAIL:  Expected values are non-negative integers (timeout in seconds)
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
          connect_timeout 'abc');
 ERROR:  invalid connect_timeout: 'abc'
-DETAIL:  Expected values are positive integers (timeout in seconds)
+DETAIL:  Expected values are non-negative integers (timeout in seconds)
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
@@ -71,7 +71,7 @@ OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '-1');
 ERROR:  invalid max_connect_retry: '-1'
-DETAIL:  Expected values are positive integers
+DETAIL:  Expected values are non-negative integers
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://server.im',
@@ -86,7 +86,7 @@ OPTIONS (url 'http://server.im',
          max_connect_retry '73',
          max_connect_redirect '-1');
 ERROR:  invalid max_connect_redirect: '-1'
-DETAIL:  Expected values are positive integers
+DETAIL:  Expected values are non-negative integers
 /* valid timeout values - '0' disables the request timeout */
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw

@@ -130,7 +130,6 @@ typedef struct NominatimFDWState
     char *accept_language;     /* Preferred language order for showing search results */
     bool dedupe;               /* Remove duplicates? */
     bool bounded;              /* Exclude results outside the viewbox? */
-    bool request_redirect;     /* Enables or disables URL redirecting. */
     bool extratags;            /* Include any additional information in the result that is available in the database? */
     bool namedetails;          /* Include a full list of names for the result? */
     bool addressdetails;       /* Include a breakdown of the address into elements? */
@@ -368,7 +367,7 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, timeout_str),
-                                 errdetail("Expected values are positive integers (timeout in seconds)")));
+                                 errdetail("Expected values are non-negative integers (timeout in seconds)")));
                 }
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_REQUEST_TIMEOUT) == 0)
@@ -392,7 +391,7 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, retry_str),
-                                 errdetail("Expected values are positive integers")));
+                                 errdetail("Expected values are non-negative integers")));
                 }
             }
         }
@@ -1117,7 +1116,6 @@ static NominatimFDWState *InitSession(const char *srvname)
     ForeignServer *server = GetForeignServerByName(srvname, true);
     ListCell *cell;
 
-    state->request_redirect = 1L;
     state->max_retries = NOMINATIM_DEFAULT_MAXRETRY;
     state->request_max_redirect = NOMINATIM_DEFAULT_MAXREDIRECT;
     state->accept_language = NOMINATIM_DEFAULT_LANGUAGE;
@@ -2150,17 +2148,25 @@ static int ExecuteRequest(NominatimFDWState *state)
             }
         }
 
-        if (state->request_redirect)
-        {
-            elog(DEBUG2, "  %s: setting request redirect: %d (%s)", __func__, state->request_redirect, state->request_redirect ? "true" : "false");
-            curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+        /*
+         * Redirects are always followed; how far is decided solely by
+         * max_connect_redirect. With a limit of 0 libcurl refuses to follow
+         * the first redirect and fails the request with
+         * CURLE_TOO_MANY_REDIRECTS, which is reported to the user like any
+         * other transport failure - so that single option covers "do not
+         * redirect at all" as well, and no separate on/off switch is needed.
+         */
+        curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
 
-            if (state->request_max_redirect)
-            {
-                elog(DEBUG2, "  %s: setting maxredirs: %ld", __func__, state->request_max_redirect);
-                curl_easy_setopt(curl, CURLOPT_MAXREDIRS, state->request_max_redirect);
-            }
-        }
+        /*
+         * Never hand the credentials over to a host we were redirected to.
+         * This is libcurl's default, set explicitly so that the intent is
+         * visible and survives a change of that default.
+         */
+        curl_easy_setopt(curl, CURLOPT_UNRESTRICTED_AUTH, 0L);
+
+        elog(DEBUG2, "  %s: setting maxredirs: %ld", __func__, state->request_max_redirect);
+        curl_easy_setopt(curl, CURLOPT_MAXREDIRS, state->request_max_redirect);
 
         curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
