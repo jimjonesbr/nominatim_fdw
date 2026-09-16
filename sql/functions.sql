@@ -1,3 +1,5 @@
+\pset null '(null)'
+
 CREATE SERVER osm 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'https://nominatim.openstreetmap.org');

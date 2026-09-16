@@ -1,3 +1,4 @@
+\pset null '(null)'
 CREATE SERVER osm 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'https://nominatim.openstreetmap.org');
@@ -62,7 +63,7 @@ lon               | 7.6038115
 lat               | 51.9660873
 boundingbox       | 51.9659397,51.9661584,7.6036345,7.6039893
 importance        | 7.215915159833703e-05
-icon              | 
+icon              | (null)
 valid_timestamp   | t
 attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring       | einsteinstraße 60, münster, germany
@@ -180,7 +181,7 @@ lon               | 7.6038115
 lat               | 51.9660873
 boundingbox       | 51.9659397,51.9661584,7.6036345,7.6039893
 importance        | 7.215915159833703e-05
-icon              | 
+icon              | (null)
 valid_timestamp   | t
 attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring       | cit, einsteinstraße 60, münster, nordrhein westfalen, 48149, germany
@@ -293,7 +294,7 @@ valid_place_id  | t
 place_rank      | 30
 lon             | 7.6038115
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
@@ -374,7 +375,7 @@ valid_place_id  | t
 place_rank      | 30
 lon             | 7.6038115
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
@@ -551,7 +552,7 @@ valid_place_id  | t
 place_rank      | 30
 lon             | 7.6038115
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
@@ -614,7 +615,7 @@ valid_place_id  | t
 place_rank      | 30
 lon             | 7.6038115
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
@@ -784,7 +785,7 @@ lon             | 7.6038115
 lat             | 51.9660873
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
 importance      | 7.215915159833703e-05
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | 

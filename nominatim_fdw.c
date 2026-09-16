@@ -115,10 +115,8 @@ typedef struct NominatimFDWState
     char *user;                /* User name for HTTP basic authentication */
     char *password;            /* Password for HTTP basic authentication */
     char *proxy;               /* Proxy for HTTP requests, if necessary. */
-    char *proxy_type;          /* Proxy protocol (HTTPS, HTTP). */
     char *proxy_user;          /* User name for proxy authentication. */
     char *proxy_user_password; /* Password for proxy authentication. */
-    char *custom_params;       /* Custom parameters used to compose the request URL */
     char *query;               /* Free-form query string to search for */
     char *layer;               /* Comma-separated list of: address, poi, railway, natural, manmade*/
     char *countrycodes;        /* Comma-separated list of country codes */
@@ -221,6 +219,7 @@ static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, voi
 static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp);
 static void ParseNominatimSearchData(NominatimFDWState *state);
 static void ParseNominatimReverseData(NominatimFDWState *state);
+static void ParseNominatimResponse(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
 static bool ParseNonNegativeLong(const char *value, long *result);
@@ -503,8 +502,12 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         funcctx = SRF_FIRSTCALL_INIT();
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        if (language_text && strlen(text_to_cstring(language_text)) > 0)
-            state->accept_language = text_to_cstring(language_text);
+        {
+            char *language = text_to_cstring(language_text);
+
+            if (language[0] != '\0')
+                state->accept_language = language;
+        }
 
         state->lon = lon;
         state->lat = lat;
@@ -555,7 +558,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
              state->polygon_type,
              state->layer);
 
-        ParseNominatimReverseData(state);
+        ParseNominatimResponse(state);
 
         funcctx->user_fctx = state->records;
 
@@ -660,8 +663,12 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         funcctx = SRF_FIRSTCALL_INIT();
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        if (language_text && strlen(text_to_cstring(language_text)) > 0)
-            state->accept_language = text_to_cstring(language_text);
+        {
+            char *language = text_to_cstring(language_text);
+
+            if (language[0] != '\0')
+                state->accept_language = language;
+        }
 
         state->query = text_to_cstring(query_text);
         state->amenity = text_to_cstring(amenity_text);
@@ -687,6 +694,12 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->limit = limit;
         state->entrances = entrances;
         state->request_type = NOMINATIM_REQUEST_SEARCH;
+
+        if (limit < 0)
+            ereport(ERROR,
+                    (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+                     errmsg("invalid limit: %d", limit),
+                     errdetail("limit must be a positive number (0 to let the server decide)")));
 
         if (((state->amenity && strlen(state->amenity) > 0) ||
              (state->street && strlen(state->street) > 0) ||
@@ -729,7 +742,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
              state->query,
              state->polygon_type);
 
-        ParseNominatimSearchData(state);
+        ParseNominatimResponse(state);
 
         funcctx->user_fctx = state->records;
 
@@ -830,8 +843,12 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         state->polygon_type = text_to_cstring(polygon_text);
         state->entrances = entrances;
 
-        if (language_text && strlen(text_to_cstring(language_text)) > 0)
-            state->accept_language = text_to_cstring(language_text);
+        {
+            char *language = text_to_cstring(language_text);
+
+            if (language[0] != '\0')
+                state->accept_language = language;
+        }
 
         state->polygon_threshold = polygon_threshold;
         state->email = text_to_cstring(email_text);
@@ -847,7 +864,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
              state->osm_ids,
              state->polygon_type);
 
-        ParseNominatimSearchData(state);
+        ParseNominatimResponse(state);
 
         funcctx->user_fctx = state->records;
 
@@ -1144,7 +1161,6 @@ static NominatimFDWState *InitSession(const char *srvname)
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0)
         {
             state->proxy = defGetString(def);
-            state->proxy_type = NOMINATIM_SERVER_OPTION_HTTP_PROXY;
         }
 
         /*
@@ -1815,6 +1831,43 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
     state->xmldoc = NULL;
 }
 
+/*
+ * ParseNominatimResponse
+ * ----------
+ *
+ * Runs the parser that matches the request type, guaranteeing that the
+ * libxml2 document is released even when parsing raises an error.
+ *
+ * The document lives in libxml2's own heap rather than in a palloc context,
+ * so unwinding an error would otherwise abandon it for the lifetime of the
+ * backend. The parsers can fail part-way through - on a node that cannot be
+ * dumped, or simply on out-of-memory - which is exactly when the leak would
+ * happen.
+ *
+ * state: NominatimFDWState containing all session data
+ */
+static void
+ParseNominatimResponse(NominatimFDWState *state)
+{
+    PG_TRY();
+    {
+        if (strcmp(state->request_type, NOMINATIM_REQUEST_REVERSE) == 0)
+            ParseNominatimReverseData(state);
+        else
+            ParseNominatimSearchData(state);
+    }
+    PG_CATCH();
+    {
+        if (state->xmldoc)
+        {
+            xmlFreeDoc(state->xmldoc);
+            state->xmldoc = NULL;
+        }
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
+}
+
 static void AppendUrlParam(StringInfo buf, CURL *curl, const char *param, const char *value)
 {
     char *escaped = curl_easy_escape(curl, value, 0);
@@ -1994,7 +2047,15 @@ static int ExecuteRequest(NominatimFDWState *state)
     curl = curl_easy_init();
 
     initStringInfo(&url_buffer);
-    appendStringInfo(&url_buffer, "%s", state->url);
+    appendStringInfoString(&url_buffer, state->url);
+
+    /*
+     * Endpoints are commonly written with a trailing slash. Appending the
+     * request path blindly would then yield "https://host//search?...", so
+     * trim whatever trailing slashes the URL carries before joining.
+     */
+    while (url_buffer.len > 0 && url_buffer.data[url_buffer.len - 1] == '/')
+        url_buffer.data[--url_buffer.len] = '\0';
 
     appendStringInfo(&url_buffer, "/%s?", state->request_type);
 
@@ -2130,11 +2191,14 @@ static int ExecuteRequest(NominatimFDWState *state)
 
             curl_easy_setopt(curl, CURLOPT_PROXY, state->proxy);
 
-            if (strcmp(state->proxy_type, NOMINATIM_SERVER_OPTION_HTTP_PROXY) == 0)
-            {
-                elog(DEBUG2, "  %s: proxy protocol > 'HTTP'", __func__);
-                curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
-            }
+            /*
+             * http_proxy is the only proxy option there is, so the type is
+             * fixed. A scheme given in the proxy URL itself still takes
+             * precedence, which is how libcurl behaves.
+             */
+            elog(DEBUG2, "  %s: proxy protocol > 'HTTP'", __func__);
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+
             if (state->proxy_user)
             {
                 elog(DEBUG2, "  %s: entering proxy user ('%s').", __func__, state->proxy_user);
@@ -2334,7 +2398,6 @@ static int ExecuteRequest(NominatimFDWState *state)
                                      (unsigned long)(chunk.size - NOMINATIM_FDW_MAX_ERROR_BODY));
             }
 
-            xmlFreeDoc(state->xmldoc);
             pfree(chunk.memory);
             pfree(chunk_header.memory);
             curl_slist_free_all(headers);
@@ -2356,8 +2419,18 @@ static int ExecuteRequest(NominatimFDWState *state)
           }
         else
         {
+            /*
+             * XML_PARSE_NOERROR / XML_PARSE_NOWARNING keep libxml2 from
+             * writing parse diagnostics straight to stderr - which in a
+             * backend means unstructured noise in the server log. A body that
+             * does not parse simply yields a NULL document, which is handled
+             * by the caller. These are per-call parser options, so no global
+             * libxml2 error handler is touched and other users of the library
+             * in this process are unaffected.
+             */
             state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL,
-                                          XML_PARSE_NOBLANKS | XML_PARSE_NONET);
+                                          XML_PARSE_NOBLANKS | XML_PARSE_NONET |
+                                          XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
 
             elog(DEBUG1, "HTTP %ld, %ld bytes", response_code, chunk.size);
         }

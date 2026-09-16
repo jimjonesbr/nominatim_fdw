@@ -14,6 +14,10 @@ Release date: **unreleased**
 * **Fixed `nominatim_fdw_handler()` returning an `FdwRoutine` with no callbacks**: every planner callback was left `NULL`, so a foreign table reaching the planner would have dereferenced a NULL function pointer. The handler now raises the same "FOREIGN TABLE not supported" error the validator does. No released version allowed such a table to be created, so this is a hardening fix.
 * **Fixed use of `strtok()` in `IsLayerValid()`**: `strtok()` keeps its parsing state in a process-wide static buffer, which is not safe in backend code. Replaced with `strtok_r()`; the working copy of the string is also freed on the rejection path.
 * **Fixed server options being parsed differently by the validator and at request time**: `connect_timeout`, `max_connect_retry` and `max_connect_redirect` were validated with `strtol()` base `0` in `nominatim_fdw_validator()` but read back with base `10` in `InitSession()`, so the two disagreed on any value that is not plain decimal. A `connect_timeout` of `'0x10'` was accepted as 16 by `CREATE SERVER` and then silently used as `0`, and `'010'` was validated as 8 but used as 10. Both readings now go through a single `ParseNonNegativeLong()` helper, which also rejects values that overflow `long` - previously accepted and clamped to `LONG_MAX`. Hexadecimal and octal notation are no longer accepted; values are always interpreted as decimal.
+* **Fixed the endpoint URL being joined naively**: a `url` written with a trailing slash - a natural way to write it - produced request URLs such as `https://host//search?...`. Trailing slashes are now trimmed before the request path is appended.
+* **Fixed a negative `limit_result` being silently ignored**: `nominatim_search()` dropped the parameter instead of complaining, so a caller passing a negative limit got the server default with no indication. Negative values are now rejected, consistent with how out-of-range coordinates are handled.
+* **Fixed the libxml2 document leaking when parsing fails**: the response document lives in libxml2's heap rather than in a palloc context, so an error raised part-way through parsing - on a node that cannot be dumped, or on out-of-memory - abandoned it for the lifetime of the backend. Parsing is now wrapped so the document is released on the error path as well.
+* **Fixed libxml2 parse diagnostics going to stderr**: an unparsable response body made libxml2 write directly to stderr, producing unstructured noise in the server log. The parser is now called with `XML_PARSE_NOERROR | XML_PARSE_NOWARNING`; these are per-call options, so no global libxml2 error handler is installed and other users of the library in the same process are unaffected.
 
 ## Security
 
@@ -21,6 +25,10 @@ Release date: **unreleased**
 
 ## Improvements
 
+* **Changed `nominatim_search()`, `nominatim_lookup()` and `nominatim_reverse()` from `PARALLEL SAFE` to `PARALLEL RESTRICTED`**: they perform HTTP requests, and the previous marking allowed PostgreSQL to run them inside parallel workers, so one query could issue several concurrent requests to the endpoint - something public Nominatim instances explicitly ask clients not to do. Plans that previously parallelised over these functions will now run serially.
+* Marked `nominatim_fdw_settings()` as `PARALLEL SAFE`, matching `nominatim_fdw_version()`. It only reports build information.
+* Removed the unused `custom_params` and `proxy_type` fields from the internal session state. `custom_params` was never assigned at all, and `proxy_type` only ever held one value, making the test that guarded the proxy protocol always true. No behaviour changes.
+* Removed a redundant `text_to_cstring()` call from each of the three query functions: the `accept_language` argument was converted twice per call.
 * Removed the unused `request_redirect` field from the internal session state. It was hardcoded to `true` and never configurable, yet the code read as though redirects could be switched off independently of `max_connect_redirect`. Redirect behaviour is governed solely by `max_connect_redirect`, where `0` means "do not follow any redirect". No behaviour changes.
 
 # 2.1

@@ -86,7 +86,7 @@ CREATE FUNCTION nominatim_search(
     limit_result int DEFAULT 0,
     entrances boolean DEFAULT false)
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_search'
-LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
+LANGUAGE C VOLATILE STRICT PARALLEL RESTRICTED;
 
 CREATE FUNCTION nominatim_lookup(
     server_name text, 
@@ -100,7 +100,7 @@ CREATE FUNCTION nominatim_lookup(
     polygon_threshold double precision DEFAULT 0.0,
     email text DEFAULT '')
 RETURNS SETOF NominatimRecord AS 'MODULE_PATHNAME', 'nominatim_fdw_lookup'
-LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
+LANGUAGE C VOLATILE STRICT PARALLEL RESTRICTED;
 
 CREATE FUNCTION nominatim_reverse(
     server_name text, 
@@ -117,11 +117,11 @@ CREATE FUNCTION nominatim_reverse(
     polygon_threshold double precision DEFAULT 0.0,
     email text DEFAULT '')
 RETURNS SETOF NominatimReverseGeocode AS 'MODULE_PATHNAME', 'nominatim_fdw_reverse'
-LANGUAGE C VOLATILE STRICT PARALLEL SAFE;
+LANGUAGE C VOLATILE STRICT PARALLEL RESTRICTED;
 
 CREATE FUNCTION nominatim_fdw_settings()
 RETURNS text AS 'MODULE_PATHNAME', 'nominatim_fdw_settings'
-LANGUAGE C STABLE STRICT;
+LANGUAGE C STABLE STRICT PARALLEL SAFE;
 
 COMMENT ON FUNCTION nominatim_fdw_settings() IS 'Returns detailed dependency information including optional components';
 
