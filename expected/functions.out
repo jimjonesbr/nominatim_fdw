@@ -188,14 +188,10 @@ querystring       | cit, einsteinstraße 60, münster, nordrhein westfalen, 4814
 geom              | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
 exclude_place_ids | W88291927,42,73
 more_url          | https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe+60&city=m%C3%BCnster&state=nordrhein+westfalen&postalcode=48149&country=germany&polygon_text=1&addressdetails=1&polygon_threshold=0.1&limit=2&countrycodes=de%2Cbr%2Cus&exclude_place_ids=W88291927%2C42%2C73&viewbox=7.603635%2C51.96594%2C7.603989%2C51.96616&format=xml
-entrances         | [                                                                                                                                                                                                                                                                                                                                                           +
-                  | ]
-extratags         | {                                                                                                                                                                                                                                                                                                                                                           +
-                  | }
-namedetails       | {                                                                                                                                                                                                                                                                                                                                                           +
-                  | }
-addressdetails    | {                                                                                                                                                                                                                                                                                                                                                           +
-                  | }
+entrances         | (null)
+extratags         | (null)
+namedetails       | (null)
+addressdetails    | (null)
 
 /* q combined with structured params => should error */
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'foo', city => 'münster');
@@ -380,12 +376,9 @@ valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
 geom            | <Polygon><outerBoundaryIs><LinearRing><coordinates>7.6036345,51.9661565 7.6036364,51.9660181 7.6036377,51.9659628 7.6036377,51.9659605 7.6037867,51.9659612 7.603787,51.9659397 7.6038173,51.9659399 7.603842,51.96594 7.6038417,51.9659618 7.6039893,51.9659626 7.6039866,51.9661584 7.6039244,51.9661581 7.6038534,51.9661577 7.6036345,51.9661565</coordinates></LinearRing></outerBoundaryIs></Polygon>
-entrances       | [                                                                                                                                                                                                                                                                                                                                                                                                          +
-                | ]
-extratags       | {                                                                                                                                                                                                                                                                                                                                                                                                          +
-                | }
-namedetails     | {                                                                                                                                                                                                                                                                                                                                                                                                          +
-                | }
+entrances       | (null)
+extratags       | (null)
+namedetails     | (null)
 addressdetails  | {                                                                                                                                                                                                                                                                                                                                                                                                          +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                                                                                                                                     +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                                                                                              +
@@ -557,12 +550,9 @@ valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
 geom            | M 7.6036345 -51.9661565 L 7.6036364 -51.9660181 7.6036377 -51.9659628 7.6036377 -51.9659605 7.6037867 -51.9659612 7.603787 -51.9659397 7.6038173 -51.9659399 7.603842 -51.96594 7.6038417 -51.9659618 7.6039893 -51.9659626 7.6039866 -51.9661584 7.6039244 -51.9661581 7.6038534 -51.9661577 Z
-entrances       | [                                                                                                                                                                                                                                                                                              +
-                | ]
-extratags       | {                                                                                                                                                                                                                                                                                              +
-                | }
-namedetails     | {                                                                                                                                                                                                                                                                                              +
-                | }
+entrances       | (null)
+extratags       | (null)
+namedetails     | (null)
 addressdetails  | {                                                                                                                                                                                                                                                                                              +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                         +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                  +
@@ -620,12 +610,9 @@ valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
 geom            | {"type":"Polygon","coordinates":[[[7.6036345,51.9661565],[7.6036364,51.9660181],[7.6036377,51.9659628],[7.6036377,51.9659605],[7.6037867,51.9659612],[7.603787,51.9659397],[7.6038173,51.9659399],[7.603842,51.96594],[7.6038417,51.9659618],[7.6039893,51.9659626],[7.6039866,51.9661584],[7.6039244,51.9661581],[7.6038534,51.9661577],[7.6036345,51.9661565]]]}
-entrances       | [                                                                                                                                                                                                                                                                                                                                                                 +
-                | ]
-extratags       | {                                                                                                                                                                                                                                                                                                                                                                 +
-                | }
-namedetails     | {                                                                                                                                                                                                                                                                                                                                                                 +
-                | }
+entrances       | (null)
+extratags       | (null)
+namedetails     | (null)
 addressdetails  | {                                                                                                                                                                                                                                                                                                                                                                 +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                                                                                            +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                                                     +

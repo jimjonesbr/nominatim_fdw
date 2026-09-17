@@ -163,6 +163,8 @@ This section describes the `nominatim_fdw` functions, which are mapped to the No
 > All `nominatim_fdw` functions are declared `STRICT`. This means that if any argument is explicitly set to SQL `NULL`, the function short-circuits and returns no rows — the request is never sent to the server, and no error is raised.
 >
 > Unrecognised values for polygon, layer and featuretype produce a `WARNING` but do not abort the request — the value is forwarded to the Nominatim server as-is. This keeps the wrapper working if the Nominatim API introduces new values in the future.
+>
+> The columns `extratags`, `namedetails`, `addressdetails` and `entrances` are `NULL` when the corresponding parameter was not set to `true`. When the detail *was* requested but the place has none, the column is an empty `{}` (or `[]` for `entrances`) instead. This keeps "not asked for" distinguishable from "asked for, and there is nothing".
 
 #### [Nominatim_Search](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_search)
 

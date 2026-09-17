@@ -1630,10 +1630,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
     appendStringInfoChar(&namedetails, '}');
     appendStringInfoChar(&entrances, ']');
 
-    place->addressdetails = addressdetails.data;
-    place->extratags = extratags.data;
-    place->namedetails = namedetails.data;
-    place->entrances = entrances.data;
+    /* see the note in ParseNominatimSearchData() */
+    place->addressdetails = state->addressdetails ? addressdetails.data : NULL;
+    place->extratags = state->extratags ? extratags.data : NULL;
+    place->namedetails = state->namedetails ? namedetails.data : NULL;
+    place->entrances = state->entrances ? entrances.data : NULL;
 
     if (found)
         state->records = lappend(state->records, place);
@@ -1818,10 +1819,17 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
             appendStringInfo(&namedetails, "}");
             appendStringInfoChar(&entrances, ']');
 
-            place->extratags = xtags.data;
-            place->addressdetails = addressdetails.data;
-            place->namedetails = namedetails.data;
-            place->entrances = entrances.data;
+            /*
+             * Leave the column NULL when the detail was not requested. The
+             * server simply omits those elements, so building the JSON here
+             * would yield an empty object indistinguishable from "requested,
+             * and the place genuinely has none" - which is a real answer and
+             * still comes back as {} (or [] for entrances).
+             */
+            place->extratags = state->extratags ? xtags.data : NULL;
+            place->addressdetails = state->addressdetails ? addressdetails.data : NULL;
+            place->namedetails = state->namedetails ? namedetails.data : NULL;
+            place->entrances = state->entrances ? entrances.data : NULL;
 
             state->records = lappend(state->records, place);
         }

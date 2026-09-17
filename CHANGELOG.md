@@ -19,6 +19,10 @@ Release date: **unreleased**
 * **Fixed the libxml2 document leaking when parsing fails**: the response document lives in libxml2's heap rather than in a palloc context, so an error raised part-way through parsing - on a node that cannot be dumped, or on out-of-memory - abandoned it for the lifetime of the backend. Parsing is now wrapped so the document is released on the error path as well.
 * **Fixed libxml2 parse diagnostics going to stderr**: an unparsable response body made libxml2 write directly to stderr, producing unstructured noise in the server log. The parser is now called with `XML_PARSE_NOERROR | XML_PARSE_NOWARNING`; these are per-call options, so no global libxml2 error handler is installed and other users of the library in the same process are unaffected.
 
+## Breaking changes
+
+* **`extratags`, `namedetails`, `addressdetails` and `entrances` are now `NULL` when they were not requested**: these columns were previously always populated, so a caller who left `extratags` at its default of `false` still got an empty `{}` back - indistinguishable from having asked for extra tags and the place having none. The empty object now carries that second meaning only, and "not requested" is reported as `NULL`. Queries that relied on these columns never being `NULL` - a `jsonb` operator applied directly to the column, for instance, or a `NOT NULL` assumption - need to set the corresponding parameter to `true`, or handle `NULL`.
+
 ## Security
 
 * Pinned `CURLOPT_UNRESTRICTED_AUTH` to `0`, so that credentials from a `USER MAPPING` are never forwarded to a host the request was redirected to. This has always been libcurl's default; setting it explicitly makes the intent visible and keeps it from changing underneath the wrapper.
