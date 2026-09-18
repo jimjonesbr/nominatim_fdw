@@ -1,3 +1,4 @@
+\pset null '(null)'
 CREATE SERVER osm 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'https://nominatim.openstreetmap.org');
@@ -62,7 +63,7 @@ lon               | 7.6038115
 lat               | 51.9660873
 boundingbox       | 51.9659397,51.9661584,7.6036345,7.6039893
 importance        | 7.2159151598337e-05
-icon              | 
+icon              | (null)
 valid_timestamp   | t
 attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring       | einsteinstraße 60, münster, germany
@@ -180,21 +181,17 @@ lon               | 7.6038115
 lat               | 51.9660873
 boundingbox       | 51.9659397,51.9661584,7.6036345,7.6039893
 importance        | 7.2159151598337e-05
-icon              | 
+icon              | (null)
 valid_timestamp   | t
 attribution       | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring       | cit, einsteinstraße 60, münster, nordrhein westfalen, 48149, germany
 geom              | POLYGON((7.6039866 51.9661584,7.6036377 51.9659605,7.6039893 51.9659626,7.6039866 51.9661584))
 exclude_place_ids | W88291927,42,73
 more_url          | https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe+60&city=m%C3%BCnster&state=nordrhein+westfalen&postalcode=48149&country=germany&polygon_text=1&addressdetails=1&polygon_threshold=0.1&limit=2&countrycodes=de%2Cbr%2Cus&exclude_place_ids=W88291927%2C42%2C73&viewbox=7.603635%2C51.96594%2C7.603989%2C51.96616&format=xml
-entrances         | [                                                                                                                                                                                                                                                                                                                                                           +
-                  | ]
-extratags         | {                                                                                                                                                                                                                                                                                                                                                           +
-                  | }
-namedetails       | {                                                                                                                                                                                                                                                                                                                                                           +
-                  | }
-addressdetails    | {                                                                                                                                                                                                                                                                                                                                                           +
-                  | }
+entrances         | (null)
+extratags         | (null)
+namedetails       | (null)
+addressdetails    | (null)
 
 /* q combined with structured params => should error */
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'foo', city => 'münster');
@@ -224,11 +221,14 @@ RESET client_min_messages;
 SELECT * FROM nominatim_search(server_name => 'osm', q => 'x', layer => 'address,bogus');
 WARNING:  unrecognised layer 'address,bogus'
 DETAIL:  Known values are: address, poi, railway, natural, manmade
-WARNING:  request to 'https://nominatim.openstreetmap.org' failed (1/3)
-WARNING:  request to 'https://nominatim.openstreetmap.org' failed (2/3)
-WARNING:  request to 'https://nominatim.openstreetmap.org' failed (3/3)
-ERROR:  The requested URL returned error: 500
+ERROR:  the server returned HTTP status 400
 DETAIL:  URL: "https://nominatim.openstreetmap.org/search?q=x&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&layer=address%2Cbogus&bounded=0"
+Response body: <?xml version="1.0" encoding="UTF-8" ?>
+                   <error>
+                     <code>400</code>
+                     <message>Parameter 'layer' must be a comma-separated list of: address, poi, railway, natural, manmade</message>
+                   </error>
+                
 HINT:  Check your request parameters and credentials, if applicable, and try again.
 SET client_min_messages TO debug1;
 /* nonexistent server */
@@ -290,7 +290,7 @@ valid_place_id  | t
 place_rank      | 30
 lon             | 7.6038115
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
@@ -371,17 +371,14 @@ valid_place_id  | t
 place_rank      | 30
 lon             | 7.6038115
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
 geom            | <Polygon><outerBoundaryIs><LinearRing><coordinates>7.6036345,51.9661565 7.6036364,51.9660181 7.6036377,51.9659628 7.6036377,51.9659605 7.6037867,51.9659612 7.603787,51.9659397 7.6038173,51.9659399 7.603842,51.96594 7.6038417,51.9659618 7.6039893,51.9659626 7.6039866,51.9661584 7.6039244,51.9661581 7.6038534,51.9661577 7.6036345,51.9661565</coordinates></LinearRing></outerBoundaryIs></Polygon>
-entrances       | [                                                                                                                                                                                                                                                                                                                                                                                                          +
-                | ]
-extratags       | {                                                                                                                                                                                                                                                                                                                                                                                                          +
-                | }
-namedetails     | {                                                                                                                                                                                                                                                                                                                                                                                                          +
-                | }
+entrances       | (null)
+extratags       | (null)
+namedetails     | (null)
 addressdetails  | {                                                                                                                                                                                                                                                                                                                                                                                                          +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                                                                                                                                     +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                                                                                              +
@@ -548,17 +545,14 @@ valid_place_id  | t
 place_rank      | 30
 lon             | 7.6038115
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
 geom            | M 7.6036345 -51.9661565 L 7.6036364 -51.9660181 7.6036377 -51.9659628 7.6036377 -51.9659605 7.6037867 -51.9659612 7.603787 -51.9659397 7.6038173 -51.9659399 7.603842 -51.96594 7.6038417 -51.9659618 7.6039893 -51.9659626 7.6039866 -51.9661584 7.6039244 -51.9661581 7.6038534 -51.9661577 Z
-entrances       | [                                                                                                                                                                                                                                                                                              +
-                | ]
-extratags       | {                                                                                                                                                                                                                                                                                              +
-                | }
-namedetails     | {                                                                                                                                                                                                                                                                                              +
-                | }
+entrances       | (null)
+extratags       | (null)
+namedetails     | (null)
 addressdetails  | {                                                                                                                                                                                                                                                                                              +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                         +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                  +
@@ -611,17 +605,14 @@ valid_place_id  | t
 place_rank      | 30
 lon             | 7.6038115
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | lat=51.9660873&lon=7.6038115&format=xml&zoom=18
 geom            | {"type":"Polygon","coordinates":[[[7.6036345,51.9661565],[7.6036364,51.9660181],[7.6036377,51.9659628],[7.6036377,51.9659605],[7.6037867,51.9659612],[7.603787,51.9659397],[7.6038173,51.9659399],[7.603842,51.96594],[7.6038417,51.9659618],[7.6039893,51.9659626],[7.6039866,51.9661584],[7.6039244,51.9661581],[7.6038534,51.9661577],[7.6036345,51.9661565]]]}
-entrances       | [                                                                                                                                                                                                                                                                                                                                                                 +
-                | ]
-extratags       | {                                                                                                                                                                                                                                                                                                                                                                 +
-                | }
-namedetails     | {                                                                                                                                                                                                                                                                                                                                                                 +
-                | }
+entrances       | (null)
+extratags       | (null)
+namedetails     | (null)
 addressdetails  | {                                                                                                                                                                                                                                                                                                                                                                 +
                 |     "city": "Münster",                                                                                                                                                                                                                                                                                                                                            +
                 |     "road": "Einsteinstraße",                                                                                                                                                                                                                                                                                                                                     +
@@ -674,6 +665,8 @@ FROM nominatim_reverse(
     lat => 90);
 DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=180.00000000&lat=90.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  HTTP 200, 287 bytes
+WARNING:  nominatim server returned an error
+DETAIL:  Unable to geocode
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -687,6 +680,8 @@ FROM nominatim_reverse(
         lat => -90);
 DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=-180.00000000&lat=-90.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  HTTP 200, 289 bytes
+WARNING:  nominatim server returned an error
+DETAIL:  Unable to geocode
 (0 rows)
 
 /* valid coordinates but no location */
@@ -699,6 +694,8 @@ FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => -60);
 DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=0.00000000&lat=-60.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  HTTP 200, 286 bytes
+WARNING:  nominatim server returned an error
+DETAIL:  Unable to geocode
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -710,6 +707,8 @@ FROM nominatim_reverse(
         server_name => 'osm', lon => 0, lat => 0);
 DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=0.00000000&lat=0.00000000&addressdetails=1&accept-language=en-US%2Cen%3Bq%3D0.9"
 DEBUG:  HTTP 200, 284 bytes
+WARNING:  nominatim server returned an error
+DETAIL:  Unable to geocode
 (0 rows)
 
 SELECT pg_sleep(2);
@@ -773,7 +772,7 @@ lon             | 7.6038115
 lat             | 51.9660873
 boundingbox     | 51.9659397,51.9661584,7.6036345,7.6039893
 importance      | 7.2159151598337e-05
-icon            | 
+icon            | (null)
 valid_timestamp | t
 attribution     | Data © OpenStreetMap contributors, ODbL 1.0. http://osm.org/copyright
 querystring     | 
