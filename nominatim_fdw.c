@@ -48,7 +48,7 @@
 #include <access/tupdesc.h>
 #include "miscadmin.h"
 
-#define FDW_VERSION "2.2-dev"
+#define FDW_VERSION "2.2"
 
 /*
  * Maximum number of bytes from an HTTP error response body to include in

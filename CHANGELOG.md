@@ -1,5 +1,5 @@
 # 2.2
-Release date: **unreleased**
+Release date: **2026-09-10**
 
 ## Bug Fixes
 
