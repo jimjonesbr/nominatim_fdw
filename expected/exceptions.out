@@ -123,15 +123,21 @@ DROP SERVER foo;
 /* invalid URL - retrying as set in 'max_connect_retry' */
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
+OPTIONS (url 'http://server.invalid',
          max_connect_retry '2',
          connect_timeout '15');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
-ERROR:  ParseNominatimSearchData -> request failed: 'http://server.im'
+WARNING:  request to 'http://server.invalid' failed (1/2)
+WARNING:  request to 'http://server.invalid' failed (2/2)
+ERROR:  Could not resolve host: server.invalid
+DETAIL:  URL: "http://server.invalid/search?q=foo&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0"
+HINT:  Check your request parameters and credentials, if applicable, and try again.
 /* no retry! */
 ALTER SERVER srv OPTIONS (SET max_connect_retry '0');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
-ERROR:  ParseNominatimSearchData -> request failed: 'http://server.im'
+ERROR:  Could not resolve host: server.invalid
+DETAIL:  URL: "http://server.invalid/search?q=foo&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0"
+HINT:  Check your request parameters and credentials, if applicable, and try again.
 DROP SERVER srv;
 /* server does not exist */
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'bar');
@@ -144,7 +150,7 @@ SELECT * FROM nominatim_lookup(server_name => 'srv', osm_ids => 'W1');
 ERROR:  FOREIGN SERVER does not exist: 'srv'
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im', 
+OPTIONS (url 'http://server.invalid', 
          connect_timeout '15', 
          max_connect_retry '0');
 /* bad request: 'q' and 'amenity' cannot be combined */
@@ -158,7 +164,9 @@ HINT:  A Nominatim Search request requires either a 'q' (free form parameter) or
 SELECT * FROM nominatim_search(server_name => 'srv',  q => 'foo', layer => 'bar');
 WARNING:  unrecognised layer 'bar'
 DETAIL:  Known values are: address, poi, railway, natural, manmade
-ERROR:  ParseNominatimSearchData -> request failed: 'http://server.im'
+ERROR:  Could not resolve host: server.invalid
+DETAIL:  URL: "http://server.invalid/search?q=foo&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&layer=bar&bounded=0"
+HINT:  Check your request parameters and credentials, if applicable, and try again.
 /* FOREIGN TABLE not supported */
 CREATE FOREIGN TABLE t (osm_id bigint OPTIONS (foo 'bar'))
 SERVER srv OPTIONS (foo 'bar');

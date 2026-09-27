@@ -105,7 +105,7 @@ DROP SERVER foo;
 /* invalid URL - retrying as set in 'max_connect_retry' */
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im',
+OPTIONS (url 'http://server.invalid',
          max_connect_retry '2',
          connect_timeout '15');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
@@ -124,7 +124,7 @@ SELECT * FROM nominatim_lookup(server_name => 'srv', osm_ids => 'W1');
 
 CREATE SERVER srv
 FOREIGN DATA WRAPPER nominatim_fdw 
-OPTIONS (url 'http://server.im', 
+OPTIONS (url 'http://server.invalid', 
          connect_timeout '15', 
          max_connect_retry '0');
 

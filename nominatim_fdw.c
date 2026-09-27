@@ -229,6 +229,7 @@ static char *BuildRequestURL(const char *base, const char *endpoint, const char 
 static bool IsHttpURL(const char *url);
 static bool ParseNonNegativeLong(const char *value, long *result);
 static bool ReportNominatimError(xmlNodePtr root);
+static void CheckRootElement(xmlNodePtr root, const char *expected, const char *alternative);
 static bool RequestFailed(CURLcode res, long response_code);
 static bool IsRetryable(CURLcode res, long response_code);
 static long ParseRetryAfter(const char *headers);
@@ -1464,6 +1465,45 @@ ReportNominatimError(xmlNodePtr root)
 }
 
 /*
+ * CheckRootElement
+ * ----------
+ *
+ * A well-formed XML document is not necessarily a Nominatim answer: an
+ * XHTML page from a captive portal or a misconfigured proxy parses just as
+ * well. Walking it for <place> or <result> elements then finds none, and
+ * the query silently returns zero rows - indistinguishable from "nothing
+ * matched". Each endpoint answers with a known root element, so anything
+ * else is reported as an error. The caller releases the document.
+ *
+ * Not every endpoint uses the same root element across Nominatim versions:
+ * /lookup answers with <searchresults> in the current Python frontend, but
+ * with <lookupresults> in the PHP frontend of older releases, which some
+ * installations still run. Both must be accepted, hence the alternative.
+ *
+ * root: root element of the parsed response
+ * expected: root element name the endpoint answers with
+ * alternative: another accepted root element name, or NULL
+ */
+static void
+CheckRootElement(xmlNodePtr root, const char *expected, const char *alternative)
+{
+    if (xmlStrcmp(root->name, (xmlChar *)expected) == 0 ||
+        (alternative && xmlStrcmp(root->name, (xmlChar *)alternative) == 0))
+        return;
+
+    ereport(ERROR,
+            (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+             errmsg("invalid response from the nominatim server: unexpected XML document"),
+             alternative
+                 ? errdetail("Expected a <%s> or <%s> document, but got <%s>.",
+                             expected, alternative, xml_to_server(root->name))
+                 : errdetail("Expected a <%s> document, but got <%s>.",
+                             expected, xml_to_server(root->name)),
+             errhint("Check that the server's '%s' option points to a Nominatim endpoint.",
+                     NOMINATIM_SERVER_OPTION_URL)));
+}
+
+/*
  * RequestFailed
  * ----------
  *
@@ -1662,6 +1702,8 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
         return;
     }
 
+    CheckRootElement(root, "reversegeocode", NULL);
+
     place = (struct NominatimRecord *)palloc0(sizeof(struct NominatimRecord));
 
     initStringInfo(&addressdetails);
@@ -1844,6 +1886,11 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
         state->xmldoc = NULL;
         return;
     }
+
+    CheckRootElement(root, "searchresults",
+                     strcmp(state->request_type, NOMINATIM_REQUEST_LOOKUP) == 0
+                         ? "lookupresults"
+                         : NULL);
 
     for (searchresults = root->children; searchresults != NULL; searchresults = searchresults->next)
     {
@@ -2215,9 +2262,12 @@ static int ExecuteRequest(NominatimFDWState *state)
     StringInfoData accept_header;
     StringInfoData user_agent;
     char errbuf[CURL_ERROR_SIZE];
+    StringInfoData invalid_body;
     struct MemoryStruct chunk;
     struct MemoryStruct chunk_header;
     struct curl_slist *headers = NULL;
+
+    invalid_body.data = NULL;
 
     /*
      * Checked here rather than in each query function, so that it also
@@ -2625,16 +2675,33 @@ static int ExecuteRequest(NominatimFDWState *state)
              * XML_PARSE_NOERROR / XML_PARSE_NOWARNING keep libxml2 from
              * writing parse diagnostics straight to stderr - which in a
              * backend means unstructured noise in the server log. A body that
-             * does not parse simply yields a NULL document, which is handled
-             * by the caller. These are per-call parser options, so no global
-             * libxml2 error handler is touched and other users of the library
-             * in this process are unaffected.
+             * does not parse simply yields a NULL document, reported below.
+             * These are per-call parser options, so no global libxml2 error
+             * handler is touched and other users of the library in this
+             * process are unaffected.
              */
             state->xmldoc = xmlReadMemory(chunk.memory, chunk.size, NULL, NULL,
                                           XML_PARSE_NOBLANKS | XML_PARSE_NONET |
                                           XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
 
             elog(DEBUG1, "HTTP %ld, %ld bytes", response_code, chunk.size);
+
+            /*
+             * The request itself succeeded, but what came back is not XML: a
+             * JSON answer, an empty body, most HTML pages from proxies and
+             * captive portals, ... Keep the beginning of the body for the
+             * error raised once the handle is released - it is the only clue
+             * as to what the server actually is.
+             */
+            if (!state->xmldoc)
+            {
+                initStringInfo(&invalid_body);
+                appendStringInfo(&invalid_body, "URL: \"%s\"\nResponse body: ", request_url);
+                if (chunk.size > 0)
+                    AppendResponseBody(&invalid_body, chunk.memory, chunk.size);
+                else
+                    appendStringInfoString(&invalid_body, "(empty)");
+            }
         }
     }
 
@@ -2643,9 +2710,15 @@ static int ExecuteRequest(NominatimFDWState *state)
     curl_slist_free_all(headers);
     curl_easy_cleanup(curl);
 
-    /*
-     * We thrown an error in case the server returns an empty XML doc
-     */
+    if (invalid_body.data)
+        ereport(ERROR,
+                (errcode(ERRCODE_FDW_INVALID_STRING_FORMAT),
+                 errmsg("invalid response from the nominatim server: not an XML document"),
+                 errdetail("%s", invalid_body.data),
+                 errhint("Check that the server's '%s' option points to a Nominatim endpoint.",
+                         NOMINATIM_SERVER_OPTION_URL)));
+
+    /* only reached when libcurl could not even be initialised */
     if (!state->xmldoc)
         return REQUEST_FAIL;
 
