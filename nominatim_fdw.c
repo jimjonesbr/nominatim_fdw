@@ -1467,19 +1467,43 @@ RequestFailed(CURLcode res, long response_code)
  * request would be rejected again. HTTP 429 is the exception, being an
  * explicit "come back later".
  *
+ * The same reasoning applies to the transport errors that stem from the
+ * request or the configuration rather than from the network: an identical
+ * attempt is bound to fail in the very same way, so retrying only adds
+ * delay and extra requests.
+ *
  * returns boolean (true: retry, false: give up)
  */
 static bool
 IsRetryable(CURLcode res, long response_code)
 {
-    /* the transfer was cancelled: retrying would only delay the interrupt */
-    if (res == CURLE_ABORTED_BY_CALLBACK)
-        return false;
+    switch (res)
+    {
+        case CURLE_OK:
+            return response_code == 429 || response_code >= 500;
 
-    if (res != CURLE_OK)
-        return true;
+        /* the transfer was cancelled: retrying would only delay the interrupt */
+        case CURLE_ABORTED_BY_CALLBACK:
+        /* the request itself cannot be carried out as configured */
+        case CURLE_UNSUPPORTED_PROTOCOL:
+        case CURLE_URL_MALFORMAT:
+        case CURLE_NOT_BUILT_IN:
+        case CURLE_BAD_FUNCTION_ARGUMENT:
+        case CURLE_TOO_MANY_REDIRECTS:
+        case CURLE_LOGIN_DENIED:
+        case CURLE_OUT_OF_MEMORY:
+        /* TLS set-up or certificate problems do not fix themselves */
+        case CURLE_PEER_FAILED_VERIFICATION:
+        case CURLE_SSL_CERTPROBLEM:
+        case CURLE_SSL_CIPHER:
+        case CURLE_SSL_CACERT_BADFILE:
+        case CURLE_SSL_ISSUER_ERROR:
+        case CURLE_SSL_PINNEDPUBKEYNOTMATCH:
+            return false;
 
-    return response_code == 429 || response_code >= 500;
+        default:
+            return true;
+    }
 }
 
 /*
