@@ -230,6 +230,7 @@ static bool IsHttpURL(const char *url);
 static bool ParseNonNegativeLong(const char *value, long *result);
 static bool ReportNominatimError(xmlNodePtr root);
 static void CheckRootElement(xmlNodePtr root, const char *expected, const char *alternative);
+static void AppendEntrance(StringInfo buf, xmlNodePtr entrance);
 static bool RequestFailed(CURLcode res, long response_code);
 static bool IsRetryable(CURLcode res, long response_code);
 static long ParseRetryAfter(const char *headers);
@@ -1693,6 +1694,81 @@ InterruptibleSleep(long seconds)
 }
 
 /*
+ * AppendEntrance
+ * ----------
+ *
+ * Appends one <entrance> element as a JSON object. Nominatim writes the
+ * entrance itself as attributes (osm_id, type, lat, lon) and the entrance's
+ * own OSM tags as child elements:
+ *
+ *   <entrance osm_id="..." type="main" lat="..." lon="...">
+ *     <tag key="door" value="hinged"/><tag key="wheelchair" value="yes"/>
+ *   </entrance>
+ *
+ * The tags go under "extratags", as in Nominatim's own JSON output. They
+ * used to be dropped, since only the attributes were read.
+ *
+ * buf: JSON being built for the entrances column
+ * entrance: the <entrance> element
+ */
+static void
+AppendEntrance(StringInfo buf, xmlNodePtr entrance)
+{
+    xmlAttrPtr attr;
+    xmlNodePtr tag;
+    bool first = true;
+    bool first_tag = true;
+
+    appendStringInfoChar(buf, '{');
+
+    for (attr = entrance->properties; attr != NULL; attr = attr->next)
+    {
+        char *value = xml_get_prop(entrance, (const char *)attr->name);
+
+        if (!first)
+            appendStringInfoChar(buf, ',');
+        first = false;
+
+        escape_json(buf, xml_to_server(attr->name));
+        appendStringInfoChar(buf, ':');
+        escape_json(buf, value ? value : "");
+    }
+
+    for (tag = entrance->children; tag != NULL; tag = tag->next)
+    {
+        char *key;
+        char *value;
+
+        if (tag->type != XML_ELEMENT_NODE ||
+            xmlStrcmp(tag->name, (xmlChar *)"tag") != 0)
+            continue;
+
+        key = xml_get_prop(tag, "key");
+        value = xml_get_prop(tag, "value");
+
+        if (first_tag)
+        {
+            if (!first)
+                appendStringInfoChar(buf, ',');
+            escape_json(buf, "extratags");
+            appendStringInfoString(buf, ":{");
+        }
+        else
+            appendStringInfoChar(buf, ',');
+        first_tag = false;
+
+        escape_json(buf, key ? key : "");
+        appendStringInfoChar(buf, ':');
+        escape_json(buf, value ? value : "");
+    }
+
+    if (!first_tag)
+        appendStringInfoChar(buf, '}');
+
+    appendStringInfoChar(buf, '}');
+}
+
+/*
  * ParseNominatimReverseData
  * ----------
  *
@@ -1822,29 +1898,11 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
 
             for (tag = reversegeocode->children; tag != NULL; tag = tag->next)
             {
-                xmlAttrPtr attr;
-                bool first_attr = true;
-
                 if (!first_entrance)
                     appendStringInfoChar(&entrances, ',');
                 first_entrance = false;
 
-                appendStringInfoChar(&entrances, '{');
-
-                for (attr = tag->properties; attr != NULL; attr = attr->next)
-                {
-                    char *value = xml_get_prop(tag, (const char *)attr->name);
-
-                    if (!first_attr)
-                        appendStringInfoChar(&entrances, ',');
-                    first_attr = false;
-
-                    escape_json(&entrances, xml_to_server(attr->name));
-                    appendStringInfoChar(&entrances, ':');
-                    escape_json(&entrances, value ? value : "");
-                }
-
-                appendStringInfoChar(&entrances, '}');
+                AppendEntrance(&entrances, tag);
             }
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"namedetails") == 0)
@@ -2020,29 +2078,11 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
 
                     for (tag = places->children; tag != NULL; tag = tag->next)
                     {
-                        xmlAttrPtr attr;
-                        bool first_attr = true;
-
                         if (!first_entrance)
                             appendStringInfoChar(&entrances, ',');
                         first_entrance = false;
 
-                        appendStringInfoChar(&entrances, '{');
-
-                        for (attr = tag->properties; attr != NULL; attr = attr->next)
-                        {
-                            char *value = xml_get_prop(tag, (const char *)attr->name);
-
-                            if (!first_attr)
-                                appendStringInfoChar(&entrances, ',');
-                            first_attr = false;
-
-                            escape_json(&entrances, xml_to_server(attr->name));
-                            appendStringInfoChar(&entrances, ':');
-                            escape_json(&entrances, value ? value : "");
-                        }
-
-                        appendStringInfoChar(&entrances, '}');
+                        AppendEntrance(&entrances, tag);
                     }
                 }
                 else
