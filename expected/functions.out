@@ -49,7 +49,7 @@ FROM nominatim_search(
       bounded => false,
       accept_language => 'de_DE,de,q=0.9',
       entrances => true);
-DEBUG:  GET "https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address%2Cpoi&exclude_place_ids=42%2C73&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&limit=1"
+DEBUG:  GET "https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address%2Cpoi&exclude_place_ids=42%2C73&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.1&email=jim.jones%40uni-muenster.de&limit=1"
 DEBUG:  HTTP 200, 2394 bytes
 -[ RECORD 1 ]-----+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 osm_id            | 88291927
@@ -167,7 +167,7 @@ FROM nominatim_search(
       accept_language => 'de_DE,de,q=0.9');
 WARNING:  unrecognized featureType 'office'
 DETAIL:  Known values are: country, state, city, settlement.
-DEBUG:  GET "https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe%2060&city=m%C3%BCnster&state=nordrhein%20westfalen&country=germany&postalcode=48149&format=xml&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address&featureType=office&exclude_place_ids=42%2C%2073&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de&limit=1"
+DEBUG:  GET "https://nominatim.openstreetmap.org/search?amenity=cit&street=einsteinstra%C3%9Fe%2060&city=m%C3%BCnster&state=nordrhein%20westfalen&country=germany&postalcode=48149&format=xml&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&countrycodes=DE%2CBR%2CUS&layer=address&featureType=office&exclude_place_ids=42%2C%2073&viewbox=7.6036345%2C51.9659397%2C7.6039893%2C51.9661584&bounded=0&polygon_threshold=0.1&email=jim.jones%40uni-muenster.de&limit=1"
 DEBUG:  HTTP 200, 1340 bytes
 -[ RECORD 1 ]-----+-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 osm_id            | 88291927
@@ -280,7 +280,7 @@ FROM nominatim_reverse(
         polygon_threshold => 0.1,
         zoom => 18,
         entrances => true);
-DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&zoom=18&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de"
+DEBUG:  GET "https://nominatim.openstreetmap.org/reverse?format=xml&lon=7.60381150&lat=51.96608730&zoom=18&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&polygon_threshold=0.1&email=jim.jones%40uni-muenster.de"
 DEBUG:  HTTP 200, 1908 bytes
 -[ RECORD 1 ]---+-----------------------------------------------------------------------------------------------------------------------------------------------
 osm_id          | 88291927
@@ -758,7 +758,7 @@ FROM nominatim_lookup(
       email => 'jim.jones@uni-muenster.de',
       polygon_threshold => 0.1,
       accept_language => 'de_DE,de,q=0.9');
-DEBUG:  GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927&format=xml&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&polygon_threshold=0.100000&email=jim.jones%40uni-muenster.de"
+DEBUG:  GET "https://nominatim.openstreetmap.org/lookup?osm_ids=W88291927&format=xml&entrances=1&extratags=1&namedetails=1&addressdetails=1&polygon_text=1&accept-language=de_DE%2Cde%2Cq%3D0.9&polygon_threshold=0.1&email=jim.jones%40uni-muenster.de"
 DEBUG:  HTTP 200, 1900 bytes
 -[ RECORD 1 ]---+-----------------------------------------------------------------------------------------------------------------------------------------------
 osm_id          | 88291927

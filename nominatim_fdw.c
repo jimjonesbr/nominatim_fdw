@@ -237,6 +237,7 @@ static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
 static bool IsFeatureTypeValid(char *layer);
 static void CheckAcceptLanguage(const char *value);
+static void CheckPolygonThreshold(float8 polygon_threshold);
 void _PG_init(void);
 
 void _PG_init(void)
@@ -542,6 +543,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         state->namedetails = namedetails;
         state->entrances = entrances;
         state->polygon_threshold = polygon_threshold;
+        CheckPolygonThreshold(state->polygon_threshold);
         state->email = text_to_cstring(email_text);
         state->request_type = NOMINATIM_REQUEST_REVERSE;
 
@@ -710,6 +712,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->viewbox = text_to_cstring(viewbox_text);
         state->bounded = bounded;
         state->polygon_threshold = polygon_threshold;
+        CheckPolygonThreshold(state->polygon_threshold);
         state->email = text_to_cstring(email_text);
         state->dedupe = dedupe;
         state->extratags = extratags;
@@ -875,6 +878,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         }
 
         state->polygon_threshold = polygon_threshold;
+        CheckPolygonThreshold(state->polygon_threshold);
         state->email = text_to_cstring(email_text);
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
 
@@ -2327,8 +2331,13 @@ static int ExecuteRequest(NominatimFDWState *state)
             appendStringInfo(&query, "dedupe=0&");
     }
 
+    /*
+     * %f would round to 6 decimal places, turning small tolerances such as
+     * 0.0000004 into 0.000000. %.15g keeps every significant digit a double
+     * reliably holds, without trailing zeros.
+     */
     if (state->polygon_threshold != 0.0)
-        appendStringInfo(&query, "polygon_threshold=%f&", state->polygon_threshold);
+        appendStringInfo(&query, "polygon_threshold=%.15g&", state->polygon_threshold);
 
     if (state->email && strlen(state->email) > 0)
         AppendUrlParam(&query, curl, "email", state->email);
@@ -2893,4 +2902,22 @@ CheckAcceptLanguage(const char *value)
                      errmsg("invalid %s: control characters are not allowed",
                             NOMINATIM_SERVER_OPTION_LANGUAGE)));
     }
+}
+
+/*
+ * CheckPolygonThreshold
+ * ----------
+ *
+ * polygon_threshold is a tolerance in degrees, so only finite, non-negative
+ * values make sense. NaN in particular has to be tested for explicitly, as
+ * every comparison with it is false.
+ */
+static void
+CheckPolygonThreshold(float8 polygon_threshold)
+{
+    if (isnan(polygon_threshold) || isinf(polygon_threshold) || polygon_threshold < 0.0)
+        ereport(ERROR,
+                (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
+                 errmsg("invalid polygon_threshold: %g", polygon_threshold),
+                 errdetail("polygon_threshold must be a non-negative number (tolerance in degrees)")));
 }
