@@ -146,3 +146,51 @@ CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (foo 'bar');
 CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user 'u1', proxy_password '');
 CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user '', proxy_password 'pw1');
 CREATE USER MAPPING FOR postgres SERVER srv OPTIONS (proxy_user '', proxy_password '');
+
+/*
+ * nominatim_reverse() coordinate validation, including values every
+ * comparison is false for (NaN). The helper reports the SQLSTATE and the
+ * message up to the offending value, which older releases print as 'nan'
+ * or 'inf' rather than 'NaN' or 'Infinity'. Accepted coordinates reach the
+ * request, which fails on a host that never resolves (RFC 2606) - proof
+ * that validation let them through.
+ */
+CREATE SERVER regress_coord_srv
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.invalid', max_connect_retry '0');
+
+CREATE FUNCTION regress_reverse_check(p_lon double precision, p_lat double precision)
+RETURNS text LANGUAGE plpgsql AS $$
+BEGIN
+    PERFORM * FROM nominatim_reverse(server_name => 'regress_coord_srv',
+                                     lon => p_lon, lat => p_lat);
+    RETURN 'accepted';
+EXCEPTION WHEN OTHERS THEN
+    RETURN SQLSTATE || ': ' || split_part(SQLERRM, ':', 1);
+END
+$$;
+
+SELECT lon, lat, regress_reverse_check(lon, lat) AS result
+FROM (VALUES
+        /* not a number */
+        (7.6::float8,       'NaN'::float8),
+        ('NaN',             51.9),
+        ('NaN',             'NaN'),
+        /* infinite */
+        (7.6,               'Infinity'),
+        (7.6,               '-Infinity'),
+        ('Infinity',        51.9),
+        ('-Infinity',       51.9),
+        /* just out of range */
+        (7.6,               90.0000001),
+        (7.6,               -90.0000001),
+        (180.0000001,       51.9),
+        (-180.0000001,      51.9),
+        /* valid, including the boundaries */
+        (0,                 0),
+        (180,               90),
+        (-180,              -90)
+     ) AS t(lon, lat);
+
+DROP FUNCTION regress_reverse_check(double precision, double precision);
+DROP SERVER regress_coord_srv;

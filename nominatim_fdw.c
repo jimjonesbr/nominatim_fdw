@@ -23,6 +23,7 @@
 #include "commands/defrem.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 #include <curl/curl.h>
 #include <utils/builtins.h>
 #include <utils/array.h>
@@ -545,13 +546,14 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
                      errmsg("zoom out of range: %d", zoom),
                      errdetail("zoom must be between 0 and 18 (-1 to disable it)")));
 
-        if (lat < -90.0 || lat > 90.0)
+        /* every comparison with NaN is false, so it has to be tested for explicitly */
+        if (isnan(lat) || lat < -90.0 || lat > 90.0)
             ereport(ERROR,
                     (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
                      errmsg("latitude out of range: %f", lat),
                      errdetail("latitude must be between -90 and 90")));
 
-        if (lon < -180.0 || lon > 180.0)
+        if (isnan(lon) || lon < -180.0 || lon > 180.0)
             ereport(ERROR,
                     (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
                      errmsg("longitude out of range: %f", lon),
