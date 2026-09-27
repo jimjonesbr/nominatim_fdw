@@ -98,7 +98,7 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 
 | Server Option | Type          | Description                                                                                                        |
 |---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
-| `url`     | **required**            | URL address of the Nominatim endpoint.
+| `url`     | **required**            | URL address of the Nominatim endpoint (`http` or `https`). The request path - `/search`, `/reverse` or `/lookup` - is appended to its path, and a query string it carries, such as an API key required by a hosted service, is sent along with every request, e.g. `https://nominatim.example.com/?key=abc`.
 | `http_proxy` | optional            | Proxy for HTTP requests.
 | `connect_timeout`         | optional            | Timeout in seconds for *establishing* the connection to the Nominatim server (default `300` seconds). It does not limit how long the server may take to answer - use `request_timeout` for that.
 | `request_timeout`         | optional            | Maximum time in seconds allowed for a complete HTTP request (connect + transfer). `0` disables the limit (default). Unlike `connect_timeout`, this applies to the entire duration of the request, including data transfer. Note that a timed-out request is retried as configured in `max_connect_retry`, so the worst case is roughly `(max_connect_retry + 1) × request_timeout` seconds.

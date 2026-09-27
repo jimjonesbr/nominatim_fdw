@@ -225,6 +225,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state);
 static void ParseNominatimResponse(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
+static char *BuildRequestURL(const char *base, const char *endpoint, const char *query);
 static bool IsHttpURL(const char *url);
 static bool ParseNonNegativeLong(const char *value, long *result);
 static bool ReportNominatimError(xmlNodePtr root);
@@ -2205,7 +2206,8 @@ static int ExecuteRequest(NominatimFDWState *state)
     CURL *curl;
     CURLcode res;
     long response_code = 0;
-    StringInfoData url_buffer;
+    StringInfoData query;
+    char *request_url;
     StringInfoData accept_header;
     StringInfoData user_agent;
     char errbuf[CURL_ERROR_SIZE];
@@ -2230,124 +2232,125 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     curl = curl_easy_init();
 
-    initStringInfo(&url_buffer);
-    appendStringInfoString(&url_buffer, state->url);
-
-    /*
-     * Endpoints are commonly written with a trailing slash. Appending the
-     * request path blindly would then yield "https://host//search?...", so
-     * trim whatever trailing slashes the URL carries before joining.
-     */
-    while (url_buffer.len > 0 && url_buffer.data[url_buffer.len - 1] == '/')
-        url_buffer.data[--url_buffer.len] = '\0';
-
-    appendStringInfo(&url_buffer, "/%s?", state->request_type);
+    /* the query string only; BuildRequestURL() joins it with the URL */
+    initStringInfo(&query);
 
     if (state->query && strlen(state->query) > 0)
-        AppendUrlParam(&url_buffer, curl, "q", state->query);
+        AppendUrlParam(&query, curl, "q", state->query);
 
     if (state->amenity && strlen(state->amenity) > 0)
-        AppendUrlParam(&url_buffer, curl, "amenity", state->amenity);
+        AppendUrlParam(&query, curl, "amenity", state->amenity);
 
     if (state->osm_ids && strlen(state->osm_ids) > 0)
-        AppendUrlParam(&url_buffer, curl, "osm_ids", state->osm_ids);
+        AppendUrlParam(&query, curl, "osm_ids", state->osm_ids);
 
     if (state->street && strlen(state->street) > 0)
-        AppendUrlParam(&url_buffer, curl, "street", state->street);
+        AppendUrlParam(&query, curl, "street", state->street);
 
     if (state->city && strlen(state->city) > 0)
-        AppendUrlParam(&url_buffer, curl, "city", state->city);
+        AppendUrlParam(&query, curl, "city", state->city);
 
     if (state->county && strlen(state->county) > 0)
-        AppendUrlParam(&url_buffer, curl, "county", state->county);
+        AppendUrlParam(&query, curl, "county", state->county);
 
     if (state->state && strlen(state->state) > 0)
-        AppendUrlParam(&url_buffer, curl, "state", state->state);
+        AppendUrlParam(&query, curl, "state", state->state);
 
     if (state->country && strlen(state->country) > 0)
-        AppendUrlParam(&url_buffer, curl, "country", state->country);
+        AppendUrlParam(&query, curl, "country", state->country);
 
     if (state->postalcode && strlen(state->postalcode) > 0)
-        AppendUrlParam(&url_buffer, curl, "postalcode", state->postalcode);
+        AppendUrlParam(&query, curl, "postalcode", state->postalcode);
 
-    appendStringInfo(&url_buffer, "format=xml&");
+    appendStringInfo(&query, "format=xml&");
 
     if (strcmp(state->request_type, NOMINATIM_REQUEST_REVERSE) == 0)
     {
-        appendStringInfo(&url_buffer, "lon=%.8f&", state->lon);
-        appendStringInfo(&url_buffer, "lat=%.8f&", state->lat);
+        appendStringInfo(&query, "lon=%.8f&", state->lon);
+        appendStringInfo(&query, "lat=%.8f&", state->lat);
     }
 
     if (strcmp(state->request_type, NOMINATIM_REQUEST_REVERSE) == 0 &&
         state->zoom >= 0)
-        appendStringInfo(&url_buffer, "zoom=%d&", state->zoom);
+        appendStringInfo(&query, "zoom=%d&", state->zoom);
 
     if (state->entrances)
-        appendStringInfo(&url_buffer, "entrances=1&");
+        appendStringInfo(&query, "entrances=1&");
 
     if (state->extratags)
-        appendStringInfo(&url_buffer, "extratags=1&");
+        appendStringInfo(&query, "extratags=1&");
 
     if (state->namedetails)
-        appendStringInfo(&url_buffer, "namedetails=1&");
+        appendStringInfo(&query, "namedetails=1&");
 
     if (state->addressdetails)
-        appendStringInfo(&url_buffer, "addressdetails=1&");
+        appendStringInfo(&query, "addressdetails=1&");
 
     if (state->polygon_type && strlen(state->polygon_type) > 0)
     {    
         char *p = curl_easy_escape(curl, pg_server_to_any(state->polygon_type,
                                                           strlen(state->polygon_type),
                                                           PG_UTF8), 0);
-        appendStringInfo(&url_buffer, "%s=1&", p);
+        appendStringInfo(&query, "%s=1&", p);
         curl_free(p);
     }
 
     if (state->accept_language && strlen(state->accept_language) > 0)
-        AppendUrlParam(&url_buffer, curl, "accept-language", state->accept_language);
+        AppendUrlParam(&query, curl, "accept-language", state->accept_language);
 
     if (state->countrycodes && strlen(state->countrycodes) > 0)
-        AppendUrlParam(&url_buffer, curl, "countrycodes", state->countrycodes);
+        AppendUrlParam(&query, curl, "countrycodes", state->countrycodes);
 
     if (state->layer && strlen(state->layer) > 0)
-        AppendUrlParam(&url_buffer, curl, "layer", state->layer);
+        AppendUrlParam(&query, curl, "layer", state->layer);
 
     if (state->feature_type && strlen(state->feature_type) > 0)
-        AppendUrlParam(&url_buffer, curl, "featureType", state->feature_type);
+        AppendUrlParam(&query, curl, "featureType", state->feature_type);
 
     if (state->exclude_place_ids && strlen(state->exclude_place_ids) > 0)
-        AppendUrlParam(&url_buffer, curl, "exclude_place_ids", state->exclude_place_ids);
+        AppendUrlParam(&query, curl, "exclude_place_ids", state->exclude_place_ids);
 
     if (state->viewbox && strlen(state->viewbox) > 0)
-        AppendUrlParam(&url_buffer, curl, "viewbox", state->viewbox);
+        AppendUrlParam(&query, curl, "viewbox", state->viewbox);
 
     if (strcmp(state->request_type, NOMINATIM_REQUEST_SEARCH) == 0)
     {
-        appendStringInfo(&url_buffer, "bounded=%d&", state->bounded ? 1 : 0);
+        appendStringInfo(&query, "bounded=%d&", state->bounded ? 1 : 0);
         if (!state->dedupe)
-            appendStringInfo(&url_buffer, "dedupe=0&");
+            appendStringInfo(&query, "dedupe=0&");
     }
 
     if (state->polygon_threshold != 0.0)
-        appendStringInfo(&url_buffer, "polygon_threshold=%f&", state->polygon_threshold);
+        appendStringInfo(&query, "polygon_threshold=%f&", state->polygon_threshold);
 
     if (state->email && strlen(state->email) > 0)
-        AppendUrlParam(&url_buffer, curl, "email", state->email);
+        AppendUrlParam(&query, curl, "email", state->email);
 
     if (state->limit > 0)
-        appendStringInfo(&url_buffer, "limit=%d", state->limit);
+        appendStringInfo(&query, "limit=%d", state->limit);
 
     if (curl)
     {
         errbuf[0] = 0;
 
-        /* remove trailing & from URL, if any. */
-        if (url_buffer.data[url_buffer.len-1] == '&')
-            url_buffer.data[url_buffer.len-1] = '\0';
+        /* remove trailing & from the query string, if any. */
+        if (query.len > 0 && query.data[query.len - 1] == '&')
+            query.data[--query.len] = '\0';
 
-        elog(DEBUG1, "GET \"%s\"", url_buffer.data);
+        request_url = BuildRequestURL(state->url, state->request_type, query.data);
 
-        curl_easy_setopt(curl, CURLOPT_URL, url_buffer.data);
+        if (!request_url)
+        {
+            curl_easy_cleanup(curl);
+            ereport(ERROR,
+                    (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                     errmsg("invalid %s: '%s'", NOMINATIM_SERVER_OPTION_URL, state->url),
+                     errdetail("The request URL could not be built from it.")));
+        }
+
+        elog(DEBUG1, "GET \"%s\"", request_url);
+
+        curl_easy_setopt(curl, CURLOPT_URL, request_url);
 
 #if ((LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR < 85) || LIBCURL_VERSION_MAJOR < 7)
         curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
@@ -2566,7 +2569,7 @@ static int ExecuteRequest(NominatimFDWState *state)
                 appendStringInfo(&message,
                                  "the server returned HTTP status %ld", response_code);
 
-            appendStringInfo(&detail, "URL: \"%s\"", url_buffer.data);
+            appendStringInfo(&detail, "URL: \"%s\"", request_url);
 
             /*
              * Report whatever the server sent along with the failure. This is
@@ -2631,6 +2634,93 @@ static int ExecuteRequest(NominatimFDWState *state)
         return REQUEST_FAIL;
 
     return REQUEST_SUCCESS;
+}
+
+/*
+ * BuildRequestURL
+ * ----------
+ *
+ * Builds the URL of a request from the server's 'url', the endpoint and the
+ * query string. Plain concatenation only works for a bare scheme://host/path:
+ * a 'url' carrying a query string - hosted Nominatim services commonly take
+ * an API key that way - would get the endpoint appended to its query string
+ * rather than to its path. libcurl's URL API takes the URL apart, so that
+ * the endpoint is added to the path, wherever the path ends:
+ *
+ *   url 'https://host/nominatim/?key=abc'
+ *     -> https://host/nominatim/search?key=abc&q=...&format=xml
+ *
+ * Trailing slashes of the path are trimmed before the endpoint is appended,
+ * as endpoints are commonly written with one, and a fragment is dropped, as
+ * it is never sent to a server anyway. The request's own query string is
+ * appended as text afterwards, so that libcurl does not re-normalise the
+ * escaping done by AppendUrlParam().
+ *
+ * base: the server's 'url' option
+ * endpoint: search, reverse or lookup
+ * query: the already percent-encoded query string, without leading '?'
+ *
+ * returns the palloc'd request URL, or NULL if 'base' could not be used
+ */
+static char *
+BuildRequestURL(const char *base, const char *endpoint, const char *query)
+{
+    CURLU *handler = curl_url();
+    char *path = NULL;
+    char *base_query = NULL;
+    char *url = NULL;
+    char *result = NULL;
+    StringInfoData buf;
+    CURLUcode code;
+
+    if (!handler)
+        return NULL;
+
+    initStringInfo(&buf);
+
+    code = curl_url_set(handler, CURLUPART_URL, base, 0);
+
+    if (code == CURLUE_OK)
+        code = curl_url_get(handler, CURLUPART_PATH, &path, 0);
+
+    if (code == CURLUE_OK)
+    {
+        appendStringInfoString(&buf, path);
+        while (buf.len > 0 && buf.data[buf.len - 1] == '/')
+            buf.data[--buf.len] = '\0';
+        appendStringInfo(&buf, "/%s", endpoint);
+
+        code = curl_url_set(handler, CURLUPART_PATH, buf.data, 0);
+    }
+
+    if (code == CURLUE_OK)
+        code = curl_url_set(handler, CURLUPART_FRAGMENT, NULL, 0);
+
+    if (code == CURLUE_OK)
+        code = curl_url_get(handler, CURLUPART_URL, &url, 0);
+
+    if (code == CURLUE_OK)
+    {
+        /* a query string given in 'url' is kept, ahead of the request's own */
+        bool has_query = curl_url_get(handler, CURLUPART_QUERY, &base_query, 0) == CURLUE_OK &&
+                         base_query[0] != '\0';
+
+        resetStringInfo(&buf);
+        appendStringInfo(&buf, "%s%c%s", url, has_query ? '&' : '?', query);
+        result = buf.data;
+    }
+    else
+    {
+        elog(DEBUG2, "%s: cannot build request URL from '%s' (%u)", __func__, base, code);
+        pfree(buf.data);
+    }
+
+    curl_free(path);
+    curl_free(base_query);
+    curl_free(url);
+    curl_url_cleanup(handler);
+
+    return result;
 }
 
 /*
