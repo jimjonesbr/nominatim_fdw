@@ -39,6 +39,7 @@
 #include "catalog/pg_operator.h"
 #include "utils/syscache.h"
 #include "utils/acl.h"
+#include "mb/pg_wchar.h"
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_user_mapping.h"
@@ -1283,18 +1284,47 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 }
 
 /*
+ * xml_to_server
+ * ----------
+ *
+ * libxml2 hands out every string as UTF-8, whatever the encoding of the
+ * document was, while the database may use any server encoding. Copies a
+ * libxml2 string into palloc'd memory, converted to the database encoding,
+ * so that it can be used as a datum. Raises an error for characters the
+ * database encoding cannot represent, as any client input would.
+ *
+ * Returns NULL for NULL input.
+ */
+static char *
+xml_to_server(const xmlChar *val)
+{
+    char *result;
+
+    if (!val)
+        return NULL;
+
+    result = pg_any_to_server((const char *)val, strlen((const char *)val), PG_UTF8);
+
+    /* pg_any_to_server() returns its input when no conversion was needed */
+    if (result == (const char *)val)
+        result = pstrdup(result);
+
+    return result;
+}
+
+/*
  * xml_get_prop / xml_node_content
  * ----------
  *
  * Wrappers around xmlGetProp / xmlNodeGetContent that copy the result
- * into palloc'd memory and immediately free the libxml2 heap string.
- * Returns NULL when the attribute or content is absent.
+ * into palloc'd memory, in the database encoding, and immediately free the
+ * libxml2 heap string. Returns NULL when the attribute or content is absent.
  */
 static char *
 xml_get_prop(xmlNodePtr node, const char *name)
 {
     xmlChar *val = xmlGetProp(node, (xmlChar *)name);
-    char *result = val ? pstrdup((char *)val) : NULL;
+    char *result = xml_to_server(val);
 
     xmlFree(val);
     return result;
@@ -1304,10 +1334,45 @@ static char *
 xml_node_content(xmlNodePtr node)
 {
     xmlChar *val = xmlNodeGetContent(node);
-    char *result = val ? pstrdup((char *)val) : NULL;
+    char *result = xml_to_server(val);
 
     xmlFree(val);
     return result;
+}
+
+/*
+ * AppendResponseBody
+ * ----------
+ *
+ * Appends the beginning of a response body to an error detail, truncated
+ * to NOMINATIM_FDW_MAX_ERROR_BODY bytes so that a large HTML error page
+ * cannot flood the logs.
+ *
+ * The body is whatever the server sent, and ends up in a message that is
+ * assumed to be in the database encoding. It is cut at a character boundary
+ * and kept as is only when it is valid UTF-8 and the database is UTF8;
+ * otherwise every non-ASCII byte is replaced by '?'. Converting it instead
+ * could itself raise an error in the middle of reporting one.
+ */
+static void
+AppendResponseBody(StringInfo buf, const char *body, size_t size)
+{
+    int len = (int)Min(size, NOMINATIM_FDW_MAX_ERROR_BODY);
+
+    /* do not cut a multi-byte character in half (this also stops at a NUL) */
+    len = pg_encoding_mbcliplen(PG_UTF8, body, len, len);
+
+    if (GetDatabaseEncoding() == PG_UTF8 && pg_verify_mbstr(PG_UTF8, body, len, true))
+        appendBinaryStringInfo(buf, body, len);
+    else
+    {
+        for (int i = 0; i < len; i++)
+            appendStringInfoChar(buf, IS_HIGHBIT_SET(body[i]) ? '?' : body[i]);
+    }
+
+    if (size > (size_t)len)
+        appendStringInfo(buf, " ... [%lu bytes truncated]",
+                         (unsigned long)(size - len));
 }
 
 /*
@@ -1575,7 +1640,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
                 char *content = xml_node_content(tag);
                 if (addressdetails.len > 1)
                     appendStringInfoChar(&addressdetails, ',');
-                escape_json(&addressdetails, (char *)tag->name);
+                escape_json(&addressdetails, xml_to_server(tag->name));
                 appendStringInfoChar(&addressdetails, ':');
                 escape_json(&addressdetails, content ? content : "");
             }
@@ -1602,7 +1667,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             if (bytes == -1)
                 elog(ERROR, "unable to dump XML node: '%s'", state->url);
 
-            place->polygon = pstrdup((char *)buffer->content);
+            place->polygon = xml_to_server(buffer->content);
             xmlBufferFree(buffer);
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"entrances") == 0)
@@ -1628,7 +1693,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
                         appendStringInfoChar(&entrances, ',');
                     first_attr = false;
 
-                    escape_json(&entrances, (char *)attr->name);
+                    escape_json(&entrances, xml_to_server(attr->name));
                     appendStringInfoChar(&entrances, ':');
                     escape_json(&entrances, value ? value : "");
                 }
@@ -1795,7 +1860,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                     if (bytes == -1)
                         elog(ERROR, "unable to dump XML node: '%s'", state->url);
 
-                    place->polygon = pstrdup((char *)buffer->content);
+                    place->polygon = xml_to_server(buffer->content);
                     xmlBufferFree(buffer);
                 }
                 else if (xmlStrcmp(places->name, (xmlChar *)"entrances") == 0)
@@ -1821,7 +1886,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                                 appendStringInfoChar(&entrances, ',');
                             first_attr = false;
 
-                            escape_json(&entrances, (char *)attr->name);
+                            escape_json(&entrances, xml_to_server(attr->name));
                             appendStringInfoChar(&entrances, ':');
                             escape_json(&entrances, value ? value : "");
                         }
@@ -1834,7 +1899,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                     char *content = xml_node_content(places);
                     if (addressdetails.len > 1)
                         appendStringInfoChar(&addressdetails, ',');
-                    escape_json(&addressdetails, (char *)places->name);
+                    escape_json(&addressdetails, xml_to_server(places->name));
                     appendStringInfoChar(&addressdetails, ':');
                     escape_json(&addressdetails, content ? content : "");
                 }
@@ -1902,9 +1967,19 @@ ParseNominatimResponse(NominatimFDWState *state)
     PG_END_TRY();
 }
 
+/*
+ * AppendUrlParam
+ * ----------
+ *
+ * Appends "param=value&" to the query string. Nominatim expects parameters
+ * as percent-encoded UTF-8, so the value is converted from the database
+ * encoding before it is escaped.
+ */
 static void AppendUrlParam(StringInfo buf, CURL *curl, const char *param, const char *value)
 {
-    char *escaped = curl_easy_escape(curl, value, 0);
+    char *utf8 = pg_server_to_any(value, strlen(value), PG_UTF8);
+    char *escaped = curl_easy_escape(curl, utf8, 0);
+
     appendStringInfo(buf, "%s=%s&", param, escaped);
     curl_free(escaped);
 }
@@ -2146,7 +2221,9 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     if (state->polygon_type && strlen(state->polygon_type) > 0)
     {    
-        char *p = curl_easy_escape(curl, state->polygon_type, 0);
+        char *p = curl_easy_escape(curl, pg_server_to_any(state->polygon_type,
+                                                          strlen(state->polygon_type),
+                                                          PG_UTF8), 0);
         appendStringInfo(&url_buffer, "%s=1&", p);
         curl_free(p);
     }
@@ -2308,7 +2385,10 @@ static int ExecuteRequest(NominatimFDWState *state)
         curl_easy_setopt(curl, CURLOPT_USERAGENT, user_agent.data);
 
         initStringInfo(&accept_header);
-        appendStringInfo(&accept_header, "Accept-Language: %s", state->accept_language);
+        appendStringInfo(&accept_header, "Accept-Language: %s",
+                         pg_server_to_any(state->accept_language,
+                                          strlen(state->accept_language),
+                                          PG_UTF8));
         headers = curl_slist_append(headers, accept_header.data);
         elog(DEBUG2, "  adding header: %s", accept_header.data);
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
@@ -2422,14 +2502,8 @@ static int ExecuteRequest(NominatimFDWState *state)
              */
             if (res == CURLE_OK && chunk.size > 0)
             {
-                int len = (int)Min(chunk.size, NOMINATIM_FDW_MAX_ERROR_BODY);
-
                 appendStringInfoString(&detail, "\nResponse body: ");
-                appendBinaryStringInfo(&detail, chunk.memory, len);
-
-                if (chunk.size > NOMINATIM_FDW_MAX_ERROR_BODY)
-                    appendStringInfo(&detail, " ... [%lu bytes truncated]",
-                                     (unsigned long)(chunk.size - NOMINATIM_FDW_MAX_ERROR_BODY));
+                AppendResponseBody(&detail, chunk.memory, chunk.size);
             }
 
             pfree(chunk.memory);
