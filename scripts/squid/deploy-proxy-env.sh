@@ -81,6 +81,11 @@ fi
 
 BASICAUTH_PORT=3130
 NOMINATIM_HOST=nominatim.openstreetmap.org
+# The reverse proxy talks TLS to Nominatim, which needs a Squid built with
+# OpenSSL: ubuntu/squid is built with GnuTLS, which sends no SNI to a
+# cache_peer, and without SNI the CDN in front of nominatim.openstreetmap.org
+# answers "421 Misdirected Request". Alpine's squid package uses OpenSSL.
+BASICAUTH_IMAGE=docker.io/library/alpine:3.24
 
 echo -e "\n== Deploying Squid reverse-proxy with HTTP Basic Auth (fronting real Nominatim) ==\n"
 
@@ -92,8 +97,13 @@ openssl passwd -apr1 nominatimpass >> /tmp/squid-basicauth-passwords
 
 cat > /tmp/squid-basicauth.conf <<EOF
 http_port 3128 accel defaultsite=$NOMINATIM_HOST
-cache_peer $NOMINATIM_HOST parent 443 0 no-query originserver ssl sslflags=DONT_VERIFY_PEER sni=nominatim.openstreetmap.org name=nominatim_backend
+cache_peer $NOMINATIM_HOST parent 443 0 no-query originserver tls tls-cafile=/etc/ssl/certs/ca-certificates.crt name=nominatim_backend
 cache_peer_access nominatim_backend allow all
+
+# Clients address the proxy (e.g. Host: 172.19.42.102:3128); Nominatim must
+# see its own name, or the CDN rejects the request with 421.
+request_header_access Host deny all
+request_header_replace Host $NOMINATIM_HOST
 
 auth_param basic program /usr/lib/squid/basic_ncsa_auth /etc/squid/passwords
 auth_param basic children 5
@@ -112,10 +122,15 @@ podman run -d --name squid-basicauth \
   -p $BASICAUTH_PORT:3128 \
   -v /tmp/squid-basicauth.conf:/etc/squid/squid.conf:ro,z \
   -v /tmp/squid-basicauth-passwords:/etc/squid/passwords:ro,z \
-  ubuntu/squid:latest
+  $BASICAUTH_IMAGE \
+  sh -c 'apk add --no-cache squid ca-certificates >/dev/null && exec squid -N'
 
+# Installing squid takes a few seconds; wait until it answers.
 echo "Waiting for Squid (basic auth) to start..."
-sleep 1
+for i in $(seq 60); do
+  [ "$(curl -s -o /dev/null -w "%{http_code}" http://localhost:$BASICAUTH_PORT/)" != 000 ] && break
+  sleep 1
+done
 
 if podman exec squid-basicauth squid -k check 2>/dev/null; then
     echo "Squid (basic auth) is ready!"
@@ -127,7 +142,7 @@ fi
 
 # Sanity checks from the host before handing off to the SQL regress test
 echo -e "\n-- sanity check: expect 401 without credentials --"
-curl -s -o /dev/null -w "%{http_code}\n" http://localhost:$BASICAUTH_PORT/search?q=test
+curl -s -o /dev/null -w "%{http_code}\n" "http://localhost:$BASICAUTH_PORT/search?q=test&format=xml"
 
 echo -e "\n-- sanity check: expect 200 with credentials --"
-curl -s -o /dev/null -w "%{http_code}\n" -u nominatimuser:nominatimpass http://localhost:$BASICAUTH_PORT/search?q=test
+curl -s -o /dev/null -w "%{http_code}\n" -u nominatimuser:nominatimpass "http://localhost:$BASICAUTH_PORT/search?q=test&format=xml"

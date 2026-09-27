@@ -1,4 +1,10 @@
-SET client_min_messages TO DEBUG1;
+/*
+ * Runs against a Squid reverse proxy with HTTP Basic Auth in front of the
+ * public Nominatim (see scripts/squid/deploy-proxy-env.sh). Only the outcome
+ * is checked: the size of the live response and Squid's error page change
+ * over time and between Squid versions.
+ */
+\set VERBOSITY terse
 CREATE SERVER osm_http_auth 
 FOREIGN DATA WRAPPER nominatim_fdw 
 OPTIONS (url 'http://172.19.42.102:3128');
@@ -9,9 +15,11 @@ SELECT osm_id, display_name
 FROM nominatim_search(
       server_name => 'osm_http_auth',
       q => 'einsteinstraße 60, münster, germany');
-DEBUG:  GET "http://172.19.42.102:3128/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0"
-DEBUG:  HTTP 200, 14 bytes
-ERROR:  ParseNominatimSearchData -> request failed: 'http://172.19.42.102:3128'
+  osm_id  |                                                                 display_name                                                                  
+----------+-----------------------------------------------------------------------------------------------------------------------------------------------
+ 88291927 | Center for Information Technology, 60, Einsteinstraße, Neutor, Innenstadtring, Münster-Mitte, Münster, North Rhine-Westphalia, 48149, Germany
+(1 row)
+
 ALTER USER MAPPING FOR postgres
 SERVER osm_http_auth OPTIONS (SET user 'foo', SET password 'bar');
 /* invalid credentials, must fail (HTTP 401) */
@@ -19,20 +27,6 @@ SELECT osm_id, display_name
 FROM nominatim_search(
       server_name => 'osm_http_auth',
       q => 'einsteinstraße 60, münster, germany');
-DEBUG:  GET "http://172.19.42.102:3128/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0"
 ERROR:  the server returned HTTP status 401
-DETAIL:  URL: "http://172.19.42.102:3128/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0"
-Response body: <!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "http://www.w3.org/TR/html4/strict.dtd">
-<html><head>
-<meta type="copyright" content="Copyright (C) 1996-2021 The Squid Software Foundation and contributors">
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-<title>ERROR: Cache Access Denied</title>
-<style type="text/css"><!-- 
- /*
- * Copyright (C) 1996-2024 The Squid Software Foundation and contributors
- *
- * Squid software is distributed under GPLv2+ license and includes
- * contributions ... [2591 bytes truncated]
-HINT:  Check your request parameters and credentials, if applicable, and try again.
 DROP SERVER osm_http_auth CASCADE;
 NOTICE:  drop cascades to user mapping for postgres on server osm_http_auth

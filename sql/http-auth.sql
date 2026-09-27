@@ -1,5 +1,10 @@
-
-SET client_min_messages TO DEBUG1;
+/*
+ * Runs against a Squid reverse proxy with HTTP Basic Auth in front of the
+ * public Nominatim (see scripts/squid/deploy-proxy-env.sh). Only the outcome
+ * is checked: the size of the live response and Squid's error page change
+ * over time and between Squid versions.
+ */
+\set VERBOSITY terse
 
 CREATE SERVER osm_http_auth 
 FOREIGN DATA WRAPPER nominatim_fdw 
