@@ -1,9 +1,13 @@
 /* drop unused attribute */
 ALTER TYPE NominatimRecord DROP ATTRIBUTE display_rank;
 
-/* add new attributes */
-ALTER TYPE NominatimRecord ADD ATTRIBUTE type text;
+/*
+ * add new attributes - in the same order as in the fresh-install script
+ * (entrances before type), so that SELECT * yields the same columns no
+ * matter how the extension got to this version.
+ */
 ALTER TYPE NominatimRecord ADD ATTRIBUTE entrances jsonb;
+ALTER TYPE NominatimRecord ADD ATTRIBUTE type text;
 ALTER TYPE NominatimReverseGeocode ADD ATTRIBUTE entrances jsonb;
 
 /* rename attribute to make it consistant with NominatimRecord */

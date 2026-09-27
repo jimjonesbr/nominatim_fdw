@@ -33,4 +33,13 @@ SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
 /* verify functions are still callable after upgrade */
 SELECT nominatim_fdw_version() IS NOT NULL;
 
+/* the upgraded objects must match those of a fresh 2.2 install */
+SELECT provolatile, proisstrict
+FROM pg_proc
+WHERE proname = 'nominatim_fdw_version';
+
+SELECT string_agg(attname, ',' ORDER BY attnum)
+FROM pg_attribute
+WHERE attrelid = 'nominatimrecord'::regclass AND attnum > 0 AND NOT attisdropped;
+
 DROP SERVER osm CASCADE;
