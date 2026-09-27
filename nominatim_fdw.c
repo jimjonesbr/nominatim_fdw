@@ -233,6 +233,7 @@ static void InterruptibleSleep(long seconds);
 static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
 static bool IsFeatureTypeValid(char *layer);
+static void CheckAcceptLanguage(const char *value);
 void _PG_init(void);
 
 void _PG_init(void)
@@ -358,6 +359,9 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", opt->optname, defGetString(def))));
                 }
+
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
+                    CheckAcceptLanguage(defGetString(def));
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
                 {
@@ -2168,6 +2172,14 @@ static int ExecuteRequest(NominatimFDWState *state)
     struct MemoryStruct chunk_header;
     struct curl_slist *headers = NULL;
 
+    /*
+     * Checked here rather than in each query function, so that it also
+     * covers server options stored before the validator learned to check
+     * them.
+     */
+    if (state->accept_language)
+        CheckAcceptLanguage(state->accept_language);
+
     chunk.memory = palloc(1);
     chunk.size = 0; /* no data at this point */
     chunk_header.memory = palloc(1);
@@ -2694,4 +2706,28 @@ static bool IsFeatureTypeValid(char *featuretype)
             strcmp(featuretype, "state") == 0 ||
             strcmp(featuretype, "city") == 0 ||
             strcmp(featuretype, "settlement") == 0);
+}
+
+/*
+ * CheckAcceptLanguage
+ * ----------
+ *
+ * The accept_language value ends up verbatim in an "Accept-Language:"
+ * request header, and libcurl does not sanitise custom headers: a CR or LF
+ * would end that header and let the value add arbitrary ones. No valid
+ * language range contains control characters, so reject them outright.
+ *
+ * value: accept_language as given in the server option or function call
+ */
+static void
+CheckAcceptLanguage(const char *value)
+{
+    for (const unsigned char *c = (const unsigned char *)value; *c; c++)
+    {
+        if (*c < 0x20 || *c == 0x7f)
+            ereport(ERROR,
+                    (errcode(ERRCODE_INVALID_PARAMETER_VALUE),
+                     errmsg("invalid %s: control characters are not allowed",
+                            NOMINATIM_SERVER_OPTION_LANGUAGE)));
+    }
 }
