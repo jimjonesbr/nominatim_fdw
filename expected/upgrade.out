@@ -67,7 +67,7 @@ SELECT nominatim_fdw_version() IS NOT NULL;
  t
 (1 row)
 
-/* the upgraded objects must match those of a fresh 2.2 install */
+/* the upgraded objects must match those of a fresh install */
 SELECT provolatile, proisstrict
 FROM pg_proc
 WHERE proname = 'nominatim_fdw_version';
@@ -85,3 +85,30 @@ WHERE attrelid = 'nominatimrecord'::regclass AND attnum > 0 AND NOT attisdropped
 (1 row)
 
 DROP SERVER osm CASCADE;
+/*
+ * An installation that reached 2.2 through the upgrade scripts released
+ * with 2.2 kept nominatim_fdw_version() IMMUTABLE STRICT and 'type' ahead
+ * of 'entrances'. Recreate that state and check that the update to 2.3
+ * repairs it.
+ */
+DROP EXTENSION nominatim_fdw;
+CREATE EXTENSION nominatim_fdw VERSION '2.2';
+ALTER FUNCTION nominatim_fdw_version() IMMUTABLE STRICT;
+ALTER TYPE nominatimrecord DROP ATTRIBUTE entrances, ADD ATTRIBUTE entrances jsonb;
+ALTER EXTENSION nominatim_fdw UPDATE TO '2.3';
+SELECT provolatile, proisstrict
+FROM pg_proc
+WHERE proname = 'nominatim_fdw_version';
+ provolatile | proisstrict 
+-------------+-------------
+ s           | f
+(1 row)
+
+SELECT string_agg(attname, ',' ORDER BY attnum)
+FROM pg_attribute
+WHERE attrelid = 'nominatimrecord'::regclass AND attnum > 0 AND NOT attisdropped;
+                                                                                                              string_agg                                                                                                              
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ osm_id,osm_type,ref,class,display_name,place_id,place_rank,address_rank,lon,lat,boundingbox,importance,icon,timestamp,attribution,querystring,polygon,exclude_place_ids,more_url,extratags,namedetails,addressdetails,entrances,type
+(1 row)
+
