@@ -1,0 +1,87 @@
+/*
+ * The query functions must only use a server the calling role has USAGE on.
+ *
+ * No request has to succeed for these tests: a denied call fails before
+ * anything is sent, and an allowed one is pointed at a host that can never
+ * resolve (RFC 2606), so "Could not resolve host" proves that the privilege
+ * check was passed. max_connect_retry '0' keeps it quick.
+ */
+\set VERBOSITY terse
+CREATE ROLE regress_nominatim_user;
+CREATE ROLE regress_nominatim_group;
+CREATE ROLE regress_nominatim_owner;
+CREATE SERVER regress_srv
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.invalid', max_connect_retry '0');
+/* a PUBLIC user mapping must not grant access to the server itself */
+CREATE USER MAPPING FOR PUBLIC SERVER regress_srv
+OPTIONS (user 'nominatimuser', password 'nominatimpass');
+/* no USAGE: all three functions are refused */
+SET ROLE regress_nominatim_user;
+SELECT * FROM nominatim_search(server_name => 'regress_srv', q => 'foo');
+ERROR:  permission denied for foreign server regress_srv
+SELECT * FROM nominatim_search(server_name => 'regress_srv', city => 'foo');
+ERROR:  permission denied for foreign server regress_srv
+SELECT * FROM nominatim_reverse(server_name => 'regress_srv', lon => 7.6, lat => 51.9);
+ERROR:  permission denied for foreign server regress_srv
+SELECT * FROM nominatim_lookup(server_name => 'regress_srv', osm_ids => 'W1');
+ERROR:  permission denied for foreign server regress_srv
+RESET ROLE;
+/* USAGE granted: the check is passed and the request is attempted */
+GRANT USAGE ON FOREIGN SERVER regress_srv TO regress_nominatim_user;
+SET ROLE regress_nominatim_user;
+SELECT * FROM nominatim_search(server_name => 'regress_srv', q => 'foo');
+ERROR:  Could not resolve host: server.invalid
+SELECT * FROM nominatim_reverse(server_name => 'regress_srv', lon => 7.6, lat => 51.9);
+ERROR:  Could not resolve host: server.invalid
+SELECT * FROM nominatim_lookup(server_name => 'regress_srv', osm_ids => 'W1');
+ERROR:  Could not resolve host: server.invalid
+RESET ROLE;
+/* USAGE revoked again: refused again */
+REVOKE USAGE ON FOREIGN SERVER regress_srv FROM regress_nominatim_user;
+SET ROLE regress_nominatim_user;
+SELECT * FROM nominatim_search(server_name => 'regress_srv', q => 'foo');
+ERROR:  permission denied for foreign server regress_srv
+RESET ROLE;
+/* USAGE inherited through role membership */
+GRANT USAGE ON FOREIGN SERVER regress_srv TO regress_nominatim_group;
+GRANT regress_nominatim_group TO regress_nominatim_user;
+SET ROLE regress_nominatim_user;
+SELECT * FROM nominatim_search(server_name => 'regress_srv', q => 'foo');
+ERROR:  Could not resolve host: server.invalid
+RESET ROLE;
+REVOKE regress_nominatim_group FROM regress_nominatim_user;
+/* USAGE granted to PUBLIC */
+GRANT USAGE ON FOREIGN SERVER regress_srv TO PUBLIC;
+SET ROLE regress_nominatim_user;
+SELECT * FROM nominatim_search(server_name => 'regress_srv', q => 'foo');
+ERROR:  Could not resolve host: server.invalid
+RESET ROLE;
+REVOKE USAGE ON FOREIGN SERVER regress_srv FROM PUBLIC;
+/* a non-superuser owner of a server needs no extra grant to use it */
+GRANT USAGE ON FOREIGN DATA WRAPPER nominatim_fdw TO regress_nominatim_owner;
+SET ROLE regress_nominatim_owner;
+CREATE SERVER regress_owned_srv
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.invalid', max_connect_retry '0');
+SELECT * FROM nominatim_search(server_name => 'regress_owned_srv', q => 'foo');
+ERROR:  Could not resolve host: server.invalid
+RESET ROLE;
+/* ... but other roles still do */
+SET ROLE regress_nominatim_user;
+SELECT * FROM nominatim_search(server_name => 'regress_owned_srv', q => 'foo');
+ERROR:  permission denied for foreign server regress_owned_srv
+RESET ROLE;
+/* a server that does not exist is still reported as such */
+SET ROLE regress_nominatim_user;
+SELECT * FROM nominatim_search(server_name => 'regress_no_such_srv', q => 'foo');
+ERROR:  FOREIGN SERVER does not exist: 'regress_no_such_srv'
+RESET ROLE;
+/* clean up */
+DROP SERVER regress_srv CASCADE;
+NOTICE:  drop cascades to user mapping for public on server regress_srv
+DROP SERVER regress_owned_srv;
+REVOKE USAGE ON FOREIGN DATA WRAPPER nominatim_fdw FROM regress_nominatim_owner;
+DROP ROLE regress_nominatim_user;
+DROP ROLE regress_nominatim_group;
+DROP ROLE regress_nominatim_owner;

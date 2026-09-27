@@ -11,7 +11,7 @@ DATA = nominatim_fdw--2.3.sql \
 	   nominatim_fdw--1.0--1.1.sql \
 	   nominatim_fdw--1.0.sql
 
-REGRESS = create-extension version upgrade create-user-mapping create-server exceptions functions 
+REGRESS = create-extension version upgrade create-user-mapping create-server permissions exceptions functions 
 
 ifndef SKIP_PROXY_TESTS
   REGRESS += proxy http-auth

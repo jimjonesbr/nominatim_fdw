@@ -38,6 +38,7 @@
 #include "utils/formatting.h"
 #include "catalog/pg_operator.h"
 #include "utils/syscache.h"
+#include "utils/acl.h"
 #include "catalog/pg_foreign_table.h"
 #include "catalog/pg_foreign_server.h"
 #include "catalog/pg_user_mapping.h"
@@ -1143,6 +1144,31 @@ static NominatimFDWState *InitSession(const char *srvname)
         ereport(ERROR,
                 (errcode(ERRCODE_CONNECTION_DOES_NOT_EXIST),
                  errmsg("FOREIGN SERVER does not exist: '%s'", srvname)));
+
+    /*
+     * The query functions take the server by name, so nothing on the way
+     * here has checked that the caller may use it - unlike foreign tables,
+     * where CREATE FOREIGN TABLE does. Without this check any role could
+     * send requests through any server, together with the credentials of
+     * a PUBLIC user mapping.
+     */
+    {
+        AclResult aclresult;
+
+#if PG_VERSION_NUM >= 160000
+        aclresult = object_aclcheck(ForeignServerRelationId, server->serverid,
+                                    GetUserId(), ACL_USAGE);
+#else
+        aclresult = pg_foreign_server_aclcheck(server->serverid, GetUserId(),
+                                               ACL_USAGE);
+#endif
+        if (aclresult != ACLCHECK_OK)
+#if PG_VERSION_NUM >= 110000
+            aclcheck_error(aclresult, OBJECT_FOREIGN_SERVER, server->servername);
+#else
+            aclcheck_error(aclresult, ACL_KIND_FOREIGN_SERVER, server->servername);
+#endif
+    }
 
     state->server = server;
     LoadNominatimUserMapping(state);

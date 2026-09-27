@@ -106,6 +106,12 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 | `max_connect_redirect`         | optional            | Limit of how many times URL redirection may follow (default `1`). Set it to `0` to refuse redirects altogether - a redirected request then fails instead of being followed.
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`).
 
+Using a `SERVER` through the `nominatim_fdw` functions requires the `USAGE` privilege on it, just like creating a foreign table on it would. The owner of the server can grant it to other roles:
+
+```sql
+GRANT USAGE ON FOREIGN SERVER osm TO some_role;
+```
+
 ### [ALTER SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#alter-server)
 
 All options and parameters set to a `SERVER` can be changed, dropped, and new ones can be added using [`ALTER SERVER`](https://www.postgresql.org/docs/current/sql-alterserver.html) statements.
