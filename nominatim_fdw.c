@@ -1527,6 +1527,27 @@ ParseRetryAfter(const char *headers)
 }
 
 /*
+ * RequestCancelled
+ * ----------
+ *
+ * Tells whether a pending interrupt is meant to end the current query: a
+ * cancel request (which is also how statement_timeout is delivered) or a
+ * request to terminate the backend.
+ *
+ * InterruptPending alone is not enough. It is also raised for interrupts
+ * that CHECK_FOR_INTERRUPTS() handles without ending the query, such as
+ * pg_log_backend_memory_contexts() or procsignal barriers. Giving up an
+ * in-flight request on those would fail the query for no reason.
+ *
+ * returns boolean (true: stop what we are doing, false: carry on)
+ */
+static bool
+RequestCancelled(void)
+{
+    return QueryCancelPending || ProcDiePending;
+}
+
+/*
  * InterruptibleSleep
  * ----------
  *
@@ -1541,7 +1562,7 @@ InterruptibleSleep(long seconds)
 {
     for (long slice = 0; slice < seconds * 10; slice++)
     {
-        if (InterruptPending)
+        if (RequestCancelled())
             return;
 
         pg_usleep(100000L); /* 100 ms */
@@ -2130,7 +2151,8 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
  */
 static int CURLProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow)
 {
-	return InterruptPending ? 1 : 0;
+	/* see RequestCancelled() for why InterruptPending is not tested here */
+	return RequestCancelled() ? 1 : 0;
 }
 
 static int ExecuteRequest(NominatimFDWState *state)
@@ -2460,7 +2482,7 @@ static int ExecuteRequest(NominatimFDWState *state)
 
                 InterruptibleSleep(delay);
 
-                if (InterruptPending)
+                if (RequestCancelled())
                     break;
 
                 res = curl_easy_perform(curl);
