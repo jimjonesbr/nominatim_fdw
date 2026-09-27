@@ -474,9 +474,9 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 
 ```sql
 SELECT nominatim_fdw_version();
-                                            nominatim_fdw_version                                             
---------------------------------------------------------------------------------------------------------------
- nominatim_fdw 2.2 (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
+                                              nominatim_fdw_version                                               
+------------------------------------------------------------------------------------------------------------------
+ nominatim_fdw 2.3-dev (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
 (1 row)
 ```
 #### [nominatim_fdw_settings](#nominatim_fdw_settings)
@@ -491,7 +491,7 @@ A system view that provides detailed version information for `nominatim_fdw` and
 SELECT * FROM nominatim_fdw_settings; 
    component   |            version            
 ---------------+-------------------------------
- nominatim_fdw | 2.2
+ nominatim_fdw | 2.3-dev
  PostgreSQL    | 18.4 (Debian 18.4-1.pgdg13+1)
  libxml        | 2.9.14
  libcurl       | 8.14.1
@@ -500,8 +500,9 @@ SELECT * FROM nominatim_fdw_settings;
  libSSH        | libssh2/1.11.1
  nghttp2       | 1.64.0
  compiler      | gcc
- built         | 2026-09-10 09:10:55 UTC
+ built         | 2026-09-27 12:54:34 UTC
 (10 rows)
+
 ```
 
 ## [Deploy with Docker](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#deploy-with-docker)

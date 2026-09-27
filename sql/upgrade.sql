@@ -27,6 +27,9 @@ SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
 ALTER EXTENSION nominatim_fdw UPDATE TO '2.2';
 SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
 
+ALTER EXTENSION nominatim_fdw UPDATE TO '2.3';
+SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
+
 /* verify functions are still callable after upgrade */
 SELECT nominatim_fdw_version() IS NOT NULL;
 
