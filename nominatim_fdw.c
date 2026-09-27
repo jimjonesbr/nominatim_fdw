@@ -1375,31 +1375,64 @@ xml_node_content(xmlNodePtr node)
  * to NOMINATIM_FDW_MAX_ERROR_BODY bytes so that a large HTML error page
  * cannot flood the logs.
  *
- * The body is whatever the server sent, and ends up in a message that is
- * assumed to be in the database encoding. It is cut at a character boundary
- * and kept as is only when it is valid UTF-8 and the database is UTF8;
- * otherwise every non-ASCII byte is replaced by '?'. Converting it instead
- * could itself raise an error in the middle of reporting one.
+ * The body is whatever the server sent - possibly not text at all, e.g. a
+ * TLS alert passed through by a misconfigured proxy - and ends up in a
+ * message that is assumed to be in the database encoding. So it is copied
+ * byte by byte:
+ *
+ *  - printable ASCII, newlines and tabs are kept;
+ *  - other control bytes, NUL included, are shown as '?', so that they can
+ *    neither cut the message short nor end up raw in the client output or
+ *    the server log;
+ *  - valid UTF-8 characters are kept when the database is UTF8, and never
+ *    cut in half at the limit; any other non-ASCII byte is shown as '?'.
+ *    Converting instead could itself raise an error in the middle of
+ *    reporting one.
  */
 static void
 AppendResponseBody(StringInfo buf, const char *body, size_t size)
 {
-    int len = (int)Min(size, NOMINATIM_FDW_MAX_ERROR_BODY);
+    size_t limit = Min(size, NOMINATIM_FDW_MAX_ERROR_BODY);
+    bool utf8 = GetDatabaseEncoding() == PG_UTF8;
+    size_t i = 0;
 
-    /* do not cut a multi-byte character in half (this also stops at a NUL) */
-    len = pg_encoding_mbcliplen(PG_UTF8, body, len, len);
-
-    if (GetDatabaseEncoding() == PG_UTF8 && pg_verify_mbstr(PG_UTF8, body, len, true))
-        appendBinaryStringInfo(buf, body, len);
-    else
+    while (i < limit)
     {
-        for (int i = 0; i < len; i++)
-            appendStringInfoChar(buf, IS_HIGHBIT_SET(body[i]) ? '?' : body[i]);
+        unsigned char c = (unsigned char)body[i];
+
+        if (!IS_HIGHBIT_SET(c))
+        {
+            bool printable = (c >= 0x20 && c != 0x7f) || c == '\n' || c == '\t';
+
+            appendStringInfoChar(buf, printable ? (char)c : '?');
+            i++;
+            continue;
+        }
+
+        if (utf8)
+        {
+            size_t len = (size_t)pg_encoding_mblen(PG_UTF8, &body[i]);
+
+            if (len > 1 && i + len <= size &&
+                pg_utf8_islegal((const unsigned char *)&body[i], (int)len))
+            {
+                /* a complete character that does not fit: stop before it */
+                if (i + len > limit)
+                    break;
+
+                appendBinaryStringInfo(buf, &body[i], (int)len);
+                i += len;
+                continue;
+            }
+        }
+
+        appendStringInfoChar(buf, '?');
+        i++;
     }
 
-    if (size > (size_t)len)
+    if (size > i)
         appendStringInfo(buf, " ... [%lu bytes truncated]",
-                         (unsigned long)(size - len));
+                         (unsigned long)(size - i));
 }
 
 /*
