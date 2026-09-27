@@ -2283,8 +2283,15 @@ static int ExecuteRequest(NominatimFDWState *state)
     if (state->namedetails)
         appendStringInfo(&query, "namedetails=1&");
 
+    /*
+     * Unlike the other output details, addressdetails does not default to 0
+     * everywhere: /reverse and /lookup include the address unless told
+     * otherwise, so "false" has to be spelled out for them.
+     */
     if (state->addressdetails)
         appendStringInfo(&query, "addressdetails=1&");
+    else if (strcmp(state->request_type, NOMINATIM_REQUEST_SEARCH) != 0)
+        appendStringInfo(&query, "addressdetails=0&");
 
     if (state->polygon_type && strlen(state->polygon_type) > 0)
     {    
