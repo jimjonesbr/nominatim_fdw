@@ -225,6 +225,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state);
 static void ParseNominatimResponse(NominatimFDWState *state);
 static int ExecuteRequest(NominatimFDWState *state);
 static int CheckURL(char *url);
+static bool IsHttpURL(const char *url);
 static bool ParseNonNegativeLong(const char *value, long *result);
 static bool ReportNominatimError(xmlNodePtr root);
 static bool RequestFailed(CURLcode res, long response_code);
@@ -359,6 +360,20 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                         ereport(ERROR,
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", opt->optname, defGetString(def))));
+
+                    /*
+                     * Requests are restricted to http and https (see
+                     * CURLOPT_PROTOCOLS in ExecuteRequest), so any other
+                     * scheme would only fail the first time the server is
+                     * used. http_proxy is not affected: it only reaches the
+                     * proxy through CURLOPT_PROXY, which has its own rules.
+                     */
+                    if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_URL) == 0 &&
+                        !IsHttpURL(defGetString(def)))
+                        ereport(ERROR,
+                                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                                 errmsg("invalid %s: '%s'", opt->optname, defGetString(def)),
+                                 errdetail("Only http and https URLs are supported.")));
                 }
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
@@ -2647,6 +2662,31 @@ static int CheckURL(char *url)
     }
 
     return REQUEST_SUCCESS;
+}
+
+/*
+ * IsHttpURL
+ * --------
+ * Checks whether a URL - already known to be valid, see CheckURL() - uses
+ * the http or https scheme.
+ *
+ * returns boolean (true: http or https, false: any other scheme)
+ */
+static bool IsHttpURL(const char *url)
+{
+    CURLU *handler = curl_url();
+    char *scheme = NULL;
+    bool result = false;
+
+    if (curl_url_set(handler, CURLUPART_URL, url, 0) == CURLUE_OK &&
+        curl_url_get(handler, CURLUPART_SCHEME, &scheme, 0) == CURLUE_OK)
+        result = pg_strcasecmp(scheme, "http") == 0 ||
+                 pg_strcasecmp(scheme, "https") == 0;
+
+    curl_free(scheme);
+    curl_url_cleanup(handler);
+
+    return result;
 }
 
 /*

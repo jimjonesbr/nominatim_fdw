@@ -194,3 +194,47 @@ FROM (VALUES
 
 DROP FUNCTION regress_reverse_check(double precision, double precision);
 DROP SERVER regress_coord_srv;
+
+/*
+ * The 'url' option only accepts http and https, since requests are
+ * restricted to those two protocols anyway. Terse verbosity: depending on
+ * the libcurl build, an unsupported scheme is refused either by the scheme
+ * check or already by the URL parser, with a different DETAIL.
+ */
+\set VERBOSITY terse
+/* one server name per case, so that a regression fails each case on its own */
+CREATE SERVER regress_url_file FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'file:///etc/passwd');
+CREATE SERVER regress_url_ftp FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'ftp://server.invalid');
+CREATE SERVER regress_url_gopher FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'gopher://server.invalid');
+CREATE SERVER regress_url_noscheme FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'server.invalid');
+
+/* ALTER SERVER is checked the same way */
+CREATE SERVER regress_url_alter FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.invalid');
+ALTER SERVER regress_url_alter OPTIONS (SET url 'ftp://server.invalid');
+SELECT srvoptions FROM pg_foreign_server WHERE srvname = 'regress_url_alter';
+DROP SERVER regress_url_alter;
+\set VERBOSITY default
+
+/* http and https are accepted, whatever the case of the scheme */
+CREATE SERVER regress_url_http FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.invalid');
+CREATE SERVER regress_url_https FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'https://server.invalid');
+CREATE SERVER regress_url_upper FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'HTTPS://server.invalid');
+CREATE SERVER regress_url_port_path FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.invalid:8080/nominatim/');
+CREATE SERVER regress_url_query FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'https://server.invalid/?key=abc');
+SELECT srvname, srvoptions FROM pg_foreign_server
+WHERE srvname LIKE 'regress\_url\_%' ORDER BY srvname;
+DROP SERVER regress_url_http;
+DROP SERVER regress_url_https;
+DROP SERVER regress_url_upper;
+DROP SERVER regress_url_port_path;
+DROP SERVER regress_url_query;
