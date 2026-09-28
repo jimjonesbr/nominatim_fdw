@@ -30,3 +30,21 @@ jobs:
         run: |
           export INCLUDE_EXTERNAL_TESTS=1
           pg-build-test
+
+  unsigned-char:
+    # arm64 and ppc64el, which packagers build for, treat plain char as
+    # unsigned; x86 treats it as signed. Build once the way those platforms
+    # do, so that code that depends on the signedness of char fails here.
+    name: 🐘 PostgreSQL 18, unsigned char
+    runs-on: ubuntu-latest
+    container: pgxn/pgxn-tools
+    steps:
+      - name: Prepare environment
+        run: sudo apt-get update && sudo apt-get install -y make gcc libxml2-dev libcurl4-openssl-dev
+      - name: Start PostgreSQL 18
+        run: pg-start 18
+      - uses: actions/checkout@v2
+      - name: Build and Regression Tests
+        run: |
+          export COPT=-funsigned-char
+          pg-build-test
