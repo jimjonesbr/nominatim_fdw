@@ -1307,7 +1307,8 @@ static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, 
 
     Assert(contents);
 
-    elog(DEBUG2, "%s: header = \"%s\"", __func__, contents);
+    /* libcurl passes the header as pointer and length, not zero-terminated */
+    elog(DEBUG2, "%s: header = \"%.*s\"", __func__, (int)realsize, contents);
 
     ptr = repalloc(mem->memory, mem->size + realsize + 1);
 
