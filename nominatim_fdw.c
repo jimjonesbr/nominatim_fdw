@@ -33,6 +33,7 @@
 #include <funcapi.h>
 #include "lib/stringinfo.h"
 #include <utils/lsyscache.h>
+#include "utils/memutils.h"
 #include "utils/datetime.h"
 #include "utils/json.h"
 #include "utils/timestamp.h"
@@ -63,9 +64,9 @@
 
 /*
  * Whether a DEBUG3 message would be sent to the client or the server log.
- * message_level_is_interesting() only exists since PostgreSQL 13.
+ * message_level_is_interesting() only exists since PostgreSQL 14.
  */
-#if PG_VERSION_NUM >= 130000
+#if PG_VERSION_NUM >= 140000
 #define DEBUG3_IS_WANTED() message_level_is_interesting(DEBUG3)
 #else
 #define DEBUG3_IS_WANTED() (log_min_messages <= DEBUG3 || client_min_messages <= DEBUG3)
