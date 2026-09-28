@@ -67,12 +67,21 @@
  */
 #define NOMINATIM_MAX_RETRY_AFTER 30
 
+/*
+ * Upper bound, in bytes, for any buffer a response is collected in: what a
+ * single palloc'd buffer can hold, together with its terminating zero byte.
+ * It applies whatever max_response_size says, including 0 (unlimited), so
+ * that a response never grows a buffer beyond what repalloc() accepts.
+ */
+#define NOMINATIM_MAX_BUFFER_SIZE (MaxAllocSize - 1)
+
 #define REQUEST_SUCCESS 0
 #define REQUEST_FAIL -1
 #define NOMINATIM_DEFAULT_CONNECTTIMEOUT 300
 #define NOMINATIM_DEFAULT_REQUEST_TIMEOUT 0
 #define NOMINATIM_DEFAULT_MAXRETRY 3
 #define NOMINATIM_DEFAULT_MAXREDIRECT 1
+#define NOMINATIM_DEFAULT_MAX_RESPONSE_SIZE 0
 #define NOMINATIM_DEFAULT_LANGUAGE "en-US,en;q=0.9"
 
 #define NOMINATIM_REQUEST_SEARCH "search"
@@ -85,6 +94,7 @@
 #define NOMINATIM_SERVER_OPTION_MAXREDIRECT "max_connect_redirect"
 #define NOMINATIM_SERVER_OPTION_HTTP_PROXY "http_proxy"
 #define NOMINATIM_SERVER_OPTION_LANGUAGE "accept_language"
+#define NOMINATIM_SERVER_OPTION_MAX_RESPONSE_SIZE "max_response_size"
 #define NOMINATIM_USERMAPPING_OPTION_PROXYUSER "proxy_user"
 #define NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD "proxy_password"
 #define NOMINATIM_USERMAPPING_OPTION_USER "user"
@@ -139,6 +149,7 @@ typedef struct NominatimFDWState
     long connect_timeout;      /* Timeout for the connection phase, in seconds */
     long request_timeout;      /* Timeout for the complete request, in seconds (0 = disabled) */
     long max_retries;          /* Number of re-try attemtps for failed requests */
+    long max_response_size;    /* Maximum size of a response body in bytes (0 = unlimited) */
     float8 lon;                /* Longitude (x) */
     float8 lat;                /* Latitude (y) */
     float8 polygon_threshold;  /* Tolerance in degrees with which the geometry may differ from the original geometry */
@@ -179,6 +190,8 @@ struct MemoryStruct
 {
     char *memory;
     size_t size;
+    size_t max_size;    /* larger data is refused, see WriteMemoryCallback() */
+    bool size_exceeded; /* max_size was reached, transfer aborted */
 };
 
 /*
@@ -204,6 +217,7 @@ static struct NominatimFDWOption valid_options[] =
         {NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_MAXREDIRECT, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_LANGUAGE, ForeignServerRelationId, false, false},
+        {NOMINATIM_SERVER_OPTION_MAX_RESPONSE_SIZE, ForeignServerRelationId, false, false},
         /* User Mapping */
         {NOMINATIM_USERMAPPING_OPTION_PROXYUSER, UserMappingRelationId, false, false},
         {NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD, UserMappingRelationId, false, false},
@@ -232,7 +246,6 @@ static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
 static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place);
 static NominatimFDWState *InitSession(const char *srvname);
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
-static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp);
 static void ParseNominatimSearchData(NominatimFDWState *state);
 static void ParseNominatimReverseData(NominatimFDWState *state);
 static void ParseNominatimResponse(NominatimFDWState *state);
@@ -418,6 +431,18 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
                                 (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                                  errmsg("invalid %s: '%s'", def->defname, timeout_str),
                                  errdetail("Expected values are non-negative integers (timeout in seconds, 0 = disabled)")));
+                }
+
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAX_RESPONSE_SIZE) == 0)
+                {
+                    char *size_str = defGetString(def);
+                    long size_val;
+
+                    if (!ParseNonNegativeLong(size_str, &size_val))
+                        ereport(ERROR,
+                                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                                 errmsg("invalid %s: '%s'", def->defname, size_str),
+                                 errdetail("Expected values are non-negative integers (size in bytes, 0 = unlimited)")));
                 }
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXCONNECTRETRY) == 0 || strcmp(opt->optname, NOMINATIM_SERVER_OPTION_MAXREDIRECT) == 0)
@@ -1181,6 +1206,7 @@ static NominatimFDWState *InitSession(const char *srvname)
     state->accept_language = NOMINATIM_DEFAULT_LANGUAGE;
     state->connect_timeout = NOMINATIM_DEFAULT_CONNECTTIMEOUT;
     state->request_timeout = NOMINATIM_DEFAULT_REQUEST_TIMEOUT;
+    state->max_response_size = NOMINATIM_DEFAULT_MAX_RESPONSE_SIZE;
 
     if (!server)
         ereport(ERROR,
@@ -1274,6 +1300,15 @@ static NominatimFDWState *InitSession(const char *srvname)
                          errdetail("Expected values are non-negative integers")));
         }
 
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_MAX_RESPONSE_SIZE) == 0)
+        {
+            if (!ParseNonNegativeLong(defGetString(def), &state->max_response_size))
+                ereport(ERROR,
+                        (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                         errmsg("invalid %s: '%s'", def->defname, defGetString(def)),
+                         errdetail("Expected values are non-negative integers (size in bytes, 0 = unlimited)")));
+        }
+
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
             state->accept_language = defGetString(def);
     }
@@ -1281,43 +1316,38 @@ static NominatimFDWState *InitSession(const char *srvname)
     return state;
 }
 
+/*
+ * WriteMemoryCallback
+ * ----------
+ *
+ * Appends a chunk of a libcurl transfer to the MemoryStruct libcurl was given
+ * for it. It serves both CURLOPT_WRITEFUNCTION and CURLOPT_HEADERFUNCTION:
+ * what separates the response body from the response headers is the buffer
+ * each is handed through CURLOPT_WRITEDATA and CURLOPT_HEADERDATA, not the
+ * function, so one implementation covers both and cannot mix them.
+ *
+ * Both callbacks receive a pointer and a count. libcurl does not promise a
+ * terminator after those bytes, so the chunk is copied by its count and the
+ * terminator is placed by this function, on its own buffer.
+ *
+ * Data that would take the buffer beyond its max_size is refused: returning
+ * a short count makes libcurl abort the transfer with CURLE_WRITE_ERROR, and
+ * ExecuteRequest() reports the limit once curl_easy_perform() has returned.
+ * Letting repalloc() fail instead would raise an error from inside libcurl,
+ * and a misleading one ("invalid memory alloc request size").
+ */
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp)
 {
     size_t realsize = size * nmemb;
     struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-    char *ptr = repalloc(mem->memory, mem->size + realsize + 1);
 
-    if (!ptr)
-        ereport(ERROR,
-                (errcode(ERRCODE_FDW_OUT_OF_MEMORY),
-                 errmsg("out of memory (repalloc returned NULL)")));
+    if (realsize > mem->max_size - mem->size)
+    {
+        mem->size_exceeded = true;
+        return 0;
+    }
 
-    mem->memory = ptr;
-    memcpy(&(mem->memory[mem->size]), contents, realsize);
-    mem->size += realsize;
-    mem->memory[mem->size] = 0;
-
-    return realsize;
-}
-static size_t HeaderCallbackFunction(char *contents, size_t size, size_t nmemb, void *userp)
-{
-    size_t realsize = size * nmemb;
-    struct MemoryStruct *mem = (struct MemoryStruct *)userp;
-    char *ptr;
-
-    Assert(contents);
-
-    /* libcurl passes the header as pointer and length, not zero-terminated */
-    elog(DEBUG2, "%s: header = \"%.*s\"", __func__, (int)realsize, contents);
-
-    ptr = repalloc(mem->memory, mem->size + realsize + 1);
-
-    if (!ptr)
-        ereport(ERROR,
-                (errcode(ERRCODE_FDW_OUT_OF_MEMORY),
-                 errmsg("[%s] out of memory (repalloc returned NULL)", __func__)));
-
-    mem->memory = ptr;
+    mem->memory = repalloc(mem->memory, mem->size + realsize + 1);
     memcpy(&(mem->memory[mem->size]), contents, realsize);
     mem->size += realsize;
     mem->memory[mem->size] = 0;
@@ -1692,7 +1722,7 @@ IsRetryable(CURLcode res, long response_code)
  * the delta-seconds form is honoured; the HTTP-date form is rare in practice
  * and would require full date parsing.
  *
- * headers: raw response headers as collected by HeaderCallbackFunction
+ * headers: raw response headers as collected by WriteMemoryCallback
  *
  * returns the delay in seconds, or -1 when absent or not understood
  */
@@ -2463,8 +2493,14 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     chunk.memory = palloc(1);
     chunk.size = 0; /* no data at this point */
+    chunk.max_size = state->max_response_size > 0
+                         ? Min((size_t)state->max_response_size, NOMINATIM_MAX_BUFFER_SIZE)
+                         : NOMINATIM_MAX_BUFFER_SIZE;
+    chunk.size_exceeded = false;
     chunk_header.memory = palloc(1);
     chunk_header.size = 0; /* no data at this point */
+    chunk_header.max_size = NOMINATIM_MAX_BUFFER_SIZE; /* max_response_size is about the body */
+    chunk_header.size_exceeded = false;
 
     elog(DEBUG2, "%s called", __func__);
 
@@ -2678,7 +2714,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         elog(DEBUG2, "  %s: setting maxredirs: %ld", __func__, state->request_max_redirect);
         curl_easy_setopt(curl, CURLOPT_MAXREDIRS, state->request_max_redirect);
 
-        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, HeaderCallbackFunction);
+        curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, WriteMemoryCallback);
         curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&chunk_header);
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteMemoryCallback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&chunk);
@@ -2763,7 +2799,9 @@ static int ExecuteRequest(NominatimFDWState *state)
             {
                 long delay = 1; /* just being polite to the public server */
 
-                if (!IsRetryable(res, response_code))
+                /* an oversized response would be just as large the next time */
+                if (!IsRetryable(res, response_code) ||
+                    chunk.size_exceeded || chunk_header.size_exceeded)
                     break;
 
                 elog(WARNING, "request to '%s' failed (%ld/%ld)", state->url, i, state->max_retries);
@@ -2809,6 +2847,38 @@ static int ExecuteRequest(NominatimFDWState *state)
             PG_RE_THROW();
         }
         PG_END_TRY();
+
+        /*
+         * The write callback aborts the transfer when the response outgrows
+         * its limit. Report it here, now that libcurl has returned, and
+         * before any HTTP status is considered: the response is incomplete
+         * either way, so the size limit is what the user needs to hear about.
+         */
+        if (chunk.size_exceeded || chunk_header.size_exceeded)
+        {
+            bool configured = chunk.size_exceeded &&
+                              state->max_response_size > 0 &&
+                              chunk.max_size == (size_t)state->max_response_size;
+            size_t max_size = chunk.size_exceeded ? chunk.max_size : chunk_header.max_size;
+
+            pfree(chunk.memory);
+            pfree(chunk_header.memory);
+            CleanupCurlRequest(request);
+
+            if (configured)
+                ereport(ERROR,
+                        (errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+                         errmsg("response exceeds %s limit of %lu bytes",
+                                NOMINATIM_SERVER_OPTION_MAX_RESPONSE_SIZE, (unsigned long)max_size),
+                         errhint("Increase %s in CREATE SERVER or narrow down the request to return less data.",
+                                 NOMINATIM_SERVER_OPTION_MAX_RESPONSE_SIZE)));
+            else
+                ereport(ERROR,
+                        (errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+                         errmsg("response exceeds the maximum size of %lu bytes",
+                                (unsigned long)max_size),
+                         errhint("Narrow down the request to return less data.")));
+        }
 
         if (RequestFailed(res, response_code))
         {

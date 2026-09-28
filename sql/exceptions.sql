@@ -59,6 +59,26 @@ OPTIONS (url 'http://server.im',
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
+         max_response_size '');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         max_response_size '-1');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         max_response_size 'abc');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         max_response_size '1.5');
+
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '');
 

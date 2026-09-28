@@ -855,3 +855,17 @@ DETAIL:  a nominatim lookup request requires the 'osm_ids' parameter (a comma-se
 SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => NULL);
 (0 rows)
 
+/* max_response_size: a response larger than the limit is refused */
+ALTER SERVER osm OPTIONS (ADD max_response_size '100');
+SELECT pg_sleep(2);
+-[ RECORD 1 ]
+pg_sleep | 
+
+SELECT osm_id, display_name
+FROM nominatim_search(
+      server_name => 'osm',
+      q => 'einsteinstraße 60, münster, germany');
+DEBUG:  GET "https://nominatim.openstreetmap.org/search?q=einsteinstra%C3%9Fe%2060%2C%20m%C3%BCnster%2C%20germany&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0"
+ERROR:  response exceeds max_response_size limit of 100 bytes
+HINT:  Increase max_response_size in CREATE SERVER or narrow down the request to return less data.
+ALTER SERVER osm OPTIONS (DROP max_response_size);

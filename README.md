@@ -105,6 +105,7 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 | `max_connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3` times). Only failures that may go away on their own are retried: network and timeout errors, HTTP `429` and `5xx` answers. Errors that an identical request would run into again - other `4xx` answers, too many redirects, unsupported protocols, TLS certificate problems - are reported straight away.
 | `max_connect_redirect`         | optional            | Limit of how many times URL redirection may follow (default `1`). Set it to `0` to refuse redirects altogether - a redirected request then fails instead of being followed.
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`).
+| `max_response_size` | optional | Maximum size in bytes of a response body (default `0` = unlimited). A larger response is aborted as soon as it exceeds the limit, and the query fails with an error. Use it to protect against unexpectedly large answers - large polygons, for instance - from untrusted or misbehaving endpoints. Independently of this option, a response can never be larger than 1 GB, the most PostgreSQL can hold in a single buffer.
 
 Using a `SERVER` through the `nominatim_fdw` functions requires the `USAGE` privilege on it, just like creating a foreign table on it would. The owner of the server can grant it to other roles:
 

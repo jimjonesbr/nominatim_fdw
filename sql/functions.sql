@@ -387,3 +387,12 @@ SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => '');
 
 /* returns 0 rows (STRICT function) */
 SELECT * FROM nominatim_lookup(server_name => 'osm', osm_ids => NULL);
+
+/* max_response_size: a response larger than the limit is refused */
+ALTER SERVER osm OPTIONS (ADD max_response_size '100');
+SELECT pg_sleep(2);
+SELECT osm_id, display_name
+FROM nominatim_search(
+      server_name => 'osm',
+      q => 'einsteinstraße 60, münster, germany');
+ALTER SERVER osm OPTIONS (DROP max_response_size);

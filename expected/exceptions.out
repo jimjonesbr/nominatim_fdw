@@ -62,6 +62,29 @@ DETAIL:  Expected values are non-negative integers (timeout in seconds, 0 = disa
 CREATE SERVER foo
 FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'http://server.im',
+         max_response_size '');
+ERROR:  empty value in option 'max_response_size'
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         max_response_size '-1');
+ERROR:  invalid max_response_size: '-1'
+DETAIL:  Expected values are non-negative integers (size in bytes, 0 = unlimited)
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         max_response_size 'abc');
+ERROR:  invalid max_response_size: 'abc'
+DETAIL:  Expected values are non-negative integers (size in bytes, 0 = unlimited)
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
+         max_response_size '1.5');
+ERROR:  invalid max_response_size: '1.5'
+DETAIL:  Expected values are non-negative integers (size in bytes, 0 = unlimited)
+CREATE SERVER foo
+FOREIGN DATA WRAPPER nominatim_fdw
+OPTIONS (url 'http://server.im',
          connect_timeout '42',
          max_connect_retry '');
 ERROR:  empty value in option 'max_connect_retry'
