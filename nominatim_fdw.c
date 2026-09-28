@@ -2666,7 +2666,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         curl_easy_setopt(curl, CURLOPT_URL, request_url);
 
 #if ((LIBCURL_VERSION_MAJOR == 7 && LIBCURL_VERSION_MINOR < 85) || LIBCURL_VERSION_MAJOR < 7)
-        curl_easy_setopt(curl, CURLOPT_PROTOCOLS, CURLPROTO_HTTP | CURLPROTO_HTTPS);
+        curl_easy_setopt(curl, CURLOPT_PROTOCOLS, (long)(CURLPROTO_HTTP | CURLPROTO_HTTPS));
 #else
         curl_easy_setopt(curl, CURLOPT_PROTOCOLS_STR, "http,https");
 #endif
@@ -2699,7 +2699,7 @@ static int ExecuteRequest(NominatimFDWState *state)
              * precedence, which is how libcurl behaves.
              */
             elog(DEBUG2, "  %s: proxy protocol > 'HTTP'", __func__);
-            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, CURLPROXY_HTTP);
+            curl_easy_setopt(curl, CURLOPT_PROXYTYPE, (long)CURLPROXY_HTTP);
 
             if (state->proxy_user)
             {
