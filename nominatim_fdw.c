@@ -598,11 +598,24 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
                               errmsg("invalid polygon type '%s'", state->polygon_type),
                               errdetail("This parameter expects one of the following formats: polygon_geojson, polygon_kml, polygon_svg, polygon_text")));
 
-        if (zoom < -1 || zoom > 18)
+        /*
+         * Nominatim clamps zoom to 0..18 itself, so do the same here: that
+         * way both ends of the range behave alike. A value below 0 used to be
+         * dropped from the request, which made the server fall back to its
+         * default of 18 - building level, the opposite of what a low zoom
+         * asks for. -1 keeps meaning "not set".
+         */
+        if (zoom != -1 && (zoom < 0 || zoom > 18))
+        {
+            int clamped = zoom < 0 ? 0 : 18;
+
             ereport(WARNING,
                     (errcode(ERRCODE_NUMERIC_VALUE_OUT_OF_RANGE),
                      errmsg("zoom out of range: %d", zoom),
-                     errdetail("zoom must be between 0 and 18 (-1 to disable it)")));
+                     errdetail("zoom must be between 0 and 18 (-1 to disable it); %d is used instead.", clamped)));
+
+            state->zoom = clamped;
+        }
 
         /* every comparison with NaN is false, so it has to be tested for explicitly */
         if (isnan(lat) || lat < -90.0 || lat > 90.0)

@@ -320,7 +320,7 @@ type              | theatre
 | `server_name` | **required** | Foreign Data Wrapper server created using the `CREATE SERVER` statement. |
 | `lon` | optional | longitude of the location to generate an address for (default `0`) |
 | `lat` | optional | latitude of the location to generate an address for (default `0`) |
-| `zoom` | optional | level of detail required for the address, `0`–`18`. Roughly corresponds to a map zoom level: `3` country, `5` state, `8` county, `10` city, `12` town/borough, `13` village/suburb, `14` neighbourhood, `15` any settlement, `16` major streets, `17` major and minor streets, `18` building. If unset, the server default (`18`, building level) is applied. (default *unset*)|
+| `zoom` | optional | level of detail required for the address, `0`–`18`. Roughly corresponds to a map zoom level: `3` country, `5` state, `8` county, `10` city, `12` town/borough, `13` village/suburb, `14` neighbourhood, `15` any settlement, `16` major streets, `17` major and minor streets, `18` building. `-1` leaves it unset, and the server default (`18`, building level) is applied. Other values outside `0`–`18` are clamped to that range with a `WARNING`, as the server itself would do. (default `-1`)|
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
 | `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `true`) |

@@ -218,7 +218,6 @@ FROM nominatim_reverse(
         server_name => 'osm', 
         lon => 7.6038115,
         lat => 51.9660873,        
-        polygon => 'polygon_kml',
         zoom => -2);
 
 /* invalid polygon format */
