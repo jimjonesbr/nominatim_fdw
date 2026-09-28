@@ -25,7 +25,7 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
  
 ## [Requirements](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#requirements)
 
-* [libxml2](http://www.xmlsoft.org/): version 2.5.0 or higher.
+* [libxml2](http://www.xmlsoft.org/): version 2.6.0 or higher.
 * [libcurl](https://curl.se/libcurl/): version 7.74.0 or higher.
 * [PostgreSQL](https://www.postgresql.org): version 10 or higher.
 
@@ -202,11 +202,11 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `featuretype` | optional | one of: `country`, `state`, `city`, `settlement` (default *unset*) |
 | `exclude_place_ids` | optional | comma-separated list of place ids (default *unset*) |
 | `viewbox` | optional | bounding box as in `<x1>,<y1>,<x2>,<y2>` (default *unset*) |
-| `bounded` | optional | When set to `true`, restrict the results to items within the `viewbox` (requires `viewbox` to be set). (default `false`)"|
+| `bounded` | optional | When set to `true`, restrict the results to items within the `viewbox` (requires `viewbox` to be set). (default `false`) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | valid email address (default *unset*) |
 | `dedupe` | optional | discards duplicated entries (default `true`) |
-| `limit_result` | optional | limits the maximum number of returned results (default `0`) |
+| `limit_result` | optional | limits the maximum number of returned results. `0` leaves it to the server, which returns up to `10` results; the server never returns more than `40`. (default `0`) |
 | `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
 
 As in the Nominatim API, the free-form query string parameter `q` cannot be combined with the parameters `amenity`, `street`, `city`, `county`, `state`, `country` and `postalcode`, as they are used in structured calls.
@@ -268,7 +268,7 @@ lat         | 51.9651014
 boundingbox | 51.9650514,51.9651514,7.6289621,7.6290621
 ```
 
-All columnns:
+All columns:
 
 ```sql
 SELECT * 
@@ -395,6 +395,8 @@ addressdetails | {"city": "Münster", "road": "Neubrückenstraße", "state": "No
 entrances      | []
 ```
 
+Nominatim's reverse answers carry no icon, so the `icon` column is always `NULL` for `nominatim_reverse()`.
+
 #### [Nominatim_Lookup](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_lookup)
 
 The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows to query the address and other details of one or multiple OSM objects like node, way or relation.
@@ -428,7 +430,8 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 SELECT osm_id, display_name 
 FROM nominatim_lookup(
       server_name => 'osm',
-      osm_ids => 'W121736959');
+      osm_ids => 'W121736959',
+      accept_language => 'de');
 
 -[ RECORD 1 ]-
 osm_id       | 121736959
@@ -446,7 +449,8 @@ FROM nominatim_lookup(
       namedetails => true,
       extratags => true,
       addressdetails => true,
-      entrances => true);
+      entrances => true,
+      accept_language => 'de');
 
 -[ RECORD 1 ]-
 osm_id            | 121736959
