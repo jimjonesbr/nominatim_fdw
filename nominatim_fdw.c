@@ -242,7 +242,7 @@ PG_FUNCTION_INFO_V1(nominatim_fdw_search);
 PG_FUNCTION_INFO_V1(nominatim_fdw_reverse);
 PG_FUNCTION_INFO_V1(nominatim_fdw_lookup);
 
-static Datum CreateDatum(int pgtype, int pgtypmod, char *value);
+static Datum CreateDatum(Oid pgtype, int pgtypmod, char *value);
 static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *place);
 static NominatimFDWState *InitSession(const char *srvname);
 static size_t WriteMemoryCallback(void *contents, size_t size, size_t nmemb, void *userp);
@@ -631,7 +631,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         if (state->records)
             funcctx->max_calls = state->records->length;
 
-        elog(DEBUG2, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
+        elog(DEBUG2, "  %s: number of records retrieved = " UINT64_FORMAT " ", __func__, funcctx->max_calls);
 
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
             ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
@@ -816,7 +816,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         if (state->records)
             funcctx->max_calls = state->records->length;
 
-        elog(DEBUG2, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
+        elog(DEBUG2, "  %s: number of records retrieved = " UINT64_FORMAT " ", __func__, funcctx->max_calls);
 
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
             ereport(ERROR,
@@ -939,7 +939,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         if (state->records)
             funcctx->max_calls = state->records->length;
 
-        elog(DEBUG2, "  %s: number of records retrieved = %ld ", __func__, funcctx->max_calls);
+        elog(DEBUG2, "  %s: number of records retrieved = " UINT64_FORMAT " ", __func__, funcctx->max_calls);
 
         if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
             ereport(ERROR,
@@ -1066,7 +1066,7 @@ static char *GetAttributeValue(Form_pg_attribute att, struct NominatimRecord *pl
  *
  * returns Datum
  */
-static Datum CreateDatum(int pgtype, int pgtypmod, char *value)
+static Datum CreateDatum(Oid pgtype, int pgtypmod, char *value)
 {
     regproc typinput;
     HeapTuple tuple = SearchSysCache1(TYPEOID, ObjectIdGetDatum(pgtype));
@@ -2943,7 +2943,7 @@ static int ExecuteRequest(NominatimFDWState *state)
                                           XML_PARSE_NOBLANKS | XML_PARSE_NONET |
                                           XML_PARSE_NOERROR | XML_PARSE_NOWARNING);
 
-            elog(DEBUG1, "HTTP %ld, %ld bytes", response_code, chunk.size);
+            elog(DEBUG1, "HTTP %ld, %lu bytes", response_code, (unsigned long)chunk.size);
 
             /*
              * The request itself succeeded, but what came back is not XML: a
