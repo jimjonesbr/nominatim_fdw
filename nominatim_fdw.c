@@ -50,6 +50,7 @@
 #include <utils/elog.h>
 #include <access/tupdesc.h>
 #include "miscadmin.h"
+#include "utils/guc.h"
 
 #define FDW_VERSION "2.3-dev"
 
@@ -59,6 +60,16 @@
  * from misconfigured proxies) from flooding PostgreSQL logs.
  */
 #define NOMINATIM_FDW_MAX_ERROR_BODY 512
+
+/*
+ * Whether a DEBUG3 message would be sent to the client or the server log.
+ * message_level_is_interesting() only exists since PostgreSQL 13.
+ */
+#if PG_VERSION_NUM >= 130000
+#define DEBUG3_IS_WANTED() message_level_is_interesting(DEBUG3)
+#else
+#define DEBUG3_IS_WANTED() (log_min_messages <= DEBUG3 || client_min_messages <= DEBUG3)
+#endif
 
 /*
  * Upper bound, in seconds, for the delay a server may request through the
@@ -1172,7 +1183,7 @@ static void LoadNominatimUserMapping(NominatimFDWState *state)
                 if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PROXYUSER) == 0)
                 {
                     state->proxy_user = pstrdup(defGetString(def));
-                    elog(DEBUG2, "%s: proxy user '%s'", __func__, def->defname);
+                    elog(DEBUG2, "%s: proxy user '%s'", __func__, state->proxy_user);
                 }
                 else if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD) == 0)
                 {
@@ -1182,7 +1193,7 @@ static void LoadNominatimUserMapping(NominatimFDWState *state)
                 else if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_USER) == 0)
                 {
                     state->user = pstrdup(defGetString(def));
-                    elog(DEBUG2, "%s: user '%s'", __func__, def->defname);
+                    elog(DEBUG2, "%s: user '%s'", __func__, state->user);
                 }
                 else if (strcmp(def->defname, NOMINATIM_USERMAPPING_OPTION_PASSWORD) == 0)
                 {
@@ -1963,10 +1974,6 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             place->ref = xml_get_prop(reversegeocode, "ref");
             place->address_rank = xml_get_prop(reversegeocode, "address_rank");
             place->boundingbox = xml_get_prop(reversegeocode, "boundingbox");
-            place->class = xml_get_prop(reversegeocode, "class");
-            place->type = xml_get_prop(reversegeocode, "type");
-            place->icon = xml_get_prop(reversegeocode, "icon");
-            place->importance = xml_get_prop(reversegeocode, "importance");
             place->lat = xml_get_prop(reversegeocode, "lat");
             place->lon = xml_get_prop(reversegeocode, "lon");
             place->osm_id = xml_get_prop(reversegeocode, "osm_id");
@@ -2743,12 +2750,17 @@ static int ExecuteRequest(NominatimFDWState *state)
 		/*
 		 * Enable libcurl verbose output, but route it exclusively through
 		 * CURLDebugCallback instead of stderr. The callback emits at DEBUG3
-		 * (gated by log_min_messages) and redacts Authorization headers so
-		 * credentials are never written to server logs.
+		 * and redacts Authorization headers so credentials are never written
+		 * to server logs. Only when DEBUG3 messages go anywhere, though:
+		 * otherwise every request would format debug lines just to throw
+		 * them away.
 		 */
-		curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
-		curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CURLDebugCallback);
-		curl_easy_setopt(curl, CURLOPT_DEBUGDATA, NULL);
+		if (DEBUG3_IS_WANTED())
+		{
+			curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+			curl_easy_setopt(curl, CURLOPT_DEBUGFUNCTION, CURLDebugCallback);
+			curl_easy_setopt(curl, CURLOPT_DEBUGDATA, NULL);
+		}
 
 		/*
 		 * Set the progress callback function, so that in-flight requests can
