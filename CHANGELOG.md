@@ -19,7 +19,18 @@ Release date: **unreleased**
 * **Fixed encoding mismatches**: Request parameters were percent-encoded in the database encoding instead of UTF-8; response values were stored as raw UTF-8 bytes, producing mojibake in non-UTF-8 databases. Parameters are now converted to UTF-8 before escaping, and response values are converted from UTF-8 to the database encoding.
 * **Fixed format string mismatches**: Several `elog()` calls passed arguments of mismatched types: `"%ld"` for `uint64`, `"%ld"` for `size_t`, `"%u"` for `Oid`. Now use appropriate format specifiers and casts.
 * **Fixed `zoom` out-of-range values being applied inconsistently**: Values above 18 were sent as-is, values below -1 were dropped. Both are now clamped to 0 or 18 with a `WARNING` naming which value is used; `-1` (disabled) stays unchanged.
-* **Fixed response size limits raising errors inside libcurl callbacks**: `WriteMemoryCallback()` called `repalloc()` without bounds, and once it hit `MaxAllocSize` an error raised from within the callback and leaked the handle. Both body and headers now use separate per-buffer size limits; oversized data is refused by returning a short count, causing libcurl to abort with `CURLE_WRITE_ERROR`.
+* **Fixed oversized responses failing inside libcurl**: `WriteMemoryCallback()` raised "invalid memory alloc request size" from within libcurl's frames, making it impossible to distinguish from a real OOM. Responses now refuse data beyond a per-buffer limit by returning a short count, causing libcurl to abort cleanly with `CURLE_WRITE_ERROR`. Oversized responses are not retried.
+
+## Enhancements
+
+* **Added `max_response_size` server option**: maximum size in bytes of a response body (default `0`, unlimited). A larger response is aborted as soon as it exceeds the limit, and the query fails with "response exceeds max_response_size limit of ... bytes", a hint to raise the limit, and `ERRCODE_PROGRAM_LIMIT_EXCEEDED`. Independently of the option, a response can never exceed 1 GB, the most PostgreSQL can hold in a single buffer.
+
+## Breaking changes
+
+* **The query functions require the `USAGE` privilege on the foreign server**: roles that used a server without it now get `permission denied for foreign server ...` (see *Security* below). Grant it where it is needed: `GRANT USAGE ON FOREIGN SERVER osm TO some_role;`.
+* **Invalid `polygon_threshold` values are rejected**: negative, `NaN` and infinite values now raise an error instead of being forwarded to the server.
+* **`zoom` values below `-1` now mean country level**: they are clamped to `0`, as the server does, instead of being dropped - which made the server fall back to building level (`18`).
+* **`make installcheck` runs only the tests that need no network**: the tests against the public Nominatim instance and through the Squid proxies are now opt-in, with `INCLUDE_EXTERNAL_TESTS=1`, `INCLUDE_LOCAL_TESTS=1` or `INCLUDE_ALL_TESTS=1`. `SKIP_PROXY_TESTS` is gone.
 
 ## Security
 
@@ -33,6 +44,9 @@ Release date: **unreleased**
 * **Removed reading of non-existent reverse parser fields**: `ParseNominatimReverseData()` read `class`, `type` and `importance` from `<result>`, which Nominatim's reverse endpoint never sends. Stopped reading them.
 * **Improved debug output**: DEBUG2 messages now log actual option values instead of the option names.
 * **Updated README**: Clarified libxml2 minimum version (2.6.0, not 2.5.0), fixed example parameters, documented `zoom` clamping, noted that `icon` is always `NULL` in reverse results.
+* **Made regression tests opt-in for network access**: Tests against a Nominatim server now require `INCLUDE_EXTERNAL_TESTS=1`, preventing timeouts in isolated package-build environments.
+* **Made builds reproducible**: the build date reported by `nominatim_fdw_settings()` honours `SOURCE_DATE_EPOCH`, which package builds set, instead of always taking the wall clock.
+* **Passed `long` values to the libcurl options that expect them**: `CURLOPT_PROXYTYPE` and `CURLOPT_PROTOCOLS` were handed `int` constants with libcurl releases before 8, which `curl_easy_setopt()` reads as `long`.
 
 # 2.2
 Release date: **2026-09-10**
