@@ -1,3 +1,39 @@
+# 2.3
+Release date: **unreleased**
+
+## Bug Fixes
+
+* **Fixed header callback reading past the provided buffer**: `HeaderCallbackFunction()` logged each header with `"%s"`, reading until a NUL byte and ignoring the length libcurl provided. Now uses `"%.*s"` to print exactly the bytes handed over.
+* **Fixed curl handle leaks on errors during request setup**: Handle creation was not wrapped in `PG_TRY`, so errors raised during parameter conversion or header construction bypassed `curl_easy_cleanup()`. Handle is now tied to the current memory context with a reset callback, releasing it on any error path.
+* **Fixed libxml2 string leaks on encoding conversion errors**: `xml_get_prop()` and `xml_node_content()` converted strings before freeing them, so encoding errors raised before `xmlFree()` was called, leaking the libxml2-heap string. Both now convert and free on all paths, including error paths.
+* **Fixed entrances losing their tags**: The parser read `<entrance>` attributes but ignored child `<tag>` elements. Tags are now collected into an "extratags" object per entrance.
+* **Fixed control bytes in error messages**: Error bodies containing NUL or control bytes were either cut at the first NUL or included raw in the log. Bodies are now sanitized byte-by-byte, with multi-byte UTF-8 sequences kept intact and non-printable bytes shown as `?`.
+* **Fixed acceptance of non-Nominatim responses**: HTTP 200 responses were parsed without checking the root element, so a misconfigured endpoint returning JSON, empty body, or HTML went silently undetected. Parsers now validate root elements and report unexpected content.
+* **Fixed `polygon_threshold` losing precision and accepting invalid values**: Formatted with `"%f"` (six decimal places), it was rounded; `NaN`, infinity and negative values were forwarded as-is. Now formatted with `"%.15g"` and validated to reject non-finite and negative values.
+* **Fixed `addressdetails=0` not being sent for `/reverse` and `/lookup`**: These endpoints default to `addressdetails=1`, so `nominatim_reverse(addressdetails => false)` and `nominatim_lookup(addressdetails => false)` made the server compute the breakdown anyway. Both endpoints now explicitly request `addressdetails=0`.
+* **Fixed request URLs with query strings or fragments**: The URL was built as `<url> + "/" + <endpoint> + "?" + <params>`. A `url` containing a query string got the endpoint appended to the query instead of the path, and fragments corrupted the request. URLs are now parsed and reassembled with `curl_url()`, keeping existing query strings and appending the endpoint to the path.
+* **Fixed validator accepting non-HTTP schemes for `url`**: `file://`, `ftp://`, ... were accepted and failed only at first use. Validator now rejects any scheme other than `http` and `https`.
+* **Fixed retries on permanent transport errors**: `IsRetryable()` treated every libcurl error except `CURLE_ABORTED_BY_CALLBACK` as transient. Certificate verification failures, malformed URLs, unsupported protocols, etc. now fail immediately. Retries are reserved for network-level failures (DNS, connect, timeouts).
+* **Fixed `nominatim_reverse()` accepting `NaN` coordinates**: Range checks like `lat > 90.0` are always false for `NaN`, so invalid coordinates passed validation. Now explicitly check `isnan()`.
+* **Fixed header injection via `accept_language`**: Control characters in `accept_language` were pasted verbatim into HTTP headers, allowing CR/LF injection. New `CheckAcceptLanguage()` rejects control characters in both the parameter and the server option.
+* **Fixed encoding mismatches**: Request parameters were percent-encoded in the database encoding instead of UTF-8; response values were stored as raw UTF-8 bytes, producing mojibake in non-UTF-8 databases. Parameters are now converted to UTF-8 before escaping, and response values are converted from UTF-8 to the database encoding.
+* **Fixed format string mismatches**: Several `elog()` calls passed arguments of mismatched types: `"%ld"` for `uint64`, `"%ld"` for `size_t`, `"%u"` for `Oid`. Now use appropriate format specifiers and casts.
+* **Fixed `zoom` out-of-range values being applied inconsistently**: Values above 18 were sent as-is, values below -1 were dropped. Both are now clamped to 0 or 18 with a `WARNING` naming which value is used; `-1` (disabled) stays unchanged.
+* **Fixed response size limits raising errors inside libcurl callbacks**: `WriteMemoryCallback()` called `repalloc()` without bounds, and once it hit `MaxAllocSize` an error raised from within the callback and leaked the handle. Both body and headers now use separate per-buffer size limits; oversized data is refused by returning a short count, causing libcurl to abort with `CURLE_WRITE_ERROR`.
+
+## Security
+
+* **Added USAGE privilege check on foreign servers**: The query functions (`nominatim_search`, `nominatim_lookup`, `nominatim_reverse`) looked up the server by name without verifying that the caller has `USAGE` on it. This bypassed the ACL checks that `CREATE FOREIGN TABLE` enforces, allowing any role to send requests through any server — including with credentials of a `PUBLIC` user mapping. `InitSession()` now checks `ACL_USAGE` and raises the standard "permission denied" error.
+
+## Improvements
+
+* **Made upgrade paths produce identical objects to fresh installs**: Upgrades from 1.x and 2.2 left `NominatimRecord`'s column order and `nominatim_fdw_version()`'s function properties different from a fresh install. Now consistent across all paths.
+* **Fixed query cancellation sensitivity**: The request and retry loop gave up on any `InterruptPending` flag, including non-cancellation interrupts like `pg_log_backend_memory_contexts()`, causing queries to fail when they should continue. Now checks `QueryCancelPending` and `ProcDiePending` explicitly.
+* **Removed always-on verbose curl logging**: `CURLOPT_VERBOSE` was on unconditionally, so every request was parsed for `DEBUG3`-level output and discarded. Now only enabled when `DEBUG3` would actually be logged.
+* **Removed reading of non-existent reverse parser fields**: `ParseNominatimReverseData()` read `class`, `type` and `importance` from `<result>`, which Nominatim's reverse endpoint never sends. Stopped reading them.
+* **Improved debug output**: DEBUG2 messages now log actual option values instead of the option names.
+* **Updated README**: Clarified libxml2 minimum version (2.6.0, not 2.5.0), fixed example parameters, documented `zoom` clamping, noted that `icon` is always `NULL` in reverse results.
+
 # 2.2
 Release date: **2026-09-10**
 
