@@ -1341,30 +1341,100 @@ xml_to_server(const xmlChar *val)
 }
 
 /*
- * xml_get_prop / xml_node_content
+ * xml_take_string
  * ----------
  *
- * Wrappers around xmlGetProp / xmlNodeGetContent that copy the result
- * into palloc'd memory, in the database encoding, and immediately free the
- * libxml2 heap string. Returns NULL when the attribute or content is absent.
+ * Converts a string allocated by libxml2 with xml_to_server() and frees it -
+ * also when the conversion raises an error, e.g. for a character the
+ * database encoding cannot represent. The string lives in libxml2's malloc
+ * heap, which no memory context cleans up: without the PG_TRY, every such
+ * error would leak it for the lifetime of the backend, and its size is
+ * whatever the server sent.
+ *
+ * Returns NULL for NULL input.
  */
 static char *
-xml_get_prop(xmlNodePtr node, const char *name)
+xml_take_string(xmlChar *val)
 {
-    xmlChar *val = xmlGetProp(node, (xmlChar *)name);
-    char *result = xml_to_server(val);
+    char *result = NULL;
+
+    PG_TRY();
+    {
+        result = xml_to_server(val);
+    }
+    PG_CATCH();
+    {
+        xmlFree(val);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
 
     xmlFree(val);
     return result;
 }
 
+/*
+ * xml_get_prop / xml_node_content
+ * ----------
+ *
+ * Wrappers around xmlGetProp / xmlNodeGetContent that copy the result
+ * into palloc'd memory, in the database encoding, and free the libxml2 heap
+ * string. Returns NULL when the attribute or content is absent.
+ */
+static char *
+xml_get_prop(xmlNodePtr node, const char *name)
+{
+    return xml_take_string(xmlGetProp(node, (xmlChar *)name));
+}
+
 static char *
 xml_node_content(xmlNodePtr node)
 {
-    xmlChar *val = xmlNodeGetContent(node);
-    char *result = xml_to_server(val);
+    return xml_take_string(xmlNodeGetContent(node));
+}
 
-    xmlFree(val);
+/*
+ * xml_dump_node
+ * ----------
+ *
+ * Serialises a node - the KML geometry inside <geokml> - into palloc'd
+ * memory, in the database encoding. The dump buffer is released on every
+ * path, including the errors raised when there is nothing to dump or the
+ * result cannot be converted, for the same reason as in xml_take_string().
+ *
+ * doc: the document the node belongs to
+ * node: the node to dump, may be NULL (an empty <geokml/>)
+ * url: the server's URL, for the error message
+ */
+static char *
+xml_dump_node(xmlDocPtr doc, xmlNodePtr node, const char *url)
+{
+    xmlBufferPtr buffer = xmlBufferCreate();
+    char *result = NULL;
+
+    if (!buffer)
+        ereport(ERROR,
+                (errcode(ERRCODE_OUT_OF_MEMORY),
+                 errmsg("out of memory")));
+
+    if (xmlNodeDump(buffer, doc, node, 0, 0) == -1)
+    {
+        xmlBufferFree(buffer);
+        elog(ERROR, "unable to dump XML node: '%s'", url);
+    }
+
+    PG_TRY();
+    {
+        result = xml_to_server(xmlBufferContent(buffer));
+    }
+    PG_CATCH();
+    {
+        xmlBufferFree(buffer);
+        PG_RE_THROW();
+    }
+    PG_END_TRY();
+
+    xmlBufferFree(buffer);
     return result;
 }
 
@@ -1881,17 +1951,7 @@ static void ParseNominatimReverseData(NominatimFDWState *state)
             }
         }
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"geokml") == 0)
-        {
-            int bytes;
-            xmlBufferPtr buffer = xmlBufferCreate();
-            bytes = xmlNodeDump(buffer, state->xmldoc, reversegeocode->children, 0, 0);
-
-            if (bytes == -1)
-                elog(ERROR, "unable to dump XML node: '%s'", state->url);
-
-            place->polygon = xml_to_server(buffer->content);
-            xmlBufferFree(buffer);
-        }
+            place->polygon = xml_dump_node(state->xmldoc, reversegeocode->children, state->url);
         else if (xmlStrcmp(reversegeocode->name, (xmlChar *)"entrances") == 0)
         {
             bool first_entrance = true;
@@ -2061,17 +2121,7 @@ static void ParseNominatimSearchData(NominatimFDWState *state)
                     }
                 }
                 else if (xmlStrcmp(places->name, (xmlChar *)"geokml") == 0)
-                {
-                    int bytes;
-                    xmlBufferPtr buffer = xmlBufferCreate();
-                    bytes = xmlNodeDump(buffer, state->xmldoc, places->children, 0, 0);
-
-                    if (bytes == -1)
-                        elog(ERROR, "unable to dump XML node: '%s'", state->url);
-
-                    place->polygon = xml_to_server(buffer->content);
-                    xmlBufferFree(buffer);
-                }
+                    place->polygon = xml_dump_node(state->xmldoc, places->children, state->url);
                 else if (xmlStrcmp(places->name, (xmlChar *)"entrances") == 0)
                 {
                     bool first_entrance = true;
