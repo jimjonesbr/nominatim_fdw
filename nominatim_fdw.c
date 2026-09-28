@@ -53,7 +53,7 @@
 #include "miscadmin.h"
 #include "utils/guc.h"
 
-#define FDW_VERSION "2.3-dev"
+#define FDW_VERSION "2.3"
 
 /*
  * Maximum number of bytes from an HTTP error response body to include in

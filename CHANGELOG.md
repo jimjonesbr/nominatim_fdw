@@ -1,5 +1,5 @@
 # 2.3
-Release date: **unreleased**
+Release date: **2026-09-28**
 
 ## Bug Fixes
 
@@ -30,7 +30,6 @@ Release date: **unreleased**
 * **The query functions require the `USAGE` privilege on the foreign server**: roles that used a server without it now get `permission denied for foreign server ...` (see *Security* below). Grant it where it is needed: `GRANT USAGE ON FOREIGN SERVER osm TO some_role;`.
 * **Invalid `polygon_threshold` values are rejected**: negative, `NaN` and infinite values now raise an error instead of being forwarded to the server.
 * **`zoom` values below `-1` now mean country level**: they are clamped to `0`, as the server does, instead of being dropped - which made the server fall back to building level (`18`).
-* **`make installcheck` runs only the tests that need no network**: the tests against the public Nominatim instance and through the Squid proxies are now opt-in, with `INCLUDE_EXTERNAL_TESTS=1`, `INCLUDE_LOCAL_TESTS=1` or `INCLUDE_ALL_TESTS=1`. `SKIP_PROXY_TESTS` is gone.
 
 ## Security
 

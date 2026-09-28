@@ -31,6 +31,37 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
 
 ## [Build and Install](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#build-and-install)
 
+### From package manager
+
+#### RHEL / CentOS / Fedora
+
+Add the PostgreSQL PGDG repository (replace `EL-10` with `EL-9`, `EL-8`, etc. for older RHEL versions):
+
+```bash
+sudo dnf install -y \
+  https://download.postgresql.org/pub/repos/yum/reporpms/EL-10-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+```
+
+Then install the package for your PostgreSQL version (replace `18` with your PostgreSQL major version):
+
+```bash
+sudo dnf install nominatim_fdw_18
+```
+
+After installation, create the extension in your database:
+
+```sql
+CREATE EXTENSION nominatim_fdw;
+```
+
+To install a specific version add the full version number in the `WITH VERSION` clause:
+
+```sql
+CREATE EXTENSION nominatim_fdw WITH VERSION '2.3';
+```
+
+### From source
+
 To compile the source code you need to ensure the [pg_config](https://www.postgresql.org/docs/current/app-pgconfig.html) executable is properly set when you run `make` - this executable is typically in your PostgreSQL installation's bin directory. After that, just run `make` in the root directory:
 
 ```bash
@@ -53,7 +84,7 @@ CREATE EXTENSION nominatim_fdw;
 To install a specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION nominatim_fdw WITH VERSION '2.2';
+CREATE EXTENSION nominatim_fdw WITH VERSION '2.3';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -80,7 +111,7 @@ ALTER EXTENSION nominatim_fdw UPDATE;
 To update to a specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION nominatim_fdw UPDATE TO '2.2';
+ALTER EXTENSION nominatim_fdw UPDATE TO '2.3';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#usage)
@@ -493,9 +524,9 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 
 ```sql
 SELECT nominatim_fdw_version();
-                                              nominatim_fdw_version                                               
-------------------------------------------------------------------------------------------------------------------
- nominatim_fdw 2.3-dev (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
+                                            nominatim_fdw_version                                             
+--------------------------------------------------------------------------------------------------------------
+ nominatim_fdw 2.3 (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
 (1 row)
 ```
 #### [nominatim_fdw_settings](#nominatim_fdw_settings)
@@ -510,7 +541,7 @@ A system view that provides detailed version information for `nominatim_fdw` and
 SELECT * FROM nominatim_fdw_settings; 
    component   |            version            
 ---------------+-------------------------------
- nominatim_fdw | 2.3-dev
+ nominatim_fdw | 2.3
  PostgreSQL    | 18.4 (Debian 18.4-1.pgdg13+1)
  libxml        | 2.9.14
  libcurl       | 8.14.1
@@ -519,7 +550,7 @@ SELECT * FROM nominatim_fdw_settings;
  libSSH        | libssh2/1.11.1
  nghttp2       | 1.64.0
  compiler      | gcc
- built         | 2026-09-27 12:54:34 UTC
+ built         | 2026-09-28 06:41:36 UTC
 (10 rows)
 ```
 
