@@ -181,6 +181,19 @@ struct MemoryStruct
     size_t size;
 };
 
+/*
+ * A libcurl easy handle and the header list it uses. Both are allocated by
+ * libcurl, outside any memory context, so ExecuteRequest() ties them to its
+ * memory context with a reset callback: an error raised anywhere while they
+ * are held then still releases them. See CurlRequestResetCallback().
+ */
+typedef struct CurlRequest
+{
+    CURL *curl;
+    struct curl_slist *headers;
+    MemoryContextCallback callback;
+} CurlRequest;
+
 static struct NominatimFDWOption valid_options[] =
     {
         /* Foreign Servers */
@@ -2349,6 +2362,53 @@ CURLDebugCallback(CURL *handle, curl_infotype type, char *data, size_t size, voi
 }
 
 /*
+ * CleanupCurlRequest
+ * ----------
+ *
+ * Releases the easy handle and the header list of a request. Safe to call
+ * more than once.
+ */
+static void
+CleanupCurlRequest(CurlRequest *request)
+{
+    if (request->curl)
+        curl_easy_cleanup(request->curl);
+    request->curl = NULL;
+
+    curl_slist_free_all(request->headers);
+    request->headers = NULL;
+}
+
+/*
+ * CurlRequestResetCallback
+ * ----------
+ *
+ * Memory context reset callback that releases a request the code did not get
+ * to release itself, because an error was raised in between: building the
+ * query string can fail, for instance on a parameter that is not valid in
+ * the database encoding. Without it, each such error leaked the easy handle
+ * for the lifetime of the backend.
+ *
+ * It runs while the error is cleaned up, long after ExecuteRequest()
+ * returned, so the handle must no longer write to that function's error
+ * buffer, and must not log through CURLDebugCallback() - a reset callback
+ * must not raise errors.
+ */
+static void
+CurlRequestResetCallback(void *arg)
+{
+    CurlRequest *request = (CurlRequest *)arg;
+
+    if (request->curl)
+    {
+        curl_easy_setopt(request->curl, CURLOPT_VERBOSE, 0L);
+        curl_easy_setopt(request->curl, CURLOPT_ERRORBUFFER, NULL);
+    }
+
+    CleanupCurlRequest(request);
+}
+
+/*
  * CURLProgressCallback
  * --------------------
  * Progress callback function for cURL requests. libcurl calls it regularly
@@ -2378,6 +2438,7 @@ static int CURLProgressCallback(void *clientp, curl_off_t dltotal, curl_off_t dl
 static int ExecuteRequest(NominatimFDWState *state)
 {
     CURL *curl;
+    CurlRequest *request;
     CURLcode res;
     long response_code = 0;
     StringInfoData query;
@@ -2388,7 +2449,6 @@ static int ExecuteRequest(NominatimFDWState *state)
     StringInfoData invalid_body;
     struct MemoryStruct chunk;
     struct MemoryStruct chunk_header;
-    struct curl_slist *headers = NULL;
 
     invalid_body.data = NULL;
 
@@ -2408,6 +2468,13 @@ static int ExecuteRequest(NominatimFDWState *state)
     elog(DEBUG2, "%s called", __func__);
 
     curl = curl_easy_init();
+
+    /* from here on, an error anywhere must not leak the handle */
+    request = (CurlRequest *)palloc0(sizeof(CurlRequest));
+    request->curl = curl;
+    request->callback.func = CurlRequestResetCallback;
+    request->callback.arg = request;
+    MemoryContextRegisterResetCallback(CurrentMemoryContext, &request->callback);
 
     /* the query string only; BuildRequestURL() joins it with the URL */
     initStringInfo(&query);
@@ -2530,7 +2597,7 @@ static int ExecuteRequest(NominatimFDWState *state)
 
         if (!request_url)
         {
-            curl_easy_cleanup(curl);
+            CleanupCurlRequest(request);
             ereport(ERROR,
                     (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
                      errmsg("invalid %s: '%s'", NOMINATIM_SERVER_OPTION_URL, state->url),
@@ -2656,9 +2723,9 @@ static int ExecuteRequest(NominatimFDWState *state)
                          pg_server_to_any(state->accept_language,
                                           strlen(state->accept_language),
                                           PG_UTF8));
-        headers = curl_slist_append(headers, accept_header.data);
+        request->headers = curl_slist_append(request->headers, accept_header.data);
         elog(DEBUG2, "  adding header: %s", accept_header.data);
-        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+        curl_easy_setopt(curl, CURLOPT_HTTPHEADER, request->headers);
 
         if (state->user && state->password)
 		{
@@ -2737,8 +2804,7 @@ static int ExecuteRequest(NominatimFDWState *state)
         }
         PG_CATCH();
         {
-            curl_slist_free_all(headers);
-            curl_easy_cleanup(curl);
+            CleanupCurlRequest(request);
             PG_RE_THROW();
         }
         PG_END_TRY();
@@ -2775,8 +2841,7 @@ static int ExecuteRequest(NominatimFDWState *state)
 
             pfree(chunk.memory);
             pfree(chunk_header.memory);
-            curl_slist_free_all(headers);
-            curl_easy_cleanup(curl);
+            CleanupCurlRequest(request);
 
             /*
              * Now that the easy handle is gone it is safe to act on a pending
@@ -2830,8 +2895,7 @@ static int ExecuteRequest(NominatimFDWState *state)
 
     pfree(chunk.memory);
     pfree(chunk_header.memory);
-    curl_slist_free_all(headers);
-    curl_easy_cleanup(curl);
+    CleanupCurlRequest(request);
 
     if (invalid_body.data)
         ereport(ERROR,
