@@ -42,10 +42,21 @@ CURL_CONFIG = curl-config
 XML2_CONFIG = xml2-config
 PG_CONFIG = pg_config
 
+# Build timestamp reported by nominatim_fdw_settings(). Package builds set
+# SOURCE_DATE_EPOCH, and honouring it in place of the wall clock is what keeps
+# the resulting binary reproducible.
+ifdef SOURCE_DATE_EPOCH
+  BUILD_DATE := $(shell date -u -d "@$(SOURCE_DATE_EPOCH)" +'%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || \
+                        date -u -r "$(SOURCE_DATE_EPOCH)" +'%Y-%m-%d %H:%M:%S UTC' 2>/dev/null || \
+                        echo "$(SOURCE_DATE_EPOCH)")
+else
+  BUILD_DATE := $(shell date -u +'%Y-%m-%d %H:%M:%S UTC')
+endif
+
 PG_CPPFLAGS += $(shell $(CURL_CONFIG) --cflags) \
 			   $(shell $(XML2_CONFIG) --cflags) \
 			   -DNOMINATIM_FDW_CC="\"$(CC)\"" \
-			   -DNOMINATIM_FDW_BUILD_DATE="\"$(shell date -u +'%Y-%m-%d %H:%M:%S UTC')\""
+			   -DNOMINATIM_FDW_BUILD_DATE="\"$(BUILD_DATE)\""
 
 LIBS += $(shell $(CURL_CONFIG) --libs) \
         $(shell $(XML2_CONFIG) --libs)
