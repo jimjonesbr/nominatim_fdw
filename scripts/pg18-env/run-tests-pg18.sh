@@ -17,7 +17,10 @@ podman restart $CONTAINER_NAME
 podman exec -itw /nominatim_fdw/ -u postgres $CONTAINER_NAME psql -d postgres \
   -c "DROP EXTENSION IF EXISTS nominatim_fdw CASCADE; CREATE EXTENSION nominatim_fdw"
 
-# SKIP_PROXY_TESTS=1 - skip proxy tests since we don't have a proxy set up in this environment
+# Tests that need a Nominatim server are opt-in (see the Makefile):
+# INCLUDE_EXTERNAL_TESTS=1 - tests against nominatim.openstreetmap.org
+# INCLUDE_LOCAL_TESTS=1    - tests through the Squid proxies deployed above
+# INCLUDE_ALL_TESTS=1      - all of the above
 
-podman exec -itw /nominatim_fdw/ $CONTAINER_NAME make PGUSER=postgres installcheck 
+podman exec -itw /nominatim_fdw/ $CONTAINER_NAME make PGUSER=postgres INCLUDE_ALL_TESTS=1 installcheck 
 echo -e "\n== Tests completed ==\n"

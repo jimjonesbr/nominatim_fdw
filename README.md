@@ -62,6 +62,12 @@ To run the predefined regression tests run `make installcheck` with the user `po
 $ make PGUSER=postgres installcheck
 ```
 
+By default this runs only the tests that need nothing but a PostgreSQL server. Tests that talk to a Nominatim server are opt-in: `INCLUDE_EXTERNAL_TESTS=1` adds those against the public [nominatim.openstreetmap.org](https://nominatim.openstreetmap.org), `INCLUDE_LOCAL_TESTS=1` those through the proxies deployed by `scripts/squid`, and `INCLUDE_ALL_TESTS=1` both:
+
+```bash
+$ make PGUSER=postgres INCLUDE_EXTERNAL_TESTS=1 installcheck
+```
+
 ## [Update](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#update)
 
 To update the extension's version you must first build and install the binaries and then run `ALTER EXTENSION`:
@@ -515,7 +521,6 @@ SELECT * FROM nominatim_fdw_settings;
  compiler      | gcc
  built         | 2026-09-27 12:54:34 UTC
 (10 rows)
-
 ```
 
 ## [Deploy with Docker](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#deploy-with-docker)

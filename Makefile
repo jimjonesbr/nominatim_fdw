@@ -11,9 +11,30 @@ DATA = nominatim_fdw--2.3.sql \
 	   nominatim_fdw--1.0--1.1.sql \
 	   nominatim_fdw--1.0.sql
 
-REGRESS = create-extension version upgrade create-user-mapping create-server permissions exceptions functions 
+REGRESS = create-extension version upgrade create-user-mapping create-server permissions exceptions
 
-ifndef SKIP_PROXY_TESTS
+#
+# The tests above need nothing but a PostgreSQL server, and are the ones that
+# run by default - package builds, for instance, have no network access. The
+# groups below need a Nominatim server to talk to, so they are opt-in:
+#
+#   make installcheck INCLUDE_EXTERNAL_TESTS=1  the public Nominatim instance,
+#                                               nominatim.openstreetmap.org
+#   make installcheck INCLUDE_LOCAL_TESTS=1     the Squid proxies deployed by
+#                                               scripts/squid, which forward to
+#                                               the public instance as well
+#   make installcheck INCLUDE_ALL_TESTS=1       all of the above
+#
+ifdef INCLUDE_ALL_TESTS
+  INCLUDE_EXTERNAL_TESTS = 1
+  INCLUDE_LOCAL_TESTS = 1
+endif
+
+ifdef INCLUDE_EXTERNAL_TESTS
+  REGRESS += functions
+endif
+
+ifdef INCLUDE_LOCAL_TESTS
   REGRESS += proxy http-auth
 endif
 
