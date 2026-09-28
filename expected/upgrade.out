@@ -112,3 +112,10 @@ WHERE attrelid = 'nominatimrecord'::regclass AND attnum > 0 AND NOT attisdropped
  osm_id,osm_type,ref,class,display_name,place_id,place_rank,address_rank,lon,lat,boundingbox,importance,icon,timestamp,attribution,querystring,polygon,exclude_place_ids,more_url,extratags,namedetails,addressdetails,entrances,type
 (1 row)
 
+ALTER EXTENSION nominatim_fdw UPDATE TO '2.4';
+SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';
+ extversion 
+------------
+ 2.4
+(1 row)
+

@@ -57,7 +57,7 @@ CREATE EXTENSION nominatim_fdw;
 To install a specific version add the full version number in the `WITH VERSION` clause:
 
 ```sql
-CREATE EXTENSION nominatim_fdw WITH VERSION '2.3';
+CREATE EXTENSION nominatim_fdw WITH VERSION '2.4';
 ```
 
 ### From source
@@ -84,7 +84,7 @@ CREATE EXTENSION nominatim_fdw;
 To install a specific version add the full version number in the `WITH VERSION` clause
 
 ```sql
-CREATE EXTENSION nominatim_fdw WITH VERSION '2.3';
+CREATE EXTENSION nominatim_fdw WITH VERSION '2.4';
 ```
 
 To run the predefined regression tests run `make installcheck` with the user `postgres`:
@@ -111,7 +111,7 @@ ALTER EXTENSION nominatim_fdw UPDATE;
 To update to a specific version use `UPDATE TO` and the full version number
 
 ```sql
-ALTER EXTENSION nominatim_fdw UPDATE TO '2.3';
+ALTER EXTENSION nominatim_fdw UPDATE TO '2.4';
 ```
 
 ## [Usage](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#usage)
@@ -526,7 +526,7 @@ Shows the version of the installed `nominatim_fdw` and its main libraries.
 SELECT nominatim_fdw_version();
                                             nominatim_fdw_version                                             
 --------------------------------------------------------------------------------------------------------------
- nominatim_fdw 2.3 (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
+ nominatim_fdw 2.4-dev (PostgreSQL 18.4 (Debian 18.4-1.pgdg13+1), compiled by gcc, libxml 2.9.14, libcurl 8.14.1)
 (1 row)
 ```
 #### [nominatim_fdw_settings](#nominatim_fdw_settings)
@@ -541,7 +541,7 @@ A system view that provides detailed version information for `nominatim_fdw` and
 SELECT * FROM nominatim_fdw_settings; 
    component   |            version            
 ---------------+-------------------------------
- nominatim_fdw | 2.3
+ nominatim_fdw | 2.4-dev
  PostgreSQL    | 18.4 (Debian 18.4-1.pgdg13+1)
  libxml        | 2.9.14
  libcurl       | 8.14.1

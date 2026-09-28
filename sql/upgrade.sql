@@ -63,3 +63,6 @@ WHERE proname = 'nominatim_fdw_version';
 SELECT string_agg(attname, ',' ORDER BY attnum)
 FROM pg_attribute
 WHERE attrelid = 'nominatimrecord'::regclass AND attnum > 0 AND NOT attisdropped;
+
+ALTER EXTENSION nominatim_fdw UPDATE TO '2.4';
+SELECT extversion FROM pg_extension WHERE extname = 'nominatim_fdw';

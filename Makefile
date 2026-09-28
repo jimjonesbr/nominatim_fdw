@@ -1,7 +1,8 @@
 MODULE_big = nominatim_fdw
 OBJS = nominatim_fdw.o
 EXTENSION = nominatim_fdw
-DATA = nominatim_fdw--2.3.sql \
+DATA = nominatim_fdw--2.4.sql \
+       nominatim_fdw--2.3--2.4.sql \
        nominatim_fdw--2.2--2.3.sql \
 	   nominatim_fdw--2.1--2.2.sql \
 	   nominatim_fdw--2.0--2.1.sql \
