@@ -1,3 +1,6 @@
+# 2.4
+Release date: **unreleased**
+
 # 2.3
 Release date: **2026-09-28**
 

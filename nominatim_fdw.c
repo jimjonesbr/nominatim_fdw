@@ -73,11 +73,14 @@
 #endif
 
 /*
- * Upper bound, in seconds, for the delay a server may request through the
- * "Retry-After" response header. Keeps a misbehaving or hostile endpoint
- * from parking a backend for an arbitrary amount of time.
+ * Waits between retries, in seconds. The wait starts at
+ * NOMINATIM_DEFAULT_RETRY_AFTER and doubles with every attempt, unless the
+ * server asks for a different delay through the "Retry-After" header.
+ * NOMINATIM_MAX_RETRY_AFTER caps either, so that a misbehaving or hostile
+ * endpoint cannot park a backend for an arbitrary amount of time.
  */
-#define NOMINATIM_MAX_RETRY_AFTER 30
+#define NOMINATIM_DEFAULT_RETRY_AFTER 5
+#define NOMINATIM_MAX_RETRY_AFTER 300
 
 /*
  * Upper bound, in bytes, for any buffer a response is collected in: what a
@@ -2825,7 +2828,13 @@ static int ExecuteRequest(NominatimFDWState *state)
                  RequestFailed(res, response_code) && i <= state->max_retries;
                  i++)
             {
-                long delay = 1; /* just being polite to the public server */
+                /*
+                 * A failure that goes away on its own, e.g. an overloaded or
+                 * briefly unreachable server, usually needs more than a few
+                 * seconds, so the wait grows with every attempt.
+                 */
+                long delay = Min(NOMINATIM_DEFAULT_RETRY_AFTER << Min(i - 1, 16),
+                                 NOMINATIM_MAX_RETRY_AFTER);
 
                 /* an oversized response would be just as large the next time */
                 if (!IsRetryable(res, response_code) ||
@@ -2836,17 +2845,17 @@ static int ExecuteRequest(NominatimFDWState *state)
                 elog(DEBUG1, "the server returned HTTP code %ld", response_code);
 
                 /*
-                 * A 429 answer usually carries a Retry-After header saying how
-                 * long to wait. Honouring it is the difference between backing
-                 * off and hammering a rate-limited server.
+                 * A 429 or 503 answer usually carries a Retry-After header
+                 * saying how long to wait, which is honoured instead - but
+                 * never less than a second, as the public server asks.
                  */
-                if (response_code == 429)
+                if (response_code == 429 || response_code == 503)
                 {
                     long retry_after = ParseRetryAfter(chunk_header.memory);
 
                     if (retry_after >= 0)
                     {
-                        delay = Min(retry_after, NOMINATIM_MAX_RETRY_AFTER);
+                        delay = Min(Max(retry_after, 1), NOMINATIM_MAX_RETRY_AFTER);
                         elog(DEBUG1, "server asked to retry after %ld seconds, waiting %ld",
                              retry_after, delay);
                     }
