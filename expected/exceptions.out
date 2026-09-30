@@ -150,8 +150,8 @@ OPTIONS (url 'http://server.invalid',
          max_connect_retry '2',
          connect_timeout '15');
 SELECT * FROM nominatim_search(server_name => 'srv', q => 'foo');
-WARNING:  request to 'http://server.invalid' failed (1/2)
-WARNING:  request to 'http://server.invalid' failed (2/2)
+WARNING:  request to 'http://server.invalid' failed, retrying in 5 seconds (1/2)
+WARNING:  request to 'http://server.invalid' failed, retrying in 10 seconds (2/2)
 ERROR:  Could not resolve host: server.invalid
 DETAIL:  URL: "http://server.invalid/search?q=foo&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0"
 HINT:  Check your request parameters and credentials, if applicable, and try again.

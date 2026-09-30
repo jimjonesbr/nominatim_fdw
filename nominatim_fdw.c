@@ -2835,13 +2835,18 @@ static int ExecuteRequest(NominatimFDWState *state)
                  */
                 long delay = Min(NOMINATIM_DEFAULT_RETRY_AFTER << Min(i - 1, 16),
                                  NOMINATIM_MAX_RETRY_AFTER);
+                long connect_code = 0;
 
                 /* an oversized response would be just as large the next time */
                 if (!IsRetryable(res, response_code) ||
                     chunk.size_exceeded || chunk_header.size_exceeded)
                     break;
 
-                elog(WARNING, "request to '%s' failed (%ld/%ld)", state->url, i, state->max_retries);
+                /* a proxy refusing the tunnel, e.g. 407, would refuse it again */
+                curl_easy_getinfo(curl, CURLINFO_HTTP_CONNECTCODE, &connect_code);
+                if (connect_code >= 400 && connect_code < 500)
+                    break;
+
                 elog(DEBUG1, "the server returned HTTP code %ld", response_code);
 
                 /*
@@ -2860,6 +2865,9 @@ static int ExecuteRequest(NominatimFDWState *state)
                              retry_after, delay);
                     }
                 }
+
+                elog(WARNING, "request to '%s' failed, retrying in %ld seconds (%ld/%ld)",
+                     state->url, delay, i, state->max_retries);
 
                 /* discard whatever the failed attempt left behind before retrying */
                 chunk.size = 0;
