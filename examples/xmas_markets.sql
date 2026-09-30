@@ -2,13 +2,15 @@
  * nominatim_search() example - Geolocates addresses of Christmas Markets in Germany.
  * Requires PostGIS.
  */
- 
-DROP SERVER IF EXISTS osm;
-DROP TABLE IF EXISTS xmas_market;
 
-CREATE SERVER osm 
-FOREIGN DATA WRAPPER nominatim_fdw 
+CREATE EXTENSION IF NOT EXISTS nominatim_fdw;
+CREATE EXTENSION IF NOT EXISTS postgis;
+
+CREATE SERVER IF NOT EXISTS osm
+FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'https://nominatim.openstreetmap.org');
+
+DROP TABLE IF EXISTS xmas_market;
 
 CREATE TABLE xmas_market(
   id int GENERATED ALWAYS AS IDENTITY,
@@ -49,10 +51,10 @@ BEGIN
           q => rec.address);
    IF g IS NOT NULL THEN
      UPDATE xmas_market SET geom = g WHERE id = rec.id;
-	 EXECUTE pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
-   END IF;    
+   END IF;
+   PERFORM pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
   END LOOP;
 END; $$;
 
-SELECT * FROM xmas_market;
+SELECT name, address, ST_AsText(geom) AS geom FROM xmas_market;
 

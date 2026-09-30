@@ -94,7 +94,7 @@ VALUES
 (E'Iran', 'http://www.wikidata.org/entity/Q794',E'Tehran', ST_MakePoint(51.42045,35.6931)),
 (E'Iraq', 'http://www.wikidata.org/entity/Q796',E'Baghdad Governorate', ST_MakePoint(44.3447201,33.3151544)),
 (E'Israel', 'http://www.wikidata.org/entity/Q801',E'Tel Aviv', ST_MakePoint(34.788611111,32.061666666)),
-(E'Italy', 'http://www.wikidata.org/entity/Q38',E'', ST_MakePoint(12.321066661,45.437650663)),
+(E'Italy', 'http://www.wikidata.org/entity/Q38',E'Venice', ST_MakePoint(12.321066661,45.437650663)),
 (E'Italy', 'http://www.wikidata.org/entity/Q38',E'Rome', ST_MakePoint(12.485141,41.920502)),
 (E'Italy', 'http://www.wikidata.org/entity/Q38',E'Rome', ST_MakePoint(12.503275,41.905117)),
 (E'Ivory Coast', 'http://www.wikidata.org/entity/Q1008',E'Abidjan', ST_MakePoint(-4.005697222,5.328477777)),
@@ -141,7 +141,7 @@ VALUES
 (E'Pakistan', 'http://www.wikidata.org/entity/Q843',E'Islamabad', ST_MakePoint(73.1041,33.724)),
 (E'Panama', 'http://www.wikidata.org/entity/Q804',E'Panama City', ST_MakePoint(-79.52015,8.9804764)),
 (E'Paraguay', 'http://www.wikidata.org/entity/Q733',E'Asunción', ST_MakePoint(-57.56267,-25.28452)),
-(E'People\s Republic of China', 'http://www.wikidata.org/entity/Q148',E'Beijing', ST_MakePoint(116.45166667,39.94166667)),
+(E'People\'s Republic of China', 'http://www.wikidata.org/entity/Q148',E'Beijing', ST_MakePoint(116.45166667,39.94166667)),
 (E'People\'s Republic of China', 'http://www.wikidata.org/entity/Q148',E'Hong Kong', ST_MakePoint(114.165416,22.278648)),
 (E'People\'s Republic of China', 'http://www.wikidata.org/entity/Q148',E'Shanghai', ST_MakePoint(121.442916,31.209114)),
 (E'Peru', 'http://www.wikidata.org/entity/Q419',E'San Isidro', ST_MakePoint(-77.0219724,-12.0959214)),
@@ -205,7 +205,7 @@ BEGIN
     SELECT * FROM public.german_embassy
   LOOP
    RAISE NOTICE 'Resolving coordinates "%" (%) ...',ST_AsLatLonText(rec.geom), rec.country;
-   SELECT result INTO addr 
+   SELECT display_name INTO addr 
    FROM nominatim_reverse(
           server_name => 'osm', 
 					lon => ST_X(rec.geom), 
@@ -214,16 +214,16 @@ BEGIN
      UPDATE german_embassy 
 	 SET address = addr 
 	 WHERE id = rec.id;
-	 EXECUTE pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
-   END IF;    
+   END IF;
+   PERFORM pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
   END LOOP;
 END; $$;
 
 /*
- * This uses the function nominatim_search() to retrieve coordiantes from the addresses
- * we retrieved using nomimatim_reverse(). Since we already have the original coordinates 
- * in the table, we can check if the coordinates retrieved match the orginal ones and 
- * caculate their distance in case they differ. The distances are caculated in metres and 
+ * This uses the function nominatim_search() to retrieve coordinates from the addresses
+ * we retrieved using nominatim_reverse(). Since we already have the original coordinates 
+ * in the table, we can check if the coordinates retrieved match the original ones and 
+ * calculate their distance in case they differ. The distances are calculated in metres and 
  * are stored in the column 'distance'.
  */
 DO $$
@@ -234,7 +234,8 @@ BEGIN
   FOR rec IN
     SELECT * FROM public.german_embassy
   LOOP
-   RAISE NOTICE 'Resolving addresses "%" ...', rec.address;
+   CONTINUE WHEN rec.address IS NULL; -- the reverse lookup found nothing
+   RAISE NOTICE 'Resolving address "%" ...', rec.address;
    SELECT ST_MakePoint(lon,lat) INTO g
    FROM nominatim_search(
           server_name => 'osm', 
@@ -242,8 +243,8 @@ BEGIN
    UPDATE german_embassy 
    SET distance = ST_Distance(g::geography,rec.geom::geography) 
    WHERE id = rec.id;   
-   EXECUTE pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
+   PERFORM pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
   END LOOP;
 END; $$;
 
-SELECT * FROM german_embassy;
+SELECT country, city, address, round(distance) AS distance FROM german_embassy;
