@@ -1,6 +1,16 @@
 # 2.4
 Release date: **unreleased**
 
+## Bug Fixes
+
+* **Fixed the build with libcurl older than 7.66**: `nghttp2_version` is only read when libcurl provides it (e.g. not on RHEL / Rocky Linux 8).
+* **Fixed retries of a proxy's refusal to open the tunnel**: a 4xx answer to `CONNECT` (e.g. a wrong proxy password) is now reported immediately instead of being retried.
+* **Fixed a cancel during the retry wait being reported as an invalid response**: it is now reported as a cancellation.
+
+## Improvements
+
+* **Longer waits between retries**: retries now back off exponentially (5, 10, 20, ... seconds, capped at 5 minutes) instead of waiting a fixed second. `Retry-After` is honoured on 503 as well as 429, and never for less than a second. The retry warning shows how long the next wait is.
+
 # 2.3
 Release date: **2026-09-28**
 
