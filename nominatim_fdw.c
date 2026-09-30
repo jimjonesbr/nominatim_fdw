@@ -2874,13 +2874,17 @@ static int ExecuteRequest(NominatimFDWState *state)
                 chunk.memory[0] = '\0';
                 chunk_header.size = 0;
                 chunk_header.memory[0] = '\0';
-                response_code = 0;
 
                 InterruptibleSleep(delay);
 
+                /*
+                 * Keep the failed status until here: a cancelled wait must
+                 * leave as a failure, which is where the interrupt is served.
+                 */
                 if (RequestCancelled())
                     break;
 
+                response_code = 0;
                 res = curl_easy_perform(curl);
                 if (res == CURLE_OK)
                     curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
