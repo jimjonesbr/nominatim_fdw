@@ -580,6 +580,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
+    char *language;
     char *email;
 
     if (SRF_IS_FIRSTCALL())
@@ -590,12 +591,10 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         funcctx = SRF_FIRSTCALL_INIT();
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        {
-            char *language = text_to_cstring(language_text);
+        language = text_to_cstring(language_text);
 
-            if (language[0] != '\0')
-                state->accept_language = language;
-        }
+        if (language[0] != '\0')
+            state->accept_language = language;
 
         state->lon = lon;
         state->lat = lat;
@@ -762,6 +761,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
+    char *language;
     char *email;
     NominatimFDWState *state;
 
@@ -773,12 +773,10 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         funcctx = SRF_FIRSTCALL_INIT();
         oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
 
-        {
-            char *language = text_to_cstring(language_text);
+        language = text_to_cstring(language_text);
 
-            if (language[0] != '\0')
-                state->accept_language = language;
-        }
+        if (language[0] != '\0')
+            state->accept_language = language;
 
         state->query = text_to_cstring(query_text);
         state->amenity = text_to_cstring(amenity_text);
@@ -937,6 +935,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
+    char *language;
     char *email;
     NominatimFDWState *state;
 
@@ -961,12 +960,10 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
         state->polygon_type = text_to_cstring(polygon_text);
         state->entrances = entrances;
 
-        {
-            char *language = text_to_cstring(language_text);
+        language = text_to_cstring(language_text);
 
-            if (language[0] != '\0')
-                state->accept_language = language;
-        }
+        if (language[0] != '\0')
+            state->accept_language = language;
 
         state->polygon_threshold = polygon_threshold;
         CheckPolygonThreshold(state->polygon_threshold);
