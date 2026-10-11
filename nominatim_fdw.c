@@ -110,6 +110,7 @@
 #define NOMINATIM_SERVER_OPTION_HTTP_PROXY "http_proxy"
 #define NOMINATIM_SERVER_OPTION_LANGUAGE "accept_language"
 #define NOMINATIM_SERVER_OPTION_MAX_RESPONSE_SIZE "max_response_size"
+#define NOMINATIM_SERVER_OPTION_EMAIL "email"
 #define NOMINATIM_USERMAPPING_OPTION_PROXYUSER "proxy_user"
 #define NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD "proxy_password"
 #define NOMINATIM_USERMAPPING_OPTION_USER "user"
@@ -233,6 +234,7 @@ static struct NominatimFDWOption valid_options[] =
         {NOMINATIM_SERVER_OPTION_MAXREDIRECT, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_LANGUAGE, ForeignServerRelationId, false, false},
         {NOMINATIM_SERVER_OPTION_MAX_RESPONSE_SIZE, ForeignServerRelationId, false, false},
+        {NOMINATIM_SERVER_OPTION_EMAIL, ForeignServerRelationId, false, false},
         /* User Mapping */
         {NOMINATIM_USERMAPPING_OPTION_PROXYUSER, UserMappingRelationId, false, false},
         {NOMINATIM_USERMAPPING_OPTION_PROXYPASSWORD, UserMappingRelationId, false, false},
@@ -280,6 +282,7 @@ static bool IsPolygonTypeSupported(char *polygon_type);
 static bool IsLayerValid(char *layer);
 static bool IsFeatureTypeValid(char *layer);
 static void CheckAcceptLanguage(const char *value);
+static void CheckEmail(const char *value);
 static void CheckPolygonThreshold(float8 polygon_threshold);
 void _PG_init(void);
 
@@ -423,6 +426,9 @@ Datum nominatim_fdw_validator(PG_FUNCTION_ARGS)
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
                     CheckAcceptLanguage(defGetString(def));
+
+                if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_EMAIL) == 0)
+                    CheckEmail(defGetString(def));
 
                 if (strcmp(opt->optname, NOMINATIM_SERVER_OPTION_CONNECTTIMEOUT) == 0)
                 {
@@ -574,6 +580,7 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
+    char *email;
 
     if (SRF_IS_FIRSTCALL())
     {
@@ -601,7 +608,13 @@ Datum nominatim_fdw_reverse(PG_FUNCTION_ARGS)
         state->entrances = entrances;
         state->polygon_threshold = polygon_threshold;
         CheckPolygonThreshold(state->polygon_threshold);
-        state->email = text_to_cstring(email_text);
+
+        /* a non-empty email argument overrides the server option */
+        email = text_to_cstring(email_text);
+
+        if (email[0] != '\0')
+            state->email = email;
+
         state->request_type = NOMINATIM_REQUEST_REVERSE;
 
         if (state->layer && !IsLayerValid(state->layer))
@@ -749,6 +762,7 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
+    char *email;
     NominatimFDWState *state;
 
     if (SRF_IS_FIRSTCALL())
@@ -783,7 +797,13 @@ Datum nominatim_fdw_search(PG_FUNCTION_ARGS)
         state->bounded = bounded;
         state->polygon_threshold = polygon_threshold;
         CheckPolygonThreshold(state->polygon_threshold);
-        state->email = text_to_cstring(email_text);
+
+        /* a non-empty email argument overrides the server option */
+        email = text_to_cstring(email_text);
+
+        if (email[0] != '\0')
+            state->email = email;
+
         state->dedupe = dedupe;
         state->extratags = extratags;
         state->addressdetails = addressdetails;
@@ -917,6 +937,7 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
 
     FuncCallContext *funcctx;
     TupleDesc tupdesc;
+    char *email;
     NominatimFDWState *state;
 
     if (SRF_IS_FIRSTCALL())
@@ -949,7 +970,13 @@ Datum nominatim_fdw_lookup(PG_FUNCTION_ARGS)
 
         state->polygon_threshold = polygon_threshold;
         CheckPolygonThreshold(state->polygon_threshold);
-        state->email = text_to_cstring(email_text);
+
+        /* a non-empty email argument overrides the server option */
+        email = text_to_cstring(email_text);
+
+        if (email[0] != '\0')
+            state->email = email;
+
         state->request_type = NOMINATIM_REQUEST_LOOKUP;
 
         if (!IsPolygonTypeSupported(state->polygon_type))
@@ -1341,6 +1368,9 @@ static NominatimFDWState *InitSession(const char *srvname)
 
         if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_LANGUAGE) == 0)
             state->accept_language = defGetString(def);
+
+        if (strcmp(def->defname, NOMINATIM_SERVER_OPTION_EMAIL) == 0)
+            state->email = defGetString(def);
     }
 
     return state;
@@ -3282,6 +3312,29 @@ CheckAcceptLanguage(const char *value)
                      errmsg("invalid %s: control characters are not allowed",
                             NOMINATIM_SERVER_OPTION_LANGUAGE)));
     }
+}
+
+/*
+ * CheckEmail
+ * ----------
+ *
+ * The email server option is sent as the "email" parameter of every request,
+ * URL-encoded like any other parameter. The check only catches obvious
+ * mistakes - an address needs an '@' with something on both sides - since
+ * anything stricter would reject valid, e.g. internationalized, addresses.
+ *
+ * value: email as given in the server option
+ */
+static void
+CheckEmail(const char *value)
+{
+    const char *at = strchr(value, '@');
+
+    if (!at || at == value || at[1] == '\0')
+        ereport(ERROR,
+                (errcode(ERRCODE_FDW_INVALID_ATTRIBUTE_VALUE),
+                 errmsg("invalid %s: '%s'", NOMINATIM_SERVER_OPTION_EMAIL, value),
+                 errdetail("An e-mail address consists of a local part, '@' and a domain.")));
 }
 
 /*

@@ -143,6 +143,7 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 | `max_connect_redirect`         | optional            | Limit of how many times URL redirection may follow (default `1`). Set it to `0` to refuse redirects altogether - a redirected request then fails instead of being followed.
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`).
 | `max_response_size` | optional | Maximum size in bytes of a response body (default `0` = unlimited). A larger response is aborted as soon as it exceeds the limit, and the query fails with an error. Use it to protect against unexpectedly large answers - large polygons, for instance - from untrusted or misbehaving endpoints. Independently of this option, a response can never be larger than 1 GB, the most PostgreSQL can hold in a single buffer.
+| `email` | optional | E-mail address that identifies the requests to the Nominatim server, as the [usage policy](https://operations.osmfoundation.org/policies/nominatim/) of the public server asks of heavier users. It is sent as the `email` parameter of every request, unless a function call passes its own `email`. It needs an `@` with something on both sides. Prefer a role address such as `geocoding@example.com` over a personal one: the server's operator and any proxy in between can see it.
 
 Using a `SERVER` through the `nominatim_fdw` functions requires the `USAGE` privilege on it, just like creating a foreign table on it would. The owner of the server can grant it to other roles:
 
@@ -241,7 +242,7 @@ The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows 
 | `viewbox` | optional | bounding box as in `<x1>,<y1>,<x2>,<y2>` (default *unset*) |
 | `bounded` | optional | When set to `true`, restrict the results to items within the `viewbox` (requires `viewbox` to be set). (default `false`) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
-| `email` | optional | valid email address (default *unset*) |
+| `email` | optional | e-mail address identifying the request. It overrides the server's `email` option (default *unset*) |
 | `dedupe` | optional | discards duplicated entries (default `true`) |
 | `limit_result` | optional | limits the maximum number of returned results. `0` leaves it to the server, which returns up to `10` results; the server never returns more than `40`. (default `0`) |
 | `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
@@ -366,7 +367,7 @@ type              | theatre
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
-| `email` | optional | valid email address (default *unset*) |
+| `email` | optional | e-mail address identifying the request. It overrides the server's `email` option (default *unset*) |
 
 ----------------------
 **Usage**
@@ -451,7 +452,7 @@ The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows 
 | `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
 | `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
-| `email` | optional | valid email address (default *unset*) |
+| `email` | optional | e-mail address identifying the request. It overrides the server's `email` option (default *unset*) |
 
 **Usage**
 

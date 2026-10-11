@@ -12,7 +12,7 @@ DATA = nominatim_fdw--2.4.sql \
 	   nominatim_fdw--1.0--1.1.sql \
 	   nominatim_fdw--1.0.sql
 
-REGRESS = create-extension version upgrade create-user-mapping create-server permissions exceptions
+REGRESS = create-extension version upgrade create-user-mapping create-server permissions exceptions email
 
 #
 # The tests above need nothing but a PostgreSQL server, and are the ones that

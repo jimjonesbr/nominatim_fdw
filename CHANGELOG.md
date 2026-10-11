@@ -7,6 +7,10 @@ Release date: **unreleased**
 * **Fixed retries of a proxy's refusal to open the tunnel**: a 4xx answer to `CONNECT` (e.g. a wrong proxy password) is now reported immediately instead of being retried.
 * **Fixed a cancel during the retry wait being reported as an invalid response**: it is now reported as a cancellation.
 
+## Enhancements
+
+* **Added `email` server option**: an e-mail address that identifies the requests, as the public server's usage policy asks of heavier users. It is sent as the `email` parameter of every request, unless a function call passes its own.
+
 ## Improvements
 
 * **Longer waits between retries**: retries now back off exponentially (5, 10, 20, ... seconds, capped at 5 minutes) instead of waiting a fixed second. `Retry-After` is honoured on 503 as well as 429, and never for less than a second. The retry warning shows how long the next wait is.
