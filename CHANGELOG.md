@@ -11,6 +11,10 @@ Release date: **unreleased**
 
 * **Added `email` server option**: an e-mail address that identifies the requests, as the public server's usage policy asks of heavier users. It is sent as the `email` parameter of every request, unless a function call passes its own.
 
+## Breaking changes
+
+* **New `User-Agent`**: requests now identify themselves as `nominatim_fdw/<version> (+https://github.com/jimjonesbr/nominatim_fdw)`. The previous `User-Agent` disclosed the exact versions of PostgreSQL, libxml2, libcurl, the TLS library and others to every Nominatim server and proxy on the way, telling them which known vulnerabilities to try. `nominatim_fdw_settings` still reports those versions locally. Servers or proxies that filter on the old `User-Agent` need to be adjusted.
+
 ## Improvements
 
 * **Longer waits between retries**: retries now back off exponentially (5, 10, 20, ... seconds, capped at 5 minutes) instead of waiting a fixed second. `Retry-After` is honoured on 503 as well as 429, and never for less than a second. The retry warning shows how long the next wait is.

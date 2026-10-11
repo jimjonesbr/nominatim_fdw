@@ -54,6 +54,7 @@
 #include "utils/guc.h"
 
 #define FDW_VERSION "2.4-dev"
+#define FDW_URL "https://github.com/jimjonesbr/nominatim_fdw"
 
 /*
  * Maximum number of bytes from an HTTP error response body to include in
@@ -2806,8 +2807,11 @@ static int ExecuteRequest(NominatimFDWState *state)
 		curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, CURLProgressCallback);
 		curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
 
+        /*
+         * The User-Agent names the wrapper and where to find it.
+         */
         initStringInfo(&user_agent);
-        appendStringInfo(&user_agent, "PostgreSQL/%s nominatim_fdw/%s libxml2/%s %s", PG_VERSION, FDW_VERSION, LIBXML_DOTTED_VERSION, curl_version());
+        appendStringInfo(&user_agent, "nominatim_fdw/%s (+%s)", FDW_VERSION, FDW_URL);
 
         elog(DEBUG2, "%s: \"Agent: %s\"", __func__, user_agent.data);
 
