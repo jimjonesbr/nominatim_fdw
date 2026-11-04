@@ -4,8 +4,8 @@ Release date: **unreleased**
 ## Bug Fixes
 
 * **Fixed the build with libcurl older than 7.66**: `nghttp2_version` is only read when libcurl provides it (e.g. not on RHEL / Rocky Linux 8).
-* **Fixed retries of a proxy's refusal to open the tunnel**: a 4xx answer to `CONNECT` (e.g. a wrong proxy password) is now reported immediately instead of being retried.
-* **Fixed a cancel during the retry wait being reported as an invalid response**: it is now reported as a cancellation.
+* **Fixed retrying when a proxy refuses to open the tunnel**: a 4xx response to `CONNECT` (e.g. a wrong proxy password) is now reported immediately instead of being retried.
+* **Fixed a cancellation during the retry wait being reported as an invalid response**: it is now reported as a cancellation.
 
 ## Enhancements
 
@@ -13,11 +13,11 @@ Release date: **unreleased**
 
 ## Breaking changes
 
-* **New `User-Agent`**: requests now identify themselves as `nominatim_fdw/<version> (+https://github.com/jimjonesbr/nominatim_fdw)`. The previous `User-Agent` disclosed the exact versions of PostgreSQL, libxml2, libcurl, the TLS library and others to every Nominatim server and proxy on the way, telling them which known vulnerabilities to try. `nominatim_fdw_settings` still reports those versions locally. Servers or proxies that filter on the old `User-Agent` need to be adjusted.
+* **New `User-Agent`**: requests now identify themselves as `nominatim_fdw/<version> (+https://github.com/jimjonesbr/nominatim_fdw)`. The previous `User-Agent` disclosed the exact versions of PostgreSQL, libxml2, libcurl, the TLS library and others to every Nominatim server and proxy along the way, telling them which known vulnerabilities to try. `nominatim_fdw_settings` still reports those versions locally. Servers or proxies that filter on the old `User-Agent` need to be adjusted.
 
 ## Improvements
 
-* **Longer waits between retries**: retries now back off exponentially (5, 10, 20, ... seconds, capped at 5 minutes) instead of waiting a fixed second. `Retry-After` is honoured on 503 as well as 429, and never for less than a second. The retry warning shows how long the next wait is.
+* **Longer waits between retries**: retries now back off exponentially (5, 10, 20, ... seconds, capped at 5 minutes) instead of a fixed one-second wait. `Retry-After` is honoured on 503 as well as 429, and the wait is never shorter than one second. The retry warning shows how long the next wait is.
 
 # 2.3
 Release date: **2026-09-28**
@@ -25,20 +25,20 @@ Release date: **2026-09-28**
 ## Bug Fixes
 
 * **Fixed header callback reading past the provided buffer**: `HeaderCallbackFunction()` logged each header with `"%s"`, reading until a NUL byte and ignoring the length libcurl provided. Now uses `"%.*s"` to print exactly the bytes handed over.
-* **Fixed curl handle leaks on errors during request setup**: Handle creation was not wrapped in `PG_TRY`, so errors raised during parameter conversion or header construction bypassed `curl_easy_cleanup()`. Handle is now tied to the current memory context with a reset callback, releasing it on any error path.
-* **Fixed libxml2 string leaks on encoding conversion errors**: `xml_get_prop()` and `xml_node_content()` converted strings before freeing them, so encoding errors raised before `xmlFree()` was called, leaking the libxml2-heap string. Both now convert and free on all paths, including error paths.
+* **Fixed curl handle leaks on errors during request setup**: Handle creation was not wrapped in `PG_TRY`, so errors raised during parameter conversion or header construction bypassed `curl_easy_cleanup()`. The handle is now tied to the current memory context with a reset callback, releasing it on any error path.
+* **Fixed libxml2 string leaks on encoding conversion errors**: `xml_get_prop()` and `xml_node_content()` converted strings before freeing them, so an encoding error was raised before `xmlFree()` was called, leaking the libxml2-heap string. Both now convert and free on all paths, including error paths.
 * **Fixed entrances losing their tags**: The parser read `<entrance>` attributes but ignored child `<tag>` elements. Tags are now collected into an "extratags" object per entrance.
 * **Fixed control bytes in error messages**: Error bodies containing NUL or control bytes were either cut at the first NUL or included raw in the log. Bodies are now sanitized byte-by-byte, with multi-byte UTF-8 sequences kept intact and non-printable bytes shown as `?`.
-* **Fixed acceptance of non-Nominatim responses**: HTTP 200 responses were parsed without checking the root element, so a misconfigured endpoint returning JSON, empty body, or HTML went silently undetected. Parsers now validate root elements and report unexpected content.
+* **Fixed acceptance of non-Nominatim responses**: HTTP 200 responses were parsed without checking the root element, so a misconfigured endpoint returning JSON, an empty body, or HTML went undetected. Parsers now validate root elements and report unexpected content.
 * **Fixed `polygon_threshold` losing precision and accepting invalid values**: Formatted with `"%f"` (six decimal places), it was rounded; `NaN`, infinity and negative values were forwarded as-is. Now formatted with `"%.15g"` and validated to reject non-finite and negative values.
 * **Fixed `addressdetails=0` not being sent for `/reverse` and `/lookup`**: These endpoints default to `addressdetails=1`, so `nominatim_reverse(addressdetails => false)` and `nominatim_lookup(addressdetails => false)` made the server compute the breakdown anyway. Both endpoints now explicitly request `addressdetails=0`.
 * **Fixed request URLs with query strings or fragments**: The URL was built as `<url> + "/" + <endpoint> + "?" + <params>`. A `url` containing a query string got the endpoint appended to the query instead of the path, and fragments corrupted the request. URLs are now parsed and reassembled with `curl_url()`, keeping existing query strings and appending the endpoint to the path.
-* **Fixed validator accepting non-HTTP schemes for `url`**: `file://`, `ftp://`, ... were accepted and failed only at first use. Validator now rejects any scheme other than `http` and `https`.
+* **Fixed validator accepting non-HTTP schemes for `url`**: `file://`, `ftp://`, ... were accepted and failed only at first use. The validator now rejects any scheme other than `http` and `https`.
 * **Fixed retries on permanent transport errors**: `IsRetryable()` treated every libcurl error except `CURLE_ABORTED_BY_CALLBACK` as transient. Certificate verification failures, malformed URLs, unsupported protocols, etc. now fail immediately. Retries are reserved for network-level failures (DNS, connect, timeouts).
-* **Fixed `nominatim_reverse()` accepting `NaN` coordinates**: Range checks like `lat > 90.0` are always false for `NaN`, so invalid coordinates passed validation. Now explicitly check `isnan()`.
+* **Fixed `nominatim_reverse()` accepting `NaN` coordinates**: Range checks like `lat > 90.0` are always false for `NaN`, so invalid coordinates passed validation. Coordinates are now explicitly checked with `isnan()`.
 * **Fixed header injection via `accept_language`**: Control characters in `accept_language` were pasted verbatim into HTTP headers, allowing CR/LF injection. New `CheckAcceptLanguage()` rejects control characters in both the parameter and the server option.
 * **Fixed encoding mismatches**: Request parameters were percent-encoded in the database encoding instead of UTF-8; response values were stored as raw UTF-8 bytes, producing mojibake in non-UTF-8 databases. Parameters are now converted to UTF-8 before escaping, and response values are converted from UTF-8 to the database encoding.
-* **Fixed format string mismatches**: Several `elog()` calls passed arguments of mismatched types: `"%ld"` for `uint64`, `"%ld"` for `size_t`, `"%u"` for `Oid`. Now use appropriate format specifiers and casts.
+* **Fixed format string mismatches**: Several `elog()` calls passed arguments of mismatched types: `"%ld"` for `uint64`, `"%ld"` for `size_t`, `"%u"` for `Oid`. They now use appropriate format specifiers and casts.
 * **Fixed `zoom` out-of-range values being applied inconsistently**: Values above 18 were sent as-is, values below -1 were dropped. Both are now clamped to 0 or 18 with a `WARNING` naming which value is used; `-1` (disabled) stays unchanged.
 * **Fixed oversized responses failing inside libcurl**: `WriteMemoryCallback()` raised "invalid memory alloc request size" from within libcurl's frames, making it impossible to distinguish from a real OOM. Responses now refuse data beyond a per-buffer limit by returning a short count, causing libcurl to abort cleanly with `CURLE_WRITE_ERROR`. Oversized responses are not retried.
 
@@ -58,10 +58,10 @@ Release date: **2026-09-28**
 
 ## Improvements
 
-* **Made upgrade paths produce identical objects to fresh installs**: Upgrades from 1.x and 2.2 left `NominatimRecord`'s column order and `nominatim_fdw_version()`'s function properties different from a fresh install. Now consistent across all paths.
+* **Made upgrade paths produce identical objects to fresh installs**: Upgrades from 1.x and 2.2 left `NominatimRecord`'s column order and `nominatim_fdw_version()`'s function properties different from a fresh install. They are now consistent across all paths.
 * **Fixed query cancellation sensitivity**: The request and retry loop gave up on any `InterruptPending` flag, including non-cancellation interrupts like `pg_log_backend_memory_contexts()`, causing queries to fail when they should continue. Now checks `QueryCancelPending` and `ProcDiePending` explicitly.
-* **Removed always-on verbose curl logging**: `CURLOPT_VERBOSE` was on unconditionally, so every request was parsed for `DEBUG3`-level output and discarded. Now only enabled when `DEBUG3` would actually be logged.
-* **Removed reading of non-existent reverse parser fields**: `ParseNominatimReverseData()` read `class`, `type` and `importance` from `<result>`, which Nominatim's reverse endpoint never sends. Stopped reading them.
+* **Removed always-on verbose curl logging**: `CURLOPT_VERBOSE` was on unconditionally, so every request produced `DEBUG3`-level output that was then discarded. It is now only enabled when `DEBUG3` would actually be logged.
+* **Removed reading of non-existent reverse parser fields**: `ParseNominatimReverseData()` read `class`, `type` and `importance` from `<result>`, which Nominatim's reverse endpoint never sends. They are no longer read.
 * **Improved debug output**: DEBUG2 messages now log actual option values instead of the option names.
 * **Updated README**: Clarified libxml2 minimum version (2.6.0, not 2.5.0), fixed example parameters, documented `zoom` clamping, noted that `icon` is always `NULL` in reverse results.
 * **Made regression tests opt-in for network access**: Tests against a Nominatim server now require `INCLUDE_EXTERNAL_TESTS=1`, preventing timeouts in isolated package-build environments.
@@ -110,7 +110,7 @@ Release date: **2026-07-24**
 
 ## Enhancements
 
-* **Add HTTP basic authentication in `USER MAPPING`**: This feature defines a mapping of a PostgreSQL user to an user in the target Nominatim server - `user` and `password`, so that the user can be authenticated.
+* **Add HTTP basic authentication in `USER MAPPING`**: maps a PostgreSQL user to a user on the target Nominatim server - `user` and `password` - so that requests are authenticated.
 * **Add `request_timeout` server option**: sets the maximum time in seconds allowed for a complete HTTP request (`CURLOPT_TIMEOUT`), defaulting to `0` (no limit). The pre-existing `connect_timeout` only bounds the connection phase, so a Nominatim server that accepted the connection and then stalled would occupy the backend indefinitely.
 
 ## Bug fixes
@@ -122,9 +122,9 @@ Release date: **2026-07-07**
 
 ## Enhancements
 
-* Add error message for invalid coordinate pairs: this adds a check on the reverse call to reject invalid coordinate pairs before sending the request to the server, therefore avoiding a HTTP request that is doomed to fail.
+* Add error message for invalid coordinate pairs: this adds a check on the reverse call to reject invalid coordinate pairs before sending the request to the server, therefore avoiding an HTTP request that is doomed to fail.
 * Add `email` and `polygon_threshold` parameters to reverse function.
-* Add support to PostgreSQL 10 and 11 (EOL'd versions).
+* Add support for PostgreSQL 10 and 11 (EOL'd versions).
 * Add system view `nominatim_fdw_settings` to list all library dependencies.
 
 ## Bug fixes
@@ -133,15 +133,15 @@ Release date: **2026-07-07**
 * Fixed JSON injection in `extratags`, `namedetails`, `addressdetails`, and `addressparts` fields: XML values from the Nominatim response were embedded into hand-crafted JSON strings without escaping, so values containing `"`, `\`, or control characters produced malformed `jsonb` or allowed content injection from a malicious server. PostgreSQL's own `escape_json()` (from `utils/json.h`) is now used to escape all keys and values before they are appended.
 * Fixed `nominatim_search`, `nominatim_lookup`, and `nominatim_reverse` incorrectly declared as `IMMUTABLE`, which allowed PostgreSQL to cache or optimize away repeated calls and return stale results. Functions are now correctly declared `VOLATILE`.
 * Fixed build failure when specifying a custom `PG_CONFIG` pointing to a PostgreSQL installation built without `--with-libxml`. The Makefile now uses `PG_CPPFLAGS` (instead of `CFLAGS`) and explicitly includes `xml2-config --cflags`, so libxml2 include paths are always passed to the compiler regardless of which `pg_config` is used.
-* Add missing `type` attribute: the custom data type `NominatimRecord` was missing the attribute `type`. Thid has been now fixed.
+* Add missing `type` attribute: the custom data type `NominatimRecord` was missing the attribute `type`. This has now been fixed.
 * Fix `DEFAULT` value for `addressdetails`: it now defaults to `true`, as defined in the API spec.
 * Set `DEFAULT` value of reverse's `zoom` to `-1` (disabled): the previous value was 0, which is a valid zoom level.
-* Fix parsing of `KML` geometries iun reverse calls: the parser was ignoring this format and returning `NULL` for `polygon_kml` requests. This is now fixed.
+* Fix parsing of `KML` geometries in reverse calls: the parser was ignoring this format and returning `NULL` for `polygon_kml` requests. This is now fixed.
 
 ## Breaking changes
 * Add `entrances` column to lookup, search, and reverse calls.
-* Rename reverse's column `result` to `display_name`: the previous name was mimicing the xml node retrieved from the API, which was inconsistent with the lookup and search functions.
-* For simplicity, `nominatim_fdw_version()` now omits ssl, zblib, libSSH, and ngt http2 versions.
+* Rename reverse's column `result` to `display_name`: the previous name was mimicking the XML node retrieved from the API, which was inconsistent with the lookup and search functions.
+* For simplicity, `nominatim_fdw_version()` now omits the ssl, zlib, libSSH, and nghttp2 versions.
 * Rename `addressparts` column from reverse function to `addressdetails`, so that it aligns with search and lookup.
 
 # 1.3
@@ -178,4 +178,4 @@ Release date: **2024-11-01**
 
 ## Enhancements
 
-* Add support to PostgreSQL 17 and 18.
+* Add support for PostgreSQL 17 and 18.
