@@ -54,7 +54,7 @@ After installation, create the extension in your database:
 CREATE EXTENSION nominatim_fdw;
 ```
 
-To install a specific version add the full version number in the `WITH VERSION` clause:
+To install a specific version, add the full version number in the `WITH VERSION` clause:
 
 ```sql
 CREATE EXTENSION nominatim_fdw WITH VERSION '2.4';
@@ -81,19 +81,19 @@ After building and installing the extension you're ready to create the extension
 CREATE EXTENSION nominatim_fdw;
 ```
 
-To install a specific version add the full version number in the `WITH VERSION` clause
+To install a specific version, add the full version number in the `WITH VERSION` clause:
 
 ```sql
 CREATE EXTENSION nominatim_fdw WITH VERSION '2.4';
 ```
 
-To run the predefined regression tests run `make installcheck` with the user `postgres`:
+To run the predefined regression tests, run `make installcheck` as the user `postgres`:
 
 ```bash
 $ make PGUSER=postgres installcheck
 ```
 
-By default this runs only the tests that need nothing but a PostgreSQL server. Tests that talk to a Nominatim server are opt-in: `INCLUDE_EXTERNAL_TESTS=1` adds those against the public [nominatim.openstreetmap.org](https://nominatim.openstreetmap.org), `INCLUDE_LOCAL_TESTS=1` those through the proxies deployed by `scripts/squid`, and `INCLUDE_ALL_TESTS=1` both:
+By default this runs only the tests that need nothing but a PostgreSQL server. Tests that talk to a Nominatim server are opt-in: `INCLUDE_EXTERNAL_TESTS=1` adds the tests against the public [nominatim.openstreetmap.org](https://nominatim.openstreetmap.org), `INCLUDE_LOCAL_TESTS=1` adds the tests that go through the proxies deployed by `scripts/squid`, and `INCLUDE_ALL_TESTS=1` adds both:
 
 ```bash
 $ make PGUSER=postgres INCLUDE_EXTERNAL_TESTS=1 installcheck
@@ -101,14 +101,14 @@ $ make PGUSER=postgres INCLUDE_EXTERNAL_TESTS=1 installcheck
 
 ## [Update](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#update)
 
-To update the extension's version you must first build and install the binaries and then run `ALTER EXTENSION`:
+To update the extension's version, you must first build and install the binaries and then run `ALTER EXTENSION`:
 
 
 ```sql
 ALTER EXTENSION nominatim_fdw UPDATE;
 ```
 
-To update to a specific version use `UPDATE TO` and the full version number
+To update to a specific version, use `UPDATE TO` and the full version number:
 
 ```sql
 ALTER EXTENSION nominatim_fdw UPDATE TO '2.4';
@@ -120,7 +120,7 @@ To use the `nominatim_fdw` you must first create a `SERVER` to connect to a Nomi
 
 ### [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create-server)
 
-The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server, which in this case means a Nominatim server. The user who defines the server becomes its owner. A `SERVER` requires an `url`, so that `nominatim_fdw` knows where to send the requests.
+The SQL command [CREATE SERVER](https://www.postgresql.org/docs/current/sql-createserver.html) defines a new foreign server, which in this case means a Nominatim server. The user who defines the server becomes its owner. A `SERVER` requires a `url`, so that `nominatim_fdw` knows where to send the requests.
 
 The following example creates a `SERVER` that connects to the [OpenStreetMap Nominatim Server](https://nominatim.openstreetmap.org):
 
@@ -135,15 +135,15 @@ OPTIONS (url 'https://nominatim.openstreetmap.org');
 
 | Server Option | Type          | Description                                                                                                        |
 |---------------|----------------------|--------------------------------------------------------------------------------------------------------------------|
-| `url`     | **required**            | URL address of the Nominatim endpoint (`http` or `https`). The request path - `/search`, `/reverse` or `/lookup` - is appended to its path, and a query string it carries, such as an API key required by a hosted service, is sent along with every request, e.g. `https://nominatim.example.com/?key=abc`.
+| `url`     | **required**            | URL of the Nominatim endpoint (`http` or `https`). The request path - `/search`, `/reverse` or `/lookup` - is appended to its path, and any query string it contains, such as an API key required by a hosted service, is sent with every request, e.g. `https://nominatim.example.com/?key=abc`.
 | `http_proxy` | optional            | Proxy for HTTP requests.
 | `connect_timeout`         | optional            | Timeout in seconds for *establishing* the connection to the Nominatim server (default `300` seconds). It does not limit how long the server may take to answer - use `request_timeout` for that.
 | `request_timeout`         | optional            | Maximum time in seconds allowed for a complete HTTP request (connect + transfer). `0` disables the limit (default). Unlike `connect_timeout`, this applies to the entire duration of the request, including data transfer. Note that a timed-out request is retried as configured in `max_connect_retry`, so the worst case is roughly `(max_connect_retry + 1) × request_timeout` seconds, plus the waits between attempts.
-`max_connect_retry`         | optional            | Number of attempts to retry a request in case of failure (default `3` times). Only failures that may go away on their own are retried: network and timeout errors, HTTP `429` and `5xx` answers. Errors that an identical request would run into again - other `4xx` answers, also from a proxy, too many redirects, unsupported protocols, TLS certificate problems - are reported straight away. The first retry waits 5 seconds and every further one twice as long (5, 10, 20, ... seconds), up to 5 minutes, unless a `429` or `503` answer asks for a different delay with `Retry-After`.
-| `max_connect_redirect`         | optional            | Limit of how many times URL redirection may follow (default `1`). Set it to `0` to refuse redirects altogether - a redirected request then fails instead of being followed.
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`).
-| `max_response_size` | optional | Maximum size in bytes of a response body (default `0` = unlimited). A larger response is aborted as soon as it exceeds the limit, and the query fails with an error. Use it to protect against unexpectedly large answers - large polygons, for instance - from untrusted or misbehaving endpoints. Independently of this option, a response can never be larger than 1 GB, the most PostgreSQL can hold in a single buffer.
-| `email` | optional | E-mail address that identifies the requests to the Nominatim server, as the [usage policy](https://operations.osmfoundation.org/policies/nominatim/) of the public server asks of heavier users. It is sent as the `email` parameter of every request, unless a function call passes its own `email`. It needs an `@` with something on both sides. Prefer a role address such as `geocoding@example.com` over a personal one: the server's operator and any proxy in between can see it.
+| `max_connect_retry`         | optional            | Number of times a failed request is retried (default `3`). Only failures that may go away on their own are retried: network and timeout errors, and HTTP `429` and `5xx` responses. Errors that an identical request would run into again - other `4xx` responses (including those from a proxy), too many redirects, unsupported protocols, TLS certificate problems - are reported immediately. The first retry waits 5 seconds and each further one twice as long (5, 10, 20, ... seconds), up to 5 minutes, unless a `429` or `503` response requests a different delay with `Retry-After`.
+| `max_connect_redirect`         | optional            | Maximum number of redirects to follow (default `1`). Set it to `0` to refuse redirects altogether - a redirected request then fails instead of being followed.
+| `accept_language` | optional | Language string, as in the `Accept-Language` HTTP header (default `en-US,en;q=0.9`).
+| `max_response_size` | optional | Maximum size in bytes of a response body (default `0` = unlimited). A larger response is aborted as soon as it exceeds the limit, and the query fails with an error. Use it to protect against unexpectedly large responses - large polygons, for instance - from untrusted or misbehaving endpoints. Independently of this option, a response can never be larger than 1 GB, the most PostgreSQL can hold in a single buffer.
+| `email` | optional | E-mail address that identifies the requests to the Nominatim server, as the [usage policy](https://operations.osmfoundation.org/policies/nominatim/) of the public server asks of heavier users. It is sent as the `email` parameter of every request, unless a function call passes its own `email`. It must contain an `@` with text on both sides. Prefer a role address such as `geocoding@example.com` over a personal one: the server's operator and any proxy in between can see it.
 
 Using a `SERVER` through the `nominatim_fdw` functions requires the `USAGE` privilege on it, just like creating a foreign table on it would. The owner of the server can grant it to other roles:
 
@@ -153,7 +153,7 @@ GRANT USAGE ON FOREIGN SERVER osm TO some_role;
 
 ### [ALTER SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#alter-server)
 
-All options and parameters set to a `SERVER` can be changed, dropped, and new ones can be added using [`ALTER SERVER`](https://www.postgresql.org/docs/current/sql-alterserver.html) statements.
+All options of a `SERVER` can be changed or dropped, and new ones can be added, using [`ALTER SERVER`](https://www.postgresql.org/docs/current/sql-alterserver.html) statements.
 
 
 Adding options
@@ -186,7 +186,7 @@ Proxy credentials for authenticating with a proxy server are stored in a [`USER 
 | `proxy_user` | optional | User name for proxy server authentication. |
 | `proxy_password` | optional | Password for proxy server authentication. |
 
-The following example creates a user mapping with proxy credentials for the current user:
+The following example creates a user mapping with proxy credentials for the user `pguser`:
 
 ```sql
 CREATE USER MAPPING FOR pguser
@@ -202,52 +202,52 @@ SERVER osm OPTIONS (SET proxy_password 'newpassword');
 ```
 ### [Functions](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#functions)
 
-This section describes the `nominatim_fdw` functions, which are mapped to the Nominatim standard search endpoints [search](https://nominatim.org/release-docs/develop/api/Search/), [reverse](https://nominatim.org/release-docs/develop/api/Reverse/) and [lookup](https://nominatim.org/release-docs/develop/api/Lookup/).
+This section describes the `nominatim_fdw` functions, which map to the standard Nominatim endpoints [search](https://nominatim.org/release-docs/develop/api/Search/), [reverse](https://nominatim.org/release-docs/develop/api/Reverse/) and [lookup](https://nominatim.org/release-docs/develop/api/Lookup/).
 
 > [!NOTE]  
 > All `nominatim_fdw` functions are declared `STRICT`. This means that if any argument is explicitly set to SQL `NULL`, the function short-circuits and returns no rows — the request is never sent to the server, and no error is raised.
 >
 > Unrecognised values for polygon, layer and featuretype produce a `WARNING` but do not abort the request — the value is forwarded to the Nominatim server as-is. This keeps the wrapper working if the Nominatim API introduces new values in the future.
 >
-> Each object in `entrances` carries the entrance's own OSM tags - `door`, `access`, `wheelchair`, ... - under `extratags`, as in Nominatim's JSON output, whenever the entrance has any.
+> If an entrance has OSM tags of its own - `door`, `access`, `wheelchair`, ... - its object in `entrances` carries them under `extratags`, as in Nominatim's JSON output.
 >
 > The columns `extratags`, `namedetails`, `addressdetails` and `entrances` are `NULL` when the corresponding parameter was not set to `true`. When the detail *was* requested but the place has none, the column is an empty `{}` (or `[]` for `entrances`) instead. This keeps "not asked for" distinguishable from "asked for, and there is nothing".
 
 #### [Nominatim_Search](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_search)
 
-The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports [structured](https://nominatim.org/release-docs/develop/api/Search/#structured-query) and [free-form](https://nominatim.org/release-docs/develop/api/Search/#free-form-query) search queries, which are distinguished by either splitting the address components into different parameters, such as `street`, `county`, `state`, or providing a single string in the parameter `q`.
+The [search](https://nominatim.org/release-docs/develop/api/Search/) API allows you to look up a location from a textual description or address. Just like the Nominatim API, the foreign data wrapper supports [structured](https://nominatim.org/release-docs/develop/api/Search/#structured-query) and [free-form](https://nominatim.org/release-docs/develop/api/Search/#free-form-query) search queries. A structured query splits the address into separate parameters, such as `street`, `county` and `state`, while a free-form query passes a single string in the parameter `q`.
 
 **Parameters**
 
 | Parameter | Type | Description |
 |---|---|---|
-| `server_name` | **required** | Foreign Data Wrapper server created using the [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server) statement. |
+| `server_name` | **required** | Foreign Data Wrapper server created using the [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create-server) statement. |
 | `q` | optional | Free-form query string to search for (default *unset*) |
 | `amenity` | optional | name and/or type of POI (default *unset*) |
-| `street` | optional | housenumber and streetname (default *unset*) |
+| `street` | optional | house number and street name (default *unset*) |
 | `city` | optional | city (default *unset*) |
 | `county` | optional | county (default *unset*) |
 | `state` | optional | state (default *unset*) |
 | `country` | optional | country (default *unset*) |
 | `postalcode` | optional | postal code (default *unset*) |
-| `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
+| `extratags` | optional | additional information available in the database, e.g. Wikipedia link, opening hours. (default `false`) |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `false`) |
 | `namedetails` | optional | includes a full list of names for the result. (default `false`) |
 | `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
+| `accept_language` | optional | language string, as in the `Accept-Language` HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `countrycodes` | optional | comma-separated list of [country codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2) (default *unset*) |
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
 | `featuretype` | optional | one of: `country`, `state`, `city`, `settlement` (default *unset*) |
 | `exclude_place_ids` | optional | comma-separated list of place ids (default *unset*) |
-| `viewbox` | optional | bounding box as in `<x1>,<y1>,<x2>,<y2>` (default *unset*) |
-| `bounded` | optional | When set to `true`, restrict the results to items within the `viewbox` (requires `viewbox` to be set). (default `false`) |
+| `viewbox` | optional | bounding box in the form `<x1>,<y1>,<x2>,<y2>` (default *unset*) |
+| `bounded` | optional | when set to `true`, restricts the results to items within the `viewbox` (requires `viewbox` to be set). (default `false`) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | e-mail address identifying the request. It overrides the server's `email` option (default *unset*) |
-| `dedupe` | optional | discards duplicated entries (default `true`) |
-| `limit_result` | optional | limits the maximum number of returned results. `0` leaves it to the server, which returns up to `10` results; the server never returns more than `40`. (default `0`) |
-| `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
+| `dedupe` | optional | removes duplicate results (default `true`) |
+| `limit_result` | optional | maximum number of results to return. `0` leaves it to the server, which returns up to `10` results; the server never returns more than `40`. (default `0`) |
+| `entrances` | optional | when set to `true`, includes the tagged entrances in the result. (default `false`) |
 
-As in the Nominatim API, the free-form query string parameter `q` cannot be combined with the parameters `amenity`, `street`, `city`, `county`, `state`, `country` and `postalcode`, as they are used in structured calls.
+As in the Nominatim API, the free-form query string parameter `q` cannot be combined with the parameters `amenity`, `street`, `city`, `county`, `state`, `country` and `postalcode`, which are used for structured queries.
 
 
 ----------------------
@@ -255,7 +255,7 @@ As in the Nominatim API, the free-form query string parameter `q` cannot be comb
 
 **Usage**
 
-For these examples we assume the following `SERVER`:
+For these examples, we assume the following `SERVER`:
 
 ```sql
 CREATE SERVER osm 
@@ -349,7 +349,7 @@ type              | theatre
 
 #### [Nominatim_Reverse](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_reverse)
 
-[Reverse](https://nominatim.org/release-docs/develop/api/Reverse/) geocoding generates an address from a coordinate given as latitude and longitude. The reverse geocoding API does not exactly compute the address for the coordinate it receives. It works by finding the closest suitable OSM object and returning its address information. This may occasionally lead to unexpected results.
+[Reverse](https://nominatim.org/release-docs/develop/api/Reverse/) geocoding generates an address from a coordinate given as latitude and longitude. The reverse geocoding API does not compute the exact address for the coordinate it receives. It works by finding the closest suitable OSM object and returning its address information. This may occasionally lead to unexpected results.
 
 **Parameters**
 
@@ -360,19 +360,19 @@ type              | theatre
 | `lat` | optional | latitude of the location to generate an address for (default `0`) |
 | `zoom` | optional | level of detail required for the address, `0`–`18`. Roughly corresponds to a map zoom level: `3` country, `5` state, `8` county, `10` city, `12` town/borough, `13` village/suburb, `14` neighbourhood, `15` any settlement, `16` major streets, `17` major and minor streets, `18` building. `-1` leaves it unset, and the server default (`18`, building level) is applied. Other values outside `0`–`18` are clamped to that range with a `WARNING`, as the server itself would do. (default `-1`)|
 | `layer` | optional | comma-separated list of: `address`, `poi`, `railway`, `natural`, `manmade` (default *unset*) |
-| `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
+| `extratags` | optional | additional information available in the database, e.g. Wikipedia link, opening hours. (default `false`) |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `true`) |
 | `namedetails` | optional | includes a full list of names for the result. (default `false`) |
 | `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
-| `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
+| `accept_language` | optional | language string, as in the `Accept-Language` HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
+| `entrances` | optional | when set to `true`, includes the tagged entrances in the result. (default `false`) |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | e-mail address identifying the request. It overrides the server's `email` option (default *unset*) |
 
 ----------------------
 **Usage**
 
-For these examples we assume the following `SERVER`:
+For these examples, we assume the following `SERVER`:
 
 ```sql
 CREATE SERVER osm 
@@ -380,7 +380,7 @@ FOREIGN DATA WRAPPER nominatim_fdw
 OPTIONS (url 'https://nominatim.openstreetmap.org');
 ```
 
-Address generation for the coordinates `7.6293` longitude and `51.9648` latitude:        
+Generating an address for longitude `7.6293` and latitude `51.9648`:        
 
 ```sql
 SELECT osm_id, display_name, boundingbox
@@ -433,30 +433,30 @@ addressdetails | {"city": "Münster", "road": "Neubrückenstraße", "state": "No
 entrances      | []
 ```
 
-Nominatim's reverse answers carry no icon, so the `icon` column is always `NULL` for `nominatim_reverse()`.
+Nominatim's reverse responses do not include an icon, so the `icon` column is always `NULL` for `nominatim_reverse()`.
 
 #### [Nominatim_Lookup](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#nominatim_lookup)
 
-The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows to query the address and other details of one or multiple OSM objects like node, way or relation.
+The [lookup](https://nominatim.org/release-docs/develop/api/Lookup/) API allows you to query the address and other details of one or more OSM objects, such as nodes, ways or relations.
 
 **Parameters**
 
 | Parameter | Type | Description |
 |---|---|---
-| `server_name` | **required** | Foreign Data Wrapper server created using the [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create_server) statement. |
+| `server_name` | **required** | Foreign Data Wrapper server created using the [CREATE SERVER](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#create-server) statement. |
 | `osm_ids` | **required** | comma-separated list of OSM ids, each prefixed with its type: `N` (node), `W` (way) or `R` (relation), e.g. `N123,W456,R789` |
-| `extratags` | optional | additional information in the result that is available in the database, e.g. wikipedia link, opening hours. (default `false`) |
+| `extratags` | optional | additional information available in the database, e.g. Wikipedia link, opening hours. (default `false`) |
 | `addressdetails` | optional | includes a breakdown of the address into elements (default `true`) |
 | `namedetails` | optional | includes a full list of names for the result. (default `false`) |
 | `polygon` | optional | one of: `polygon_geojson`, `polygon_kml`, `polygon_svg`, `polygon_text` (default *unset*) |
-| `entrances` | optional | when set to `true`, include the tagged entrances in the result. (default `false`) |
-| `accept_language` | optional | language string as in "Accept-Language" HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` |
+| `entrances` | optional | when set to `true`, includes the tagged entrances in the result. (default `false`) |
+| `accept_language` | optional | language string, as in the `Accept-Language` HTTP header (default `en-US,en;q=0.9`). This overrides the `accept_language` set in the `CREATE SERVER` statement |
 | `polygon_threshold` | optional | floating-point number (default `0.0`) |
 | `email` | optional | e-mail address identifying the request. It overrides the server's `email` option (default *unset*) |
 
 **Usage**
 
-For these examples we assume the following `SERVER`:
+For these examples, we assume the following `SERVER`:
 
 ```sql
 CREATE SERVER osm 
@@ -532,7 +532,7 @@ SELECT nominatim_fdw_version();
 ```
 #### [nominatim_fdw_settings](#nominatim_fdw_settings)
 
-A system view that provides detailed version information for `nominatim_fdw` and all its dependencies, including core libraries (PostgreSQL, libxml, libcurl) and optional components (SSL, zlib, libSSH, nghttp2), along with compiler and build information. Returns individual component names and their corresponding versions for convenient programmatic access.
+A system view that provides detailed version information for `nominatim_fdw` and all its dependencies, including core libraries (PostgreSQL, libxml, libcurl) and optional components (SSL, zlib, libSSH, nghttp2), along with compiler and build information. It returns one row per component with its version, for convenient programmatic access.
 
 -------
 
@@ -557,7 +557,7 @@ SELECT * FROM nominatim_fdw_settings;
 
 ## [Deploy with Docker](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#deploy-with-docker)
 
-To deploy `nominatim_fdw` with docker just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/nominatim_fdw/releases). For instance, a `nominatim_fdw` `Dockerfile` for PostgreSQL 18 should look like this (minimal example):
+To deploy `nominatim_fdw` with Docker, just pick one of the supported PostgreSQL versions, install the [requirements](#requirements) and [compile](#build-and-install) the [source code](https://github.com/jimjonesbr/nominatim_fdw/releases). For instance, a `nominatim_fdw` `Dockerfile` for PostgreSQL 18 could look like this (minimal example):
 
 ```Dockerfile
 FROM postgres:18
@@ -571,7 +571,7 @@ RUN tar xvzf nominatim_fdw-[VERSION].tar.gz && \
     make install
 ```
 
-To build the image save it in a `Dockerfile` and  run the following command in the root directory - this will create an image called `nominatim_fdw_image`:
+To build the image, save it as `Dockerfile` and run the following command in the root directory - this will create an image called `nominatim_fdw_image`:
  
 ```bash
  $ docker build -t nominatim_fdw_image .
