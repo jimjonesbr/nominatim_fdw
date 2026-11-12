@@ -122,8 +122,11 @@ SET client_min_messages TO debug1;
 SELECT * FROM nominatim_reverse(server_name => 'does_not_exist', lon => 0, lat => 0);
 
 SELECT pg_sleep(2);
+/* no debug output: the response size changes whenever OSM data does */
+RESET client_min_messages;
 SELECT count(*) <= 3 AS respects_limit
 FROM nominatim_search(server_name => 'osm', q => 'münster', limit_result => 3);
+SET client_min_messages TO debug1;
 
 /* nominatim reverse */
 SELECT pg_sleep(2);

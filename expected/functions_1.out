@@ -238,13 +238,14 @@ SELECT pg_sleep(2);
 -[ RECORD 1 ]
 pg_sleep | 
 
+/* no debug output: the response size changes whenever OSM data does */
+RESET client_min_messages;
 SELECT count(*) <= 3 AS respects_limit
 FROM nominatim_search(server_name => 'osm', q => 'münster', limit_result => 3);
-DEBUG:  GET "https://nominatim.openstreetmap.org/search?q=m%C3%BCnster&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&limit=3"
-DEBUG:  HTTP 200, 1515 bytes
 -[ RECORD 1 ]--+--
 respects_limit | t
 
+SET client_min_messages TO debug1;
 /* nominatim reverse */
 SELECT pg_sleep(2);
 -[ RECORD 1 ]

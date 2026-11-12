@@ -2,7 +2,7 @@
 
 CODEPATH="/home/jim/git/nominatim_fdw"
 PGVERSIONS="10,11,12,13,14,15,16,17,18,19"
-#PGVERSIONS="10"
+PGVERSIONS="10"
 IMAGENAME="pgxn-image"
 NETWORK_NAME="pgnet"
 TEST_ENV_PATH=~/git/nominatim_fdw/scripts/postgres-env
