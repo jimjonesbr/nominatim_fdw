@@ -39,7 +39,7 @@ BEGIN
            polygon => 'polygon_text',
            polygon_threshold => 0.01,
            limit_result => 1);
-    PERFORM pg_sleep(2); -- waits 2 seconds between requests to avoid any trouble with OSM.
+    PERFORM pg_sleep(2); -- the public server allows at most 1 request per second
   END LOOP;
 END; $$;
 

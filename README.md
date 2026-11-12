@@ -21,6 +21,7 @@ The `nominatim_fdw` is a PostgreSQL Foreign Data Wrapper to access data from [No
     - [Nominatim_Lookup](#nominatim_lookup)
     - [Version](#nominatim_fdw_version)
     - [Settings](#nominatim_fdw_settings)
+- [Examples](#examples)
 - [Deploy with Docker](#deploy-with-docker)
  
 ## [Requirements](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#requirements)
@@ -554,6 +555,10 @@ SELECT * FROM nominatim_fdw_settings;
  built         | 2026-09-28 06:41:36 UTC
 (10 rows)
 ```
+
+## [Examples](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#examples)
+
+Complete examples that combine the functions above with ordinary SQL can be found in the [examples](examples/) directory.
 
 ## [Deploy with Docker](https://github.com/jimjonesbr/nominatim_fdw/blob/master/README.md#deploy-with-docker)
 
