@@ -241,7 +241,7 @@ pg_sleep |
 SELECT count(*) <= 3 AS respects_limit
 FROM nominatim_search(server_name => 'osm', q => 'münster', limit_result => 3);
 DEBUG:  GET "https://nominatim.openstreetmap.org/search?q=m%C3%BCnster&format=xml&accept-language=en-US%2Cen%3Bq%3D0.9&bounded=0&limit=3"
-DEBUG:  HTTP 200, 1515 bytes
+DEBUG:  HTTP 200, 1516 bytes
 -[ RECORD 1 ]--+--
 respects_limit | t
 
