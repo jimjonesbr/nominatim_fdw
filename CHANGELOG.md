@@ -13,7 +13,7 @@ Release date: **unreleased**
 
 ## Breaking changes
 
-* **New `User-Agent`**: requests now identify themselves as `nominatim_fdw/<version> (+https://github.com/jimjonesbr/nominatim_fdw)`. The previous `User-Agent` disclosed the exact versions of PostgreSQL, libxml2, libcurl, the TLS library and others to every Nominatim server and proxy along the way, telling them which known vulnerabilities to try. `nominatim_fdw_settings` still reports those versions locally. Servers or proxies that filter on the old `User-Agent` need to be adjusted.
+* **New `User-Agent`**: requests now identify themselves as `nominatim_fdw/<version> (+https://github.com/jimjonesbr/nominatim_fdw)`. The previous `User-Agent` disclosed the exact versions of PostgreSQL, libxml2, libcurl, the TLS library and others to every Nominatim server and proxy along the way. `nominatim_fdw_settings` still reports those versions locally. Servers or proxies that filter on the old `User-Agent` need to be adjusted.
 
 ## Improvements
 
